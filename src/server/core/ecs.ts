@@ -38,6 +38,7 @@ export interface Turret {
     active: boolean;
     hp: number;
     cooldown: number;
+    turretType: number;
     orientUp: boolean;
 }
 

@@ -69,7 +69,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
         for (const [te, turret] of ecs.turrets.entries()) {
             const tt = ecs.transforms.get(te)!;
             if (Math.abs(tt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(tt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.turrets.push({ x: tt.x, y: tt.y, angle: tt.angle, orientUp: turret.orientUp, active: turret.active });
+                state.turrets.push({ x: tt.x, y: tt.y, angle: tt.angle, orientUp: turret.orientUp, active: turret.active, type: turret.turretType });
             }
         }
         for (const [be, b] of ecs.bullets.entries()) {

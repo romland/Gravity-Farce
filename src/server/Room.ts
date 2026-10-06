@@ -11,7 +11,7 @@ export class Room {
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
         level.entities.forEach(ent => {
-            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.orientUp || false);
+            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
         });
     }
 

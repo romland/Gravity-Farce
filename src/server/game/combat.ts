@@ -2,6 +2,7 @@ import { Registry, type Entity, type Transform } from '../core/ecs';
 import { checkPolyIntersect } from '../core/math';
 import { lineIntersect } from '../core/math';
 import type { Room } from '../Room';
+import { getTurretSpecByTile } from './turret-defs';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -11,10 +12,10 @@ export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy:
     return e;
 }
 
-export function spawnTurret(ecs: Registry, x: number, y: number, orientUp: boolean) {
+export function spawnTurret(ecs: Registry, x: number, y: number, turretType: number = 0xAF, orientUp: boolean = false) {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: orientUp ? -Math.PI/2 : Math.PI/2 });
-    ecs.turrets.set(e, { active: true, hp: 3, cooldown: 0, orientUp });
+    ecs.turrets.set(e, { active: true, hp: 3, cooldown: 0, turretType, orientUp });
     return e;
 }
 
@@ -151,8 +152,21 @@ export function sysTurrets(ecs: Registry, room: Room) {
             }
 
             if (turret.cooldown <= 0 && Math.abs(diff) < 0.5) {
-                spawnBullet(ecs, t.x + Math.cos(t.angle) * 20, t.y + Math.sin(t.angle) * 20, Math.cos(t.angle) * 6, Math.sin(t.angle) * 6, false, 'npc', 90);
-                turret.cooldown = 90;
+                const spec = getTurretSpecByTile(turret.turretType);
+                const speed = 5.0;
+                for (const vec of spec.vectors) {
+                    spawnBullet(
+                        ecs,
+                        t.x + spec.muzzleOffset.x,
+                        t.y + spec.muzzleOffset.y,
+                        vec.vx * speed,
+                        vec.vy * speed,
+                        false,
+                        'npc',
+                        90
+                    );
+                }
+                turret.cooldown = spec.cooldownMax;
             }
         }
     }

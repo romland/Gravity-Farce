@@ -320,16 +320,51 @@
             ctx.save(); 
             ctx.translate(t.x, t.y);
             
+            const tileId = t.type || 0xAF;
+            
+            // Orientation and mounting alignment per Amiga tile ID
+            if (tileId === 0xB3 || tileId === 0xB4) {
+                ctx.rotate(Math.PI); // Ceiling mounted - pointing down
+            } else if (tileId === 0xB7) {
+                ctx.rotate(Math.PI / 2); // Wall mounted - facing east
+            } else if (tileId === 0xB8) {
+                ctx.rotate(-Math.PI / 2); // Wall mounted - facing west
+            } else if (tileId === 0xB5 || tileId === 0xB9) {
+                ctx.rotate(-Math.PI / 4); // Diagonal wall mount
+            } else {
+                ctx.rotate(t.angle || 0); // Floor mounted / default angle
+            }
+            
+            // Base mount plate
             ctx.fillStyle = '#333'; 
             ctx.strokeStyle = '#555';
-            ctx.fillRect(-15, t.orientUp ? -8 : 0, 30, 8);
-            ctx.strokeRect(-15, t.orientUp ? -8 : 0, 30, 8);
+            ctx.fillRect(-15, 0, 30, 8);
+            ctx.strokeRect(-15, 0, 30, 8);
             
-            ctx.rotate(t.angle);
-            ctx.fillStyle = '#666'; 
-            ctx.fillRect(0, -4, 25, 8);
-            ctx.fillStyle = '#f44'; 
-            ctx.fillRect(20, -2, 5, 4);
+            // Housing & Barrels matching exact firing patterns
+            ctx.fillStyle = '#666';
+            if (tileId === 0xBA) {
+                // 5-way half-circle fan
+                ctx.fillRect(-10, -12, 4, 12);
+                ctx.fillRect(-5, -16, 4, 16);
+                ctx.fillRect(-2, -18, 4, 18);
+                ctx.fillRect(1, -16, 4, 16);
+                ctx.fillRect(6, -12, 4, 12);
+                ctx.fillStyle = '#f44';
+                ctx.fillRect(-2, -20, 4, 2);
+            } else if (tileId === 0xAF || tileId === 0xB0 || tileId === 0xAE) {
+                // Multi-way cone (3-way / 4-way)
+                ctx.fillRect(-8, -12, 4, 12);
+                ctx.fillRect(-2, -16, 4, 16);
+                ctx.fillRect(4, -12, 4, 12);
+                ctx.fillStyle = '#f44';
+                ctx.fillRect(-2, -18, 4, 2);
+            } else {
+                // Standard single stream (vertical, horizontal, angled)
+                ctx.fillRect(-4, -16, 8, 16);
+                ctx.fillStyle = '#f44';
+                ctx.fillRect(-4, -18, 8, 2);
+            }
             
             ctx.restore();
         }
