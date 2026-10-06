@@ -261,6 +261,22 @@
             if (serverState.turrets) serverState.turrets.forEach(drawTurret);
             for (let id in renderState.players) drawShip(renderState.players[id], id === myId);
             
+            // Debug Tile Overlay
+            if (level.rawMap) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '600 11px system-ui, monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                for (let y = 0; y < level.rawMap.length; y++) {
+                    for (let x = 0; x < level.rawMap[y].length; x++) {
+                        const tile = level.rawMap[y][x];
+                        if (tile !== 0) {
+                            ctx.fillText(tile.toString(16).toUpperCase().padStart(2, '0'), x * 32 + 16, y * 32 + 16);
+                        }
+                    }
+                }
+            }
+
             ctx.fillStyle = '#ff8';
             for (let b of serverState.bullets) ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
             updateAndDrawParticles(ctx);

@@ -19,4 +19,5 @@ export interface LevelData {
     ceiling: Point[]; floor: Point[];
     walls: Point[][];
     entities: LevelEntity[];
+    rawMap?: number[][];
 }

@@ -44,7 +44,10 @@ export class Room {
         let chosenX: number | null = null;
         let chosenY: number | null = null;
 
-        const spawnEntities = this.level.entities.filter(e => e.type === 'spawn');
+        const spawnEntities = this.level.entities
+            .filter(e => e.type === 'spawn')
+            .sort((a, b) => (a.props?.player || 1) - (b.props?.player || 1));
+
         let candidateSpots = spawnEntities.map(e => ({ x: e.x, y: e.y }));
         if (candidateSpots.length === 0) {
             candidateSpots = [{ x: 100, y: 100 }]; // Failsafe
