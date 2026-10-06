@@ -23,7 +23,9 @@ function handleTransition(id: string) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
     
-    let pLevel = 0; let pType: 'classic'|'modern' = 'modern';
+    let pLevel = 0;
+    let pType: 'classic'|'modern' = 'modern';
+    
     for (const room of rooms.values()) {
         const e = room.ecs.getPlayerEntity(id);
         if (e !== undefined) {
@@ -59,9 +61,18 @@ io.on('connection', (socket) => {
             const e = room.ecs.getPlayerEntity(socket.id);
             if (e !== undefined) {
                 const p = room.ecs.players.get(e)!;
+
                 if (!p.isDead) {
-                    p.inputs = { up: !!rawInputs?.up, left: !!rawInputs?.left, right: !!rawInputs?.right, shoot: !!rawInputs?.shoot };
-                    if (rawInputs?.shoot) p.shootLatch = true;
+                    p.inputs = {
+                        up: !!rawInputs?.up,
+                        left: !!rawInputs?.left,
+                        right: !!rawInputs?.right,
+                        shoot: !!rawInputs?.shoot
+                    };
+
+                    if (rawInputs?.shoot) {
+                        p.shootLatch = true;
+                    }
                 }
                 break;
             }

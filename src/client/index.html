@@ -59,6 +59,25 @@
         let camera = { x: 0, y: 0 };
         let particles = [];
 
+        const KNOWN_TILES = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
+            0x1F, 0x24, 0x25, 0x26, 
+            0x27, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 
+            0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+            0x39, 0x3A, 0x5E, 0x5F, 0x60, 
+            0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 
+            0x67,
+            0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x73, 
+            0x74, 0x75, 0x76, 0x77, 0x79, 0x7A, 0x7B,
+            0x7D, 0x7E,
+            0x82, 0x83, 0x86, 0x88, 0x89,
+            0x87, 0x89, 0x8A, 0x8B, 0x8F, 0xD1, 
+            0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 
+            0xE7, 0xF0, 0xF1, 0xF2,
+            0xF3, 0xF8, 0xF9, 0xFA, 0xFB
+        ];
+
         const inputs = { up: false, left: false, right: false, shoot: false };
         
         function emitInputs() { socket.emit('input', inputs); }
@@ -263,14 +282,18 @@
             
             // Debug Tile Overlay
             if (level.rawMap) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                ctx.font = '600 11px system-ui, monospace';
+                ctx.font = '600 14px system-ui, monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 for (let y = 0; y < level.rawMap.length; y++) {
                     for (let x = 0; x < level.rawMap[y].length; x++) {
                         const tile = level.rawMap[y][x];
-                        if (tile !== 0) {
+                        if(tile !== 0) {
+                            if (KNOWN_TILES.includes(tile)) {
+                                ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                            } else {
+                                ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+                            }
                             ctx.fillText(tile.toString(16).toUpperCase().padStart(2, '0'), x * 32 + 16, y * 32 + 16);
                         }
                     }
