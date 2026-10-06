@@ -101,6 +101,10 @@ export const TILE_TO_TURRET_TYPE: Record<number, number> = {
     0xBA: 13  // 5-Way Fan
 };
 
+export function getTriggerIdForTurretTile(turretTileId: number): number {
+    return turretTileId - 0xAD;
+}
+
 export function getTurretSpecByTile(tileId: number): TurretSpec {
     const typeId = TILE_TO_TURRET_TYPE[tileId] || 1;
     return TURRET_SPECS_BY_ID[typeId];

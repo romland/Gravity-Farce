@@ -12,10 +12,11 @@ export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy:
     return e;
 }
 
-export function spawnTurret(ecs: Registry, x: number, y: number, turretType: number = 0xAF, orientUp: boolean = false) {
+export function spawnTurret(ecs: Registry, x: number, y: number, turretType: number = 0xAF, orientUp: boolean = false, triggerId?: number) {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: orientUp ? -Math.PI/2 : Math.PI/2 });
-    ecs.turrets.set(e, { active: true, hp: 3, cooldown: 0, turretType, orientUp });
+    const resolvedTriggerId = triggerId !== undefined ? triggerId : (turretType - 0xAD);
+    ecs.turrets.set(e, { active: true, hp: 3, cooldown: 0, turretType, orientUp, triggerId: resolvedTriggerId });
     return e;
 }
 
@@ -118,56 +119,54 @@ export function sysBullets(ecs: Registry, room: Room) {
 }
 
 export function sysTurrets(ecs: Registry, room: Room) {
-    for (const [e, turret] of ecs.turrets.entries()) {
-        if (!turret.active) continue;
-        const t = ecs.transforms.get(e)!;
+    // 1. Collect all trigger tile IDs currently touched by alive players (0xBD - 0xCB)
+    const activeTriggers = new Set<number>();
 
-        let targetId: string | null = null;
-        let minDist = 800;
-        let targetPos = { x: 0, y: 0 };
-
+    if (room.level && room.level.rawMap) {
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
-            const pt = ecs.transforms.get(pe)!;
-            let d = Math.hypot(pt.x - t.x, pt.y - t.y);
-            if (d < minDist) {
-                minDist = d;
-                targetId = p.id;
-                targetPos = { x: pt.x, y: pt.y };
+            const pt = ecs.transforms.get(pe);
+            if (!pt) continue;
+
+            const tileX = Math.floor(pt.x / 32);
+            const tileY = Math.floor(pt.y / 32);
+            const tileId = room.level.rawMap[tileY]?.[tileX];
+
+            if (tileId !== undefined && tileId >= 0xBD && tileId <= 0xCB) {
+                activeTriggers.add(tileId - 0xBC);
             }
         }
+    }
 
-        if (targetId) {
-            let diff = Math.atan2(targetPos.y - t.y, targetPos.x - t.x) - t.angle;
-            while (diff < -Math.PI) {
-                diff += Math.PI * 2; 
-            }
-            while (diff > Math.PI) {
-                diff -= Math.PI * 2;
-            }
-            t.angle += Math.sign(diff) * 0.02;
+    // 2. Process turret firing based on tile trigger state
+    for (const [e, turret] of ecs.turrets.entries()) {
+        if (!turret.active) continue;
 
-            if (turret.cooldown > 0) {
-                turret.cooldown--;
-            }
+        if (turret.cooldown > 0) {
+            turret.cooldown--;
+        }
 
-            if (turret.cooldown <= 0 && Math.abs(diff) < 0.5) {
-                const spec = getTurretSpecByTile(turret.turretType);
-                const speed = 5.0;
-                for (const vec of spec.vectors) {
-                    spawnBullet(
-                        ecs,
-                        t.x + spec.muzzleOffset.x,
-                        t.y + spec.muzzleOffset.y,
-                        vec.vx * speed,
-                        vec.vy * speed,
-                        false,
-                        'npc',
-                        90
-                    );
-                }
-                turret.cooldown = spec.cooldownMax;
+        const targetTriggerId = turret.triggerId !== undefined ? turret.triggerId : (turret.turretType - 0xAD);
+        const isTriggered = activeTriggers.has(targetTriggerId);
+
+        if (isTriggered && turret.cooldown <= 0) {
+            const t = ecs.transforms.get(e)!;
+            const spec = getTurretSpecByTile(turret.turretType);
+            const speed = 5.0;
+
+            for (const vec of spec.vectors) {
+                spawnBullet(
+                    ecs,
+                    t.x + spec.muzzleOffset.x,
+                    t.y + spec.muzzleOffset.y,
+                    vec.vx * speed,
+                    vec.vy * speed,
+                    false,
+                    'npc',
+                    90
+                );
             }
+            turret.cooldown = spec.cooldownMax;
         }
     }
 }
