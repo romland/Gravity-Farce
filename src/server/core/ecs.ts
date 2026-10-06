@@ -2,8 +2,23 @@ import type { Inputs } from './types';
 
 export type Entity = number;
 
-export interface Transform { x: number; y: number; angle: number; }
-export interface Velocity { vx: number; vy: number; angularVelocity: number; }
+export interface Transform {
+    x: number;
+    y: number;
+    angle: number;
+}
+
+export interface Velocity {
+    vx: number;
+    vy: number;
+    angularVelocity: number;
+}
+
+export interface GameEvent {
+    type: string;
+    x: number;
+    y: number;
+}
 
 export interface Player {
     id: string;
@@ -19,8 +34,18 @@ export interface Player {
     isLanded: boolean;
 }
 
-export interface Turret { active: boolean; hp: number; cooldown: number; orientUp: boolean; }
-export interface Bullet { life: number; isPlayer: boolean; ownerId: string; }
+export interface Turret {
+    active: boolean;
+    hp: number;
+    cooldown: number;
+    orientUp: boolean;
+}
+
+export interface Bullet {
+    life: number;
+    isPlayer: boolean;
+    ownerId: string;
+}
 
 export class Registry {
     private nextId = 1;
@@ -29,6 +54,7 @@ export class Registry {
     public players = new Map<Entity, Player>();
     public turrets = new Map<Entity, Turret>();
     public bullets = new Map<Entity, Bullet>();
+    public events: GameEvent[] = [];
 
     create(): Entity { 
         return this.nextId++; 

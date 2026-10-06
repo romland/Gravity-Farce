@@ -12,6 +12,10 @@ Some python RE-related files:
 RE conversation -- some nice nuggets on code in there:
     Z:\saved-pages\_Gemini - direct access to Google AI (06_10_2026 03_11_34).html
 
+The more crates you carry, the heavier you are (gravity is meaner)
+    - Need to dig out HOW MUCH heavier
+    - also, seems you can only carry the larger crates if you are not carrying anything else? or?
+      ah, no, you can at least carry ONE small crater and still pick up a larger one
 
 in original
     shift or DOWN is thrust
@@ -24,6 +28,36 @@ in original
         4 turn left
         6 turn right
         8 fire
+
+- Lives at:
+    $000357C2
+    set to 127 lives: e.g: W 357C2 7f
+    on write to it, start debugger: w 0 000357C2 1 W
+
+- Collision check at:
+    This will remove all collisions except a "correct" landing:
+    W 0003511E 4E 71 4E 71 4E 71 4E 71
+
+    Should look like this afterwards:
+    >d 000350e4 12
+    000350e4 4a39 0003 55b4           tst.b $000355b4 [00]
+    000350ea 6600 04bc                bne.w #$04bc == $000355a8 (F)
+    000350ee 0c39 0004 0003 55b5      cmp.b #$04,$000355b5 [02]
+    000350f6 6700 002e                beq.w #$002e == $00035126 (T)
+    000350fa 0839 0001 0003 091d      btst.b #$0001,$0003091d [21]
+    00035102 6600 001a                bne.w #$001a == $0003511e (F)
+    00035106 0839 0002 0003 091c      btst.b #$0002,$0003091c [80]
+    0003510e 6600 000e                bne.w #$000e == $0003511e (F)
+    00035112 0839 0001 0003 091c      btst.b #$0001,$0003091c [80]
+    0003511a 6700 000c                beq.w #$000c == $00035128 (T)
+    0003511e 4e71                     nop
+    00035120 4e71                     nop
+    00035122 4e71                     nop
+    00035124 4e71                     nop
+    00035126 4e75                     rts  == $00000000
+    00035128 4280                     clr.l d0
+    0003512a 3039 0003 7f40           move.w $00037f40 [00a3],d0
+    00035130 0640 0002                add.w #$0002,d0
 
 
 level 50 is the race course

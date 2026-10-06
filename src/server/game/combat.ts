@@ -57,10 +57,11 @@ export function sysBullets(ecs: Registry, room: Room) {
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
         
-        const ox = t.x; 
+        const ox = t.x;
         const oy = t.y;
-        t.x += v.vx; 
-        t.y += v.vy; 
+        
+        t.x += v.vx;
+        t.y += v.vy;
         b.life--;
 
         let hit = false;
@@ -70,18 +71,23 @@ export function sysBullets(ecs: Registry, room: Room) {
             if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) {
                 hit = true;
             }
+            
             if (room.level.walls) {
                 for (const wall of room.level.walls) {
-                    if (checkPolyIntersect(bLine, wall)) { hit = true; break; }
+                    if (checkPolyIntersect(bLine, wall)) { 
+                        hit = true; 
+                        break; 
+                    }
                 }
             }
 
             if (p.isDead) continue;
+            
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {
-                if (b.ownerId !== p.id || b.life < 390) { 
-                    hit = true; 
-                    killPlayer(ecs, pe); 
+                if (b.ownerId !== p.id || b.life < 390) {
+                    hit = true;
+                    killPlayer(ecs, pe);
                 }
             }
         }
@@ -91,16 +97,20 @@ export function sysBullets(ecs: Registry, room: Room) {
                 if (!turret.active) continue;
                 const tt = ecs.transforms.get(te)!;
                 if (t.x > tt.x - 15 && t.x < tt.x + 15 && t.y > tt.y - 15 && t.y < tt.y + 15) {
-                    hit = true; 
-                    turret.hp--; 
+                    hit = true;
+                    turret.hp--;
                     if (turret.hp <= 0) {
                         turret.active = false;
+                        ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
                     }
                 }
             }
         }
 
         if (b.life <= 0 || hit) {
+            if (hit) {
+                ecs.events.push({ type: 'poof', x: t.x, y: t.y });
+            }
             ecs.destroy(e);
         }
     }
@@ -119,10 +129,10 @@ export function sysTurrets(ecs: Registry, room: Room) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe)!;
             let d = Math.hypot(pt.x - t.x, pt.y - t.y);
-            if (d < minDist) { 
-                minDist = d; 
-                targetId = p.id; 
-                targetPos = { x: pt.x, y: pt.y }; 
+            if (d < minDist) {
+                minDist = d;
+                targetId = p.id;
+                targetPos = { x: pt.x, y: pt.y };
             }
         }
 

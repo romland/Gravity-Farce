@@ -31,6 +31,8 @@ export class Room {
         }
 
         sysNetworkSync(this.ecs, this.levelIndex, this.io);
+        
+        this.ecs.events = [];
     }
 
     addPlayer(id: string, type: 'classic' | 'modern') {
@@ -60,15 +62,24 @@ export class Room {
             for (const [e, p] of this.ecs.players.entries()) {
                 if (p.id !== id && !p.isDead) {
                     const t = this.ecs.transforms.get(e)!;
-                    if (Math.hypot(t.x - pt.x, t.y - pt.y) < 30) clear = false;
+                    if (Math.hypot(t.x - pt.x, t.y - pt.y) < 30) {
+                        clear = false;
+                    }
                 }
             }
-            if (clear) { chosenX = pt.x; chosenY = pt.y; break; }
+            
+            if (clear) { 
+                chosenX = pt.x; 
+                chosenY = pt.y; 
+                break; 
+            }
         }
 
         if (chosenX !== null) {
             const existing = this.ecs.getPlayerEntity(id);
-            if (existing !== undefined) this.ecs.destroy(existing);
+            if (existing !== undefined) {
+                this.ecs.destroy(existing);
+            }
             
             if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!);
             else spawnModernPlayer(this.ecs, id, chosenX, chosenY!);

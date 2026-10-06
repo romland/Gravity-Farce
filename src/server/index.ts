@@ -18,6 +18,9 @@ export const SERVER_CONFIG = {
 const rooms = new Map<number, Room>();
 let isServerPaused = false;
 
+// O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
+const playerRooms = new Map<string, number>();
+
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
         rooms.set(index, new Room(index, getLevelData(index), io, handleTransition));
@@ -46,8 +49,10 @@ function handleTransitionToLevel(id: string, targetLevel: number) {
     
     const newRoom = getOrCreateRoom(targetLevel);
     socket.join(`level_${targetLevel}`);
+    playerRooms.set(id, targetLevel);
     
     socket.emit('initLevel', newRoom.level);
+    socket.emit('levelIndex', newRoom.levelIndex);
     newRoom.addPlayer(id, pType);
 }
 
@@ -69,9 +74,11 @@ io.on('connection', (socket) => {
     const room = getOrCreateRoom(0);
     
     socket.join('level_0');
+    playerRooms.set(socket.id, 0);
     socket.emit('serverConfig', SERVER_CONFIG);
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
+    socket.emit('levelIndex', room.levelIndex);
     room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern');
 
     socket.on('debug_action', (action, payload) => {
@@ -85,24 +92,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('input', (rawInputs) => {
-        for (const room of rooms.values()) {
-            const e = room.ecs.getPlayerEntity(socket.id);
-            if (e !== undefined) {
-                const p = room.ecs.players.get(e)!;
+        const roomIndex = playerRooms.get(socket.id);
+        if (roomIndex === undefined) return;
+        
+        const room = rooms.get(roomIndex);
+        if (!room) return;
 
-                if (!p.isDead) {
-                    p.inputs = {
-                        up: Boolean(rawInputs?.up),
-                        left: Boolean(rawInputs?.left),
-                        right: Boolean(rawInputs?.right),
-                        shoot: Boolean(rawInputs?.shoot)
-                    };
+        const e = room.ecs.getPlayerEntity(socket.id);
+        if (e !== undefined) {
+            const p = room.ecs.players.get(e)!;
 
-                    if (rawInputs?.shoot) {
-                        p.shootLatch = true;
-                    }
+            if (!p.isDead) {
+                p.inputs = {
+                    up: Boolean(rawInputs?.up),
+                    left: Boolean(rawInputs?.left),
+                    right: Boolean(rawInputs?.right),
+                    shoot: Boolean(rawInputs?.shoot)
+                };
+
+                if (rawInputs?.shoot) {
+                    p.shootLatch = true;
                 }
-                break;
             }
         }
     });
@@ -111,6 +121,7 @@ io.on('connection', (socket) => {
         for (const room of rooms.values()) {
             room.removePlayer(socket.id);
         }
+        playerRooms.delete(socket.id);
     });
 });
 

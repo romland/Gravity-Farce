@@ -22,7 +22,13 @@ try {
 }
 
 export function getLevelData(index: number): LevelData {
-    const safeIndex = index % Math.max(1, orgLevelsData.length);
+    const maxLevels = Math.max(1, orgLevelsData.length);
+    let safeIndex = index % maxLevels;
+    
+    if (safeIndex < 0) {
+        safeIndex += maxLevels;
+    }
+    
     const levelJson = orgLevelsData[safeIndex];
     const generator = new LegacyTileGenerator(`SECTOR ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
     return generator.generate(safeIndex);

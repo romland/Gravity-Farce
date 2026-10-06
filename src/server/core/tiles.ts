@@ -72,18 +72,18 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x40: { id: 0x40, description: "Race: Blinking checkpoint 6", known: false },
     0x41: { id: 0x41, description: "Race: Blinking checkpoint 7", known: false },
     0x42: { id: 0x42, description: "Race: Blinking checkpoint 8", known: false },
-    0x43: { id: 0x43, description: "Race: Bottom checkpoint number holder", known: false },
-    0x44: { id: 0x44, description: "Race: Bottom checkpoint number holder", known: false },
-    0x45: { id: 0x45, description: "Race: Bottom checkpoint number holder", known: false },
-    0x46: { id: 0x46, description: "Race: Left-side checkpoint number holder", known: false },
-    0x47: { id: 0x47, description: "Race: Left-side checkpoint number holder", known: false },
-    0x48: { id: 0x48, description: "Race: Left-side checkpoint number holder", known: false },
-    0x49: { id: 0x49, description: "Race: Top checkpoint number holder (3)", known: false },
-    0x4A: { id: 0x4A, description: "Race: Top checkpoint number holder (2)", known: false },
-    0x4B: { id: 0x4B, description: "Race: Top checkpoint number holder (1)", known: false },
-    0x4C: { id: 0x4C, description: "Race: Right-side checkpoint number holder", known: false },
-    0x4D: { id: 0x4D, description: "Race: Right-side checkpoint number holder", known: false },
-    0x4E: { id: 0x4E, description: "Race: Right-side checkpoint number holder", known: false },
+    0x43: { id: 0x43, description: "Race: Bottom checkpoint number holder", known: true },
+    0x44: { id: 0x44, description: "Race: Bottom checkpoint number holder", known: true },
+    0x45: { id: 0x45, description: "Race: Bottom checkpoint number holder", known: true },
+    0x46: { id: 0x46, description: "Race: Left-side checkpoint number holder", known: true },
+    0x47: { id: 0x47, description: "Race: Left-side checkpoint number holder", known: true },
+    0x48: { id: 0x48, description: "Race: Left-side checkpoint number holder", known: true },
+    0x49: { id: 0x49, description: "Race: Top checkpoint number holder (3)", known: true },
+    0x4A: { id: 0x4A, description: "Race: Top checkpoint number holder (2)", known: true },
+    0x4B: { id: 0x4B, description: "Race: Top checkpoint number holder (1)", known: true },
+    0x4C: { id: 0x4C, description: "Race: Right-side checkpoint number holder", known: true },
+    0x4D: { id: 0x4D, description: "Race: Right-side checkpoint number holder", known: true },
+    0x4E: { id: 0x4E, description: "Race: Right-side checkpoint number holder", known: true },
 
     0x5B: { id: 0x5B, description: "thin standalone rock start", known: true },
     0x5C: { id: 0x5C, description: "thin standalone rock middle", known: true },
@@ -127,23 +127,38 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x8B: { id: 0x8B, description: 'Teal decorative boxes/barrels', known: true },
     0x8F: { id: 0x8F, description: 'Teal decorative boxes/barrels', known: true },
 
-    // b2 turret pointing up shooting straight up
-    
-    // b7 turret pointing east shooting straight east
+    // 0x00: { id: 0x00, description: '', known: true },
+    0xaf: { id: 0xaf, description: 'turret pointing up, shooting three bullets in cone', entity: { type: 'turret', }, known: true },
+    0xb0: { id: 0xb0, description: 'turret pointing up, shooting four bullets in cone', entity: { type: 'turret', }, known: true },
+    0xb2: { id: 0xb2, description: 'turret pointing up shooting straight up', entity: { type: 'turret', }, known: true },
 
-    // af turrent pointing up, shooting three bullets in cone
+    // b5 (lvl 49) some turret
+
+    0xb7: { id: 0xb7, description: 'turret pointing east shooting straight east', entity: { type: 'turret', }, known: true },
+    0xba: { id: 0xba, description: 'turret pointing up shooting 5 directions (half circle) sideways/upwards (9 or 10 hits needed) -- seen on e.g. lvl 49', entity: { type: 'turret', }, known: true },
+
 
     0xBD: { id: 0xBD, description: 'Solid Lethal Walls', solid: true, known: true },
 
-    // be -- trigger area for when (af?) turrets start shooting?
-    // c1 -- trigger area for when (b2?) turrets start shooting?
-    // c6 -- trigger area for when (b7?) turrets start shooting ... maybe?
+    // 0x00: { id: 0x00, description: '', known: true },
+    0xBE: { id: 0xBE, description: 'trigger area for when (af?) turrets start shooting?', known: true },
+    0xBF: { id: 0xBF, description: 'trigger area for when (b0?) turrets start shooting?', known: true },
+    0xC1: { id: 0xC1, description: 'trigger area for when (b2?) turrets start shooting?', known: true },
+
+    // c4 (lvl49) some turret trigger area
+
+    0xC6: { id: 0xC6, description: 'trigger area for when (b7?) turrets start shooting ... maybe?', known: true },
+    0xC9: { id: 0xC9, description: 'trigger area for when (ba?) turrets start shooting ... maybe?', known: true },
 
     0xCC: { id: 0xCC, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
     0xCF: { id: 0xCF, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
+    // D0 - Pickup package: fuel
     0xD1: { id: 0xD1, description: 'Pickup package / objective', known: true },
     0xD2: { id: 0xD2, description: 'Pickup package / objective', known: true },
     
+    0xD6: { id: 0xD6, description: 'Pickup package bonus: double shot; every key press shoots two bullets', known: true },
+
+
     0xDA: { id: 0xDA, description: 'Race objective 1 (invisible start line)', known: true },
     0xDB: { id: 0xDB, description: 'Race objective 2 (invisible checkpoint line)', known: true },
     0xDC: { id: 0xDC, description: 'Race objective 3 (invisible checkpoint line)', known: true },
@@ -155,6 +170,7 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xE2: { id: 0xE2, description: 'Multi-player P1 race start', entity: { type: 'spawn', props: { player: 1 } }, known: true },
     0xE3: { id: 0xE3, description: 'Multi-player P2 race start', known: true },
     0xE7: { id: 0xE7, description: 'Enemy path', known: true },
+    0xEC: { id: 0xEC, description: 'Enemy spawn (e.g. lvl 49)', known: true },
     0xF0: { id: 0xF0, description: 'Enemy path', known: true },
     0xF1: { id: 0xF1, description: 'Enemy path', known: true },
     0xF2: { id: 0xF2, description: 'Enemy path', known: true },

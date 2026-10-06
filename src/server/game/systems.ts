@@ -51,7 +51,12 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
     
     for (const [e, p] of ecs.players.entries()) {
         const t = ecs.transforms.get(e)!;
-        const state = { players: {} as any, turrets: [] as any, bullets: [] as any };
+        const state = { 
+            players: {} as any, 
+            turrets: [] as any, 
+            bullets: [] as any,
+            events: [] as any
+        };
         
         for (const [oe, op] of ecs.players.entries()) {
             const ot = ecs.transforms.get(oe)!;
@@ -71,6 +76,12 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             const bt = ecs.transforms.get(be)!;
             if (Math.abs(bt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(bt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
                 state.bullets.push({ x: bt.x, y: bt.y, isPlayer: b.isPlayer });
+            }
+        }
+        
+        for (const ev of ecs.events) {
+            if (Math.abs(ev.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ev.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.events.push(ev);
             }
         }
 
