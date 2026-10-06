@@ -1,4 +1,7 @@
 import type { LevelData } from './core/types';
+import { LegacyTileGenerator } from './game/level-generators';
+import fs from 'fs';
+import path from 'path';
 
 function createPRNG(seed: number) {
     return function() {
@@ -9,52 +12,18 @@ function createPRNG(seed: number) {
     }
 }
 
-const handcraftedLevels: LevelData[] = [
-    {
-        name: "SECTOR 01: THE DROP",
-        ceiling: [{x:-200, y:100}, {x:500, y:100}, {x:900, y:300}, {x:1400, y:300}, {x:1800, y:100}, {x:2500, y:100}],
-        floor: [{x:-200, y:600}, {x:300, y:600}, {x:700, y:800}, {x:1500, y:800}, {x:1900, y:600}, {x:2500, y:600}],
-        startPad: { x: 100, y: 600, w: 100 },
-        endPad: { x: 2100, y: 600, w: 100 },
-        turrets: []
-    }
-];
+let orgLevelsData: any[] = [];
+try {
+    const rawData = fs.readFileSync(path.join(process.cwd(), 'src/server/data/org-levels.json'), 'utf-8');
+    orgLevelsData = JSON.parse(rawData);
+    console.log(`Loaded ${orgLevelsData.length} classic levels from JSON.`);
+} catch (e) {
+    console.warn("Could not load org-levels.json. Did you run the extractor?", e);
+}
 
 export function getLevelData(index: number): LevelData {
-    if (index < handcraftedLevels.length) return JSON.parse(JSON.stringify(handcraftedLevels[index]));
-
-    const rng = createPRNG(index * 1337);
-    const length = 3000 + (index - 1) * 800;
-    const segments = Math.floor(length / 200);
-    
-    let ceiling = [], floor = [], turrets = [];
-    let cy = 400, gap = 500;
-    
-    for (let i = 0; i <= segments; i++) {
-        let x = i * 200;
-        if (i > 1 && i < segments - 1) {
-            cy += (rng() - 0.5) * 400; gap = 400 + rng() * 200;
-        }
-        let noiseCeil = (rng() - 0.5) * 100, noiseFloor = (rng() - 0.5) * 100;
-        if (i <= 2 || i >= segments - 2) {
-            noiseCeil = 0; noiseFloor = 0; gap = 600;
-            if (i <= 2) cy = 400; 
-        }
-        ceiling.push({x, y: cy - gap/2 + noiseCeil});
-        floor.push({x, y: cy + gap/2 + noiseFloor});
-
-        if (i > 2 && i < segments - 2 && rng() < 0.4) {
-            let isUp = rng() > 0.5;
-            turrets.push({ x, y: isUp ? floor[i].y : ceiling[i].y, orientUp: isUp });
-        }
-    }
-    ceiling.unshift({x: -500, y: ceiling[0].y}); floor.unshift({x: -500, y: floor[0].y});
-    ceiling.push({x: length + 500, y: ceiling[ceiling.length-1].y}); floor.push({x: length + 500, y: floor[floor.length-1].y});
-
-    return {
-        name: `SECTOR ${String(index + 1).padStart(2, '0')}: UNCHARTED DEPTHS`,
-        ceiling, floor, turrets,
-        startPad: { x: 100, y: floor[1].y, w: 100 },
-        endPad: { x: length - 300, y: floor[floor.length-2].y, w: 100 }
-    };
+    const safeIndex = index % Math.max(1, orgLevelsData.length);
+    const levelJson = orgLevelsData[safeIndex];
+    const generator = new LegacyTileGenerator(`SECTOR ${String(safeIndex + 1).padStart(2, '0')}`, levelJson.map_data);
+    return generator.generate(safeIndex);
 }

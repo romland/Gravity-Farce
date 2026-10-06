@@ -76,7 +76,9 @@ io.on('connection', (socket) => {
 });
 
 setInterval(() => {
-    for (let room of rooms.values()) room.tick();
+    for (let room of rooms.values()) {
+        room.tick();
+    }
 }, 1000 / 60);
 
 server.listen(10000, () => console.log('TS Server running on http://localhost:10000'));

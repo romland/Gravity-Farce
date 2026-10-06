@@ -11,7 +11,13 @@
             font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             overflow: hidden; 
         }
-        canvas { display: block; width: 100%; height: 100%; }
+        #gameCanvas { 
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+        }
         #hud { 
             position: absolute; top: 24px; left: 24px; z-index: 20; pointer-events: none; 
             font-size: 16px; font-weight: 600; letter-spacing: 1px; color: rgba(255, 255, 255, 0.9);
@@ -32,13 +38,16 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const hud = document.getElementById('hud');
-        let width = window.innerWidth, height = window.innerHeight;
         
+        // Enforce Competitive Fixed Viewport
+        const VIEW_W = 1600;
+        const VIEW_H = 900;
+        canvas.width = VIEW_W;
+        canvas.height = VIEW_H;
+
         function resize() { 
-            width = window.innerWidth; height = window.innerHeight; 
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = width * dpr; canvas.height = height * dpr; 
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const scale = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
+            canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
         }
         window.addEventListener('resize', resize); resize();
 
@@ -171,8 +180,8 @@
             ctx.save(); ctx.translate(t.x, t.y);
             
             ctx.fillStyle = '#333'; ctx.strokeStyle = '#555';
-            ctx.fillRect(-15, t.orientUp ? -10 : 0, 30, 10);
-            ctx.strokeRect(-15, t.orientUp ? -10 : 0, 30, 10);
+            ctx.fillRect(-15, t.orientUp ? -8 : 0, 30, 8);
+            ctx.strokeRect(-15, t.orientUp ? -8 : 0, 30, 8);
             
             ctx.rotate(t.angle);
             ctx.fillStyle = '#666'; ctx.fillRect(0, -4, 25, 8);
@@ -182,7 +191,7 @@
 
         function gameLoop() {
             requestAnimationFrame(gameLoop);
-            ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
             if (!level) return;
 
             // Interpolation
@@ -204,8 +213,15 @@
 
             let myPlayer = renderState.players[myId];
             if (myPlayer) {
-                camera.x += (myPlayer.x - width / 2 - camera.x) * 0.1;
-                camera.y += (myPlayer.y - height / 2 - camera.y) * 0.1;
+                let targetX = myPlayer.x - VIEW_W / 2;
+                let targetY = myPlayer.y - VIEW_H / 2;
+                
+                // Clamp camera strictly to map bounds
+                targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
+                targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
+
+                camera.x += (targetX - camera.x) * 0.1;
+                camera.y += (targetY - camera.y) * 0.1;
             }
 
             ctx.save();
@@ -214,18 +230,32 @@
             // Map
             ctx.fillStyle = '#0d1117'; ctx.strokeStyle = '#2d3748'; ctx.lineWidth = 3;
             
-            ctx.beginPath(); ctx.moveTo(level.ceiling[0].x, -3000);
-            for (let p of level.ceiling) ctx.lineTo(p.x, p.y); ctx.lineTo(level.ceiling[level.ceiling.length-1].x, -3000);
-            ctx.fill(); ctx.stroke();
+            if (level.ceiling && level.ceiling.length > 0) {
+                ctx.beginPath(); ctx.moveTo(level.ceiling[0].x, -3000);
+                for (let p of level.ceiling) ctx.lineTo(p.x, p.y); ctx.lineTo(level.ceiling[level.ceiling.length-1].x, -3000);
+                ctx.fill(); ctx.stroke();
+            }
 
-            ctx.beginPath(); ctx.moveTo(level.floor[0].x, 3000);
-            for (let p of level.floor) ctx.lineTo(p.x, p.y); ctx.lineTo(level.floor[level.floor.length-1].x, 3000);
-            ctx.fill(); ctx.stroke();
+            if (level.floor && level.floor.length > 0) {
+                ctx.beginPath(); ctx.moveTo(level.floor[0].x, 3000);
+                for (let p of level.floor) ctx.lineTo(p.x, p.y); ctx.lineTo(level.floor[level.floor.length-1].x, 3000);
+                ctx.fill(); ctx.stroke();
+            }
+
+            if (level.walls) {
+                for (let wall of level.walls) {
+                    ctx.beginPath(); ctx.moveTo(wall[0].x, wall[0].y);
+                    for (let p of wall) ctx.lineTo(p.x, p.y);
+                    ctx.fill(); ctx.stroke();
+                }
+            }
 
             // Pads
-            for (let pad of [level.startPad, level.endPad]) {
-                ctx.fillStyle = '#111'; ctx.fillRect(pad.x, pad.y, pad.w, 20);
-                ctx.fillStyle = '#4a9'; ctx.fillRect(pad.x, pad.y, pad.w, 4);
+            if (level.entities) {
+                level.entities.filter(e => e.type === 'pad').forEach(pad => {
+                    ctx.fillStyle = '#111'; ctx.fillRect(pad.x, pad.y, pad.w || 20, pad.h || 20);
+                    ctx.fillStyle = '#4a9'; ctx.fillRect(pad.x, pad.y, pad.w || 20, 4);
+                });
             }
 
             if (serverState.turrets) serverState.turrets.forEach(drawTurret);

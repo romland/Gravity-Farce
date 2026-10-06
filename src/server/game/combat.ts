@@ -24,10 +24,19 @@ export function killPlayer(ecs: Registry, e: Entity) {
     p.isDead = true;
     p.isLanded = false;
     const v = ecs.velocities.get(e);
-    if (v) { v.vx = 0; v.vy = 0; v.angularVelocity = 0; }
+    if (v) { 
+        v.vx = 0; 
+        v.vy = 0; 
+        v.angularVelocity = 0; 
+    }
+    
     p.inputs = { up: false, left: false, right: false, shoot: false };
-    p.shootLatch = false; p.prevShoot = false;
-    setTimeout(() => { p.respawnRequest = true; }, 3000);
+    p.shootLatch = false; 
+    p.prevShoot = false;
+    
+    setTimeout(() => { 
+        p.respawnRequest = true; 
+    }, 3000);
 }
 
 export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18): boolean {
@@ -35,7 +44,10 @@ export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radiu
     for (const [oe, op] of ecs.players.entries()) {
         if (oe === e || op.isDead) continue;
         const ot = ecs.transforms.get(oe)!;
-        if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { crashed = true; killPlayer(ecs, oe); }
+        if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { 
+            crashed = true; 
+            killPlayer(ecs, oe); 
+        }
     }
     return crashed;
 }
@@ -45,18 +57,32 @@ export function sysBullets(ecs: Registry, room: Room) {
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
         
-        const ox = t.x; const oy = t.y;
-        t.x += v.vx; t.y += v.vy; b.life--;
+        const ox = t.x; 
+        const oy = t.y;
+        t.x += v.vx; 
+        t.y += v.vy; 
+        b.life--;
 
         let hit = false;
 
         for (const [pe, p] of ecs.players.entries()) {
-        const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
-        if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) hit = true;
+            const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
+            if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) {
+                hit = true;
+            }
+            if (room.level.walls) {
+                for (const wall of room.level.walls) {
+                    if (checkPolyIntersect(bLine, wall)) { hit = true; break; }
+                }
+            }
+
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {
-                if (b.ownerId !== p.id || b.life < 390) { hit = true; killPlayer(ecs, pe); }
+                if (b.ownerId !== p.id || b.life < 390) { 
+                    hit = true; 
+                    killPlayer(ecs, pe); 
+                }
             }
         }
 
@@ -65,12 +91,18 @@ export function sysBullets(ecs: Registry, room: Room) {
                 if (!turret.active) continue;
                 const tt = ecs.transforms.get(te)!;
                 if (t.x > tt.x - 15 && t.x < tt.x + 15 && t.y > tt.y - 15 && t.y < tt.y + 15) {
-                    hit = true; turret.hp--; if (turret.hp <= 0) turret.active = false;
+                    hit = true; 
+                    turret.hp--; 
+                    if (turret.hp <= 0) {
+                        turret.active = false;
+                    }
                 }
             }
         }
 
-        if (b.life <= 0 || hit) ecs.destroy(e);
+        if (b.life <= 0 || hit) {
+            ecs.destroy(e);
+        }
     }
 }
 
@@ -87,17 +119,29 @@ export function sysTurrets(ecs: Registry, room: Room) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe)!;
             let d = Math.hypot(pt.x - t.x, pt.y - t.y);
-            if (d < minDist) { minDist = d; targetId = p.id; targetPos = { x: pt.x, y: pt.y }; }
+            if (d < minDist) { 
+                minDist = d; 
+                targetId = p.id; 
+                targetPos = { x: pt.x, y: pt.y }; 
+            }
         }
 
         if (targetId) {
             let diff = Math.atan2(targetPos.y - t.y, targetPos.x - t.x) - t.angle;
-            while (diff < -Math.PI) diff += Math.PI * 2; while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) {
+                diff += Math.PI * 2; 
+            }
+            while (diff > Math.PI) {
+                diff -= Math.PI * 2;
+            }
             t.angle += Math.sign(diff) * 0.02;
 
-            if (turret.cooldown > 0) turret.cooldown--;
+            if (turret.cooldown > 0) {
+                turret.cooldown--;
+            }
+
             if (turret.cooldown <= 0 && Math.abs(diff) < 0.5) {
-                spawnBullet(ecs, t.x + Math.cos(t.angle)*20, t.y + Math.sin(t.angle)*20, Math.cos(t.angle)*6, Math.sin(t.angle)*6, false, 'npc', 90);
+                spawnBullet(ecs, t.x + Math.cos(t.angle) * 20, t.y + Math.sin(t.angle) * 20, Math.cos(t.angle) * 6, Math.sin(t.angle) * 6, false, 'npc', 90);
                 turret.cooldown = 90;
             }
         }

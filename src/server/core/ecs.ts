@@ -30,7 +30,9 @@ export class Registry {
     public turrets = new Map<Entity, Turret>();
     public bullets = new Map<Entity, Bullet>();
 
-    create(): Entity { return this.nextId++; }
+    create(): Entity { 
+        return this.nextId++; 
+    }
     
     destroy(e: Entity) {
         this.transforms.delete(e);

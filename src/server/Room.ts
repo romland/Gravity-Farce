@@ -10,7 +10,9 @@ export class Room {
     public ecs = new Registry();
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
-        level.turrets.forEach(t => spawnTurret(this.ecs, t.x, t.y, t.orientUp));
+        level.entities.forEach(ent => {
+            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.orientUp || false);
+        });
     }
 
     tick() {
@@ -39,28 +41,47 @@ export class Room {
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern') {
-        const spawnY = this.level.startPad.y - 20;
-        const padW = this.level.startPad.w;
-        const spots = [this.level.startPad.x + 25, this.level.startPad.x + padW - 25, this.level.startPad.x + padW / 2];
-        
         let chosenX: number | null = null;
-        for (let x of spots) {
+        let chosenY: number | null = null;
+
+        const spawnEntities = this.level.entities.filter(e => e.type === 'spawn');
+        let candidateSpots = spawnEntities.map(e => ({ x: e.x, y: e.y }));
+        if (candidateSpots.length === 0) {
+            candidateSpots = [{ x: 100, y: 100 }]; // Failsafe
+        }
+
+        for (let pt of candidateSpots) {
             let clear = true;
             for (const [e, p] of this.ecs.players.entries()) {
                 if (p.id !== id && !p.isDead) {
                     const t = this.ecs.transforms.get(e)!;
-                    if (Math.hypot(t.x - x, t.y - spawnY) < 30) clear = false;
+                    if (Math.hypot(t.x - pt.x, t.y - pt.y) < 30) clear = false;
                 }
             }
-            if (clear) { chosenX = x; break; }
+            if (clear) { chosenX = pt.x; chosenY = pt.y; break; }
         }
 
         if (chosenX !== null) {
             const existing = this.ecs.getPlayerEntity(id);
             if (existing !== undefined) this.ecs.destroy(existing);
             
-            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, spawnY);
-            else spawnModernPlayer(this.ecs, id, chosenX, spawnY);
+            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!);
+            else spawnModernPlayer(this.ecs, id, chosenX, chosenY!);
+
+            const playerEntity = this.ecs.getPlayerEntity(id);
+            if (playerEntity !== undefined) {
+                const p = this.ecs.players.get(playerEntity);
+                if (p) {
+                    p.isLanded = true;
+                    const v = this.ecs.velocities.get(playerEntity);
+                    if (v) {
+                        v.vx = 0;
+                        v.vy = 0;
+                        v.angularVelocity = 0;
+                    }
+                }
+            }
+
         } else {
             setTimeout(() => this.trySpawnPlayer(id, type), 500);
         }

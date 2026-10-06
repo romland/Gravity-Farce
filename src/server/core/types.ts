@@ -6,9 +6,17 @@ export interface Inputs {
     right: boolean; shoot: boolean;
 }
 
+export interface LevelEntity {
+    type: string;
+    x: number; y: number; w?: number; h?: number;
+    props?: any;
+}
+
 export interface LevelData {
     name: string;
+    width: number;
+    height: number;
     ceiling: Point[]; floor: Point[];
-    startPad: Pad; endPad: Pad;
-    turrets: { x: number; y: number; orientUp: boolean }[];
+    walls: Point[][];
+    entities: LevelEntity[];
 }
