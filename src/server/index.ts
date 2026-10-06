@@ -3,9 +3,6 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { getLevelData } from './levels';
 import { Room } from './Room';
-import type { BasePlayer } from './BasePlayer';
-import { ModernPlayer } from './ModernPlayer';
-import { ClassicPlayer } from './ClassicPlayer';
 
 const app = express();
 const server = http.createServer(app);
@@ -22,52 +19,59 @@ function getOrCreateRoom(index: number): Room {
     return rooms.get(index)!;
 }
 
-function handleTransition(p: BasePlayer) {
-    const socket = io.sockets.sockets.get(p.id);
+function handleTransition(id: string) {
+    const socket = io.sockets.sockets.get(id);
     if (!socket) return;
     
-    const oldRoom = rooms.get(p.levelIndex);
-    if (oldRoom) oldRoom.players.delete(p.id);
-    socket.leave(`level_${p.levelIndex}`);
+    let pLevel = 0; let pType: 'classic'|'modern' = 'modern';
+    for (const room of rooms.values()) {
+        const e = room.ecs.getPlayerEntity(id);
+        if (e !== undefined) {
+            pLevel = room.levelIndex;
+            pType = room.ecs.players.get(e)!.type;
+            room.removePlayer(id);
+            break;
+        }
+    }
 
-    p.levelIndex++;
-    p.isDead = true; 
+    socket.leave(`level_${pLevel}`);
+    pLevel++;
     
-    const newRoom = getOrCreateRoom(p.levelIndex);
-    newRoom.players.set(p.id, p);
-    socket.join(`level_${p.levelIndex}`);
+    const newRoom = getOrCreateRoom(pLevel);
+    socket.join(`level_${pLevel}`);
     
     socket.emit('initLevel', newRoom.level);
-    newRoom.trySpawnPlayer(p);
+    newRoom.addPlayer(id, pType);
 }
 
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
     
-    // Toggle between the two API compatible models here! 
     const useClassicPhysics = true;
-    const p = useClassicPhysics ? new ClassicPlayer(socket.id, 0) : new ModernPlayer(socket.id, 0);
     const room = getOrCreateRoom(0);
-    room.players.set(p.id, p);
     
     socket.join('level_0');
     socket.emit('initLevel', room.level);
-    room.trySpawnPlayer(p);
+    room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern');
 
     socket.on('input', (rawInputs) => {
-        const playerRoom = rooms.get(p.levelIndex);
-        if (playerRoom && playerRoom.players.has(p.id) && !p.isDead) {
-            p.inputs = {
-                up: !!rawInputs?.up, left: !!rawInputs?.left,
-                right: !!rawInputs?.right, shoot: !!rawInputs?.shoot
-            };
-            if (rawInputs?.shoot) p.shootLatch = true;
+        for (const room of rooms.values()) {
+            const e = room.ecs.getPlayerEntity(socket.id);
+            if (e !== undefined) {
+                const p = room.ecs.players.get(e)!;
+                if (!p.isDead) {
+                    p.inputs = { up: !!rawInputs?.up, left: !!rawInputs?.left, right: !!rawInputs?.right, shoot: !!rawInputs?.shoot };
+                    if (rawInputs?.shoot) p.shootLatch = true;
+                }
+                break;
+            }
         }
     });
 
     socket.on('disconnect', () => {
-        const playerRoom = rooms.get(p.levelIndex);
-        if (playerRoom) playerRoom.players.delete(p.id);
+        for (const room of rooms.values()) {
+            room.removePlayer(socket.id);
+        }
     });
 });
 

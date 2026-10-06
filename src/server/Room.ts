@@ -1,42 +1,58 @@
 import { Server } from 'socket.io';
 import type { LevelData } from './types';
-import { Turret, Bullet } from './entities';
-import type { BasePlayer } from './BasePlayer';
+import { Registry } from './ecs';
+import { spawnTurret, sysTurrets, sysBullets } from './combat';
+import { spawnModernPlayer, sysModernPlayers } from './player-modern';
+import { spawnClassicPlayer, sysClassicPlayers } from './player-classic';
 
 export class Room {
-    public players = new Map<string, BasePlayer>();
-    public turrets: Turret[] = [];
-    public bullets: Bullet[] = [];
+    public ecs = new Registry();
 
-    constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (p: BasePlayer) => void) {
-        this.turrets = level.turrets.map(t => new Turret(t.x, t.y, t.orientUp));
+    constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
+        level.turrets.forEach(t => spawnTurret(this.ecs, t.x, t.y, t.orientUp));
     }
 
     tick() {
-        if (this.players.size === 0) return;
+        if (this.ecs.players.size === 0) return;
 
-        // Update Entities
-        this.turrets.forEach(t => t.update(this));
-        this.players.forEach(p => {
-            if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p); }
-            p.update(this);
-        });
-        
-        for (let i = this.bullets.length - 1; i >= 0; i--) {
-            this.bullets[i].update(this);
-            if (this.bullets[i].isDestroyed) this.bullets.splice(i, 1);
+        for (const [e, p] of this.ecs.players.entries()) {
+            if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
         }
 
-        // Broadcast State
-        const state = {
-            players: Object.fromEntries(Array.from(this.players.entries()).map(([id, p]) => [id, p.serialize()])),
-            turrets: this.turrets.map(t => t.serialize()),
-            bullets: this.bullets.map(b => b.serialize())
-        };
+        sysModernPlayers(this.ecs, this);
+        sysClassicPlayers(this.ecs, this);
+        sysTurrets(this.ecs, this);
+        sysBullets(this.ecs, this);
+
+        const state = { players: {} as any, turrets: [] as any, bullets: [] as any };
+        
+        for (const [e, p] of this.ecs.players.entries()) {
+            const t = this.ecs.transforms.get(e)!;
+            const v = this.ecs.velocities.get(e)!;
+            state.players[p.id] = { x: t.x, y: t.y, vx: v.vx, vy: v.vy, angle: t.angle, angleStep: p.angleStep, isDead: p.isDead, isLanded: p.isLanded, inputs: p.inputs };
+        }
+        for (const [e, turret] of this.ecs.turrets.entries()) {
+            const t = this.ecs.transforms.get(e)!;
+            state.turrets.push({ x: t.x, y: t.y, angle: t.angle, orientUp: turret.orientUp, active: turret.active });
+        }
+        for (const [e, b] of this.ecs.bullets.entries()) {
+            const t = this.ecs.transforms.get(e)!;
+            state.bullets.push({ x: t.x, y: t.y, isPlayer: b.isPlayer });
+        }
+
         this.io.to(`level_${this.levelIndex}`).emit('state', state);
     }
 
-    trySpawnPlayer(p: BasePlayer) {
+    addPlayer(id: string, type: 'classic' | 'modern') {
+        this.trySpawnPlayer(id, type);
+    }
+
+    removePlayer(id: string) {
+        const e = this.ecs.getPlayerEntity(id);
+        if (e !== undefined) this.ecs.destroy(e);
+    }
+
+    trySpawnPlayer(id: string, type: 'classic' | 'modern') {
         const spawnY = this.level.startPad.y - 20;
         const padW = this.level.startPad.w;
         const spots = [this.level.startPad.x + 25, this.level.startPad.x + padW - 25, this.level.startPad.x + padW / 2];
@@ -44,20 +60,27 @@ export class Room {
         let chosenX: number | null = null;
         for (let x of spots) {
             let clear = true;
-            for (let other of this.players.values()) {
-                if (other.id !== p.id && !other.isDead && Math.hypot(other.x - x, other.y - spawnY) < 30) clear = false;
+            for (const [e, p] of this.ecs.players.entries()) {
+                if (p.id !== id && !p.isDead) {
+                    const t = this.ecs.transforms.get(e)!;
+                    if (Math.hypot(t.x - x, t.y - spawnY) < 30) clear = false;
+                }
             }
             if (clear) { chosenX = x; break; }
         }
 
         if (chosenX !== null) {
-            p.spawn(chosenX, spawnY);
+            const existing = this.ecs.getPlayerEntity(id);
+            if (existing !== undefined) this.ecs.destroy(existing);
+            
+            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, spawnY);
+            else spawnModernPlayer(this.ecs, id, chosenX, spawnY);
         } else {
-            setTimeout(() => this.trySpawnPlayer(p), 500);
+            setTimeout(() => this.trySpawnPlayer(id, type), 500);
         }
     }
 
-    transitionPlayer(p: BasePlayer) {
-        this.transitionCb(p);
+    transitionPlayer(id: string) {
+        this.transitionCb(id);
     }
 }

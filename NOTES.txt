@@ -17,6 +17,7 @@ in original
     shift or DOWN is thrust
     return or UP is fire
     (can't believe I did not remember this, it came so natural when I tried it! muscle memory!)
+    there is no auto-fire in original
 
 level 50 is the race course
 
