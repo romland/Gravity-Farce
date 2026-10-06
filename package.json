@@ -7,6 +7,7 @@
     "start": "tsx src/server/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "type": "module",
   "author": "",
   "license": "ISC",
   "description": "",
@@ -19,5 +20,9 @@
     "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "compilerOptions": {
+    "module": "NodeNext",
+    "verbatimModuleSyntax": true
   }
 }

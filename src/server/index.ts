@@ -3,7 +3,9 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { getLevelData } from './levels';
 import { Room } from './Room';
-import { Player } from './entities';
+import type { BasePlayer } from './BasePlayer';
+import { ModernPlayer } from './ModernPlayer';
+import { ClassicPlayer } from './ClassicPlayer';
 
 const app = express();
 const server = http.createServer(app);
@@ -20,7 +22,7 @@ function getOrCreateRoom(index: number): Room {
     return rooms.get(index)!;
 }
 
-function handleTransition(p: Player) {
+function handleTransition(p: BasePlayer) {
     const socket = io.sockets.sockets.get(p.id);
     if (!socket) return;
     
@@ -42,7 +44,9 @@ function handleTransition(p: Player) {
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
     
-    const p = new Player(socket.id, 0);
+    // Toggle between the two API compatible models here! 
+    const useClassicPhysics = true;
+    const p = useClassicPhysics ? new ClassicPlayer(socket.id, 0) : new ModernPlayer(socket.id, 0);
     const room = getOrCreateRoom(0);
     room.players.set(p.id, p);
     

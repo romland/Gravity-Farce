@@ -1,0 +1,65 @@
+Some python RE-related files:
+    Disassemble:
+        disasm.py
+    Extract maps from ADF image:
+        extract_levels.py
+    Draw extract maps:
+        draw_level.py 1
+
+    Code dump:
+        engine_code.asm
+
+RE conversation -- some nice nuggets on code in there:
+    Z:\saved-pages\_Gemini - direct access to Google AI (06_10_2026 03_11_34).html
+
+
+in original
+    shift or DOWN is thrust
+    return or UP is fire
+    (can't believe I did not remember this, it came so natural when I tried it! muscle memory!)
+
+level 50 is the race course
+
+
+Register	Amiga Hex	24-bit Hex
+COLOR00	0000	#000000	Black (Background / Transparent)
+COLOR01	0FFF	#FFFFFF	White
+COLOR02	0E62	#EE6622	Orange / Copper
+COLOR03	0259	#225599	Deep Blue
+COLOR04	0FF2	#FFFF22	Bright Yellow
+COLOR05	047B	#4477BB	Medium Blue
+COLOR06	07AD	#77AADD	Sky Blue
+COLOR07	0ADF	#AADDFF	Pale Blue / Ice
+COLOR08	0B10	#BB1100	Deep Red / Rust
+COLOR09	0800	#880000	Dark Red
+COLOR10	0CCC	#CCCCCC	Light Gray
+COLOR11	0888	#888888	Medium Gray
+COLOR12	0333	#333333	Dark Gray
+COLOR13	0EB7	#EEBB77	Tan / Sand
+COLOR14	0C84	#CC8844	Dirt Brown
+COLOR15	0A62	#AA6622	Dark Dirt Brown
+COLOR16	0840	#884400
+COLOR17	0999	#999999
+COLOR18	0666	#666666
+COLOR19	0999	#999999
+COLOR20	02C0	#22CC00
+COLOR21	0080	#008800
+COLOR22	00A0	#00AA00
+COLOR23	0F00	#FF0000
+COLOR24	0AAA	#AAAAAA
+COLOR25	0F90	#FF9900
+COLOR26	0FF0	#FFFF00
+COLOR27	0FFF	#FFFFFF
+COLOR28	00AA	#00AAAA
+COLOR29	0055	#005555
+COLOR30	0077	#007777
+COLOR31	0000	#000000
+
+
+----
+Art
+I need 2026 art for this graphic, which is from the old Amiga game Gravity Force ... spice it up and make
+it very detailed. It will be used in a game. It's a 2D game...
+No perspective ... it's seen straight from the side and I want plain black background.
+
+----

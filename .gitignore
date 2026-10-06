@@ -1,7 +1,8 @@
+prompt.txt
+cat-files.sh
 apply-llm.sh
 old
 package-lock.json
-prompt.txt
 node_modules
 org
 .vscode

@@ -1,4 +1,4 @@
-import { Point } from './types';
+import type { Point } from './types';
 
 export function lineIntersect(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number): Point | null {
     const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);

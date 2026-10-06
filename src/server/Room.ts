@@ -1,13 +1,14 @@
 import { Server } from 'socket.io';
-import { LevelData } from './types';
-import { Player, Turret, Bullet } from './entities';
+import type { LevelData } from './types';
+import { Turret, Bullet } from './entities';
+import type { BasePlayer } from './BasePlayer';
 
 export class Room {
-    public players = new Map<string, Player>();
+    public players = new Map<string, BasePlayer>();
     public turrets: Turret[] = [];
     public bullets: Bullet[] = [];
 
-    constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (p: Player) => void) {
+    constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (p: BasePlayer) => void) {
         this.turrets = level.turrets.map(t => new Turret(t.x, t.y, t.orientUp));
     }
 
@@ -35,7 +36,7 @@ export class Room {
         this.io.to(`level_${this.levelIndex}`).emit('state', state);
     }
 
-    trySpawnPlayer(p: Player) {
+    trySpawnPlayer(p: BasePlayer) {
         const spawnY = this.level.startPad.y - 20;
         const padW = this.level.startPad.w;
         const spots = [this.level.startPad.x + 25, this.level.startPad.x + padW - 25, this.level.startPad.x + padW / 2];
@@ -50,16 +51,13 @@ export class Room {
         }
 
         if (chosenX !== null) {
-            p.x = chosenX; p.y = spawnY; p.vx = 0; p.vy = 0;
-            p.angle = -Math.PI / 2; p.angularVelocity = 0;
-            p.isDead = false; p.inputs = { up: false, left: false, right: false, shoot: false };
-            p.shootLatch = false; p.prevShoot = false; p.gunCooldown = 0;
+            p.spawn(chosenX, spawnY);
         } else {
             setTimeout(() => this.trySpawnPlayer(p), 500);
         }
     }
 
-    transitionPlayer(p: Player) {
+    transitionPlayer(p: BasePlayer) {
         this.transitionCb(p);
     }
 }
