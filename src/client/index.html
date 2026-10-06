@@ -186,6 +186,50 @@
             renderState.players = {}; // Clear old players on level swap
         });
         
+        socket.on('tile_update', (data) => {
+            if (level && level.rawMap && level.rawMap[data.y]) {
+                level.rawMap[data.y][data.x] = data.tile;
+            }
+        });
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTurretSound(soundId) {
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            if (soundId === 8) {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(110, now + 0.12);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (soundId === 10) {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(320, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 0.15);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (soundId === 12) {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.18);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                osc.start(now); osc.stop(now + 0.18);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            }
+        }        
         socket.on('state', (state) => {
             serverState = state;
             
@@ -197,6 +241,8 @@
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffaa00', 40, 50);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
+                    } else if (ev.type === 'sound') {
+                        playTurretSound(ev.soundId);
                     }
                 }
             }

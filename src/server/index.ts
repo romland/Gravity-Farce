@@ -28,7 +28,7 @@ function getOrCreateRoom(index: number): Room {
     return rooms.get(index)!;
 }
 
-function handleTransitionToLevel(id: string, targetLevel: number) {
+function handleTransitionToLevel(id: string, targetLevel: number, forceReset: boolean = false) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
     
@@ -48,6 +48,9 @@ function handleTransitionToLevel(id: string, targetLevel: number) {
     socket.leave(`level_${pLevel}`);
     
     const newRoom = getOrCreateRoom(targetLevel);
+    if (forceReset) {
+        newRoom.resetLevel();
+    }
     socket.join(`level_${targetLevel}`);
     playerRooms.set(id, targetLevel);
     
@@ -87,7 +90,7 @@ io.on('connection', (socket) => {
             isServerPaused = !isServerPaused;
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
-            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt);
+            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, true);
         }
     });
 

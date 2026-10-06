@@ -8,8 +8,12 @@ import { sysWeapons, sysNetworkSync } from './game/systems';
 
 export class Room {
     public ecs = new Registry();
+    private initialRawMap?: number[][];
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
+        if (level.rawMap) {
+            this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
+        }
         level.entities.forEach(ent => {
             if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
         });
@@ -106,4 +110,21 @@ export class Room {
     transitionPlayer(id: string) {
         this.transitionCb(id);
     }
+
+    broadcastTileUpdate(x: number, y: number, tile: number) {
+        this.io.to(`level_${this.levelIndex}`).emit('tile_update', { x, y, tile });
+    }
+
+    resetLevel() {
+        if (this.initialRawMap) {
+            this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
+        }
+        for (const [e] of Array.from(this.ecs.turrets.entries())) {
+            this.ecs.destroy(e);
+        }
+        this.level.entities.forEach(ent => {
+            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
+        });
+        this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
+    }    
 }

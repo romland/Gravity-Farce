@@ -16,8 +16,47 @@ export function spawnTurret(ecs: Registry, x: number, y: number, turretType: num
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: orientUp ? -Math.PI/2 : Math.PI/2 });
     const resolvedTriggerId = triggerId !== undefined ? triggerId : (turretType - 0xAD);
-    ecs.turrets.set(e, { active: true, hp: 3, cooldown: 0, turretType, orientUp, triggerId: resolvedTriggerId });
+    const spec = getTurretSpecByTile(turretType);
+    const tileX = Math.floor(x / 32);
+    const tileY = Math.floor(y / 32);
+    ecs.turrets.set(e, {
+        active: true,
+        hp: spec.hpMax,
+        hpMax: spec.hpMax,
+        cooldown: 0,
+        turretType,
+        orientUp,
+        triggerId: resolvedTriggerId,
+        tileX,
+        tileY
+    });
     return e;
+}
+
+function destroyTurretTile(room: Room, tileX: number, tileY: number) {
+    if (room.level && room.level.rawMap && room.level.rawMap[tileY] && room.level.rawMap[tileY][tileX] !== undefined) {
+        room.level.rawMap[tileY][tileX] = 0x00;
+        room.broadcastTileUpdate(tileX, tileY, 0x00);
+    }
+}
+
+function checkShipTurretCollisions(ecs: Registry, room: Room) {
+    for (const [e, p] of ecs.players.entries()) {
+        if (p.isDead) continue;
+        const pt = ecs.transforms.get(e);
+        if (!pt) continue;
+        for (const [te, turret] of ecs.turrets.entries()) {
+            if (!turret.active) continue;
+            const tt = ecs.transforms.get(te)!;
+            if (Math.hypot(pt.x - tt.x, pt.y - tt.y) < 18) {
+                killPlayer(ecs, e);
+                turret.hp = 0;
+                turret.active = false;
+                ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
+                destroyTurretTile(room, turret.tileX, turret.tileY);
+            }
+        }
+    }
 }
 
 export function killPlayer(ecs: Registry, e: Entity) {
@@ -98,13 +137,15 @@ export function sysBullets(ecs: Registry, room: Room) {
             for (const [te, turret] of ecs.turrets.entries()) {
                 if (!turret.active) continue;
                 const tt = ecs.transforms.get(te)!;
-                if (t.x > tt.x - 15 && t.x < tt.x + 15 && t.y > tt.y - 15 && t.y < tt.y + 15) {
+                if (Math.abs(t.x - tt.x) <= 7 && Math.abs(t.y - tt.y) <= 7) {
                     hit = true;
                     turret.hp--;
                     if (turret.hp <= 0) {
                         turret.active = false;
                         ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
+                        destroyTurretTile(room, turret.tileX, turret.tileY);
                     }
+                    break;
                 }
             }
         }
@@ -119,6 +160,7 @@ export function sysBullets(ecs: Registry, room: Room) {
 }
 
 export function sysTurrets(ecs: Registry, room: Room) {
+    checkShipTurretCollisions(ecs, room);
     // 1. Collect all trigger tile IDs currently touched by alive players (0xBD - 0xCB)
     const activeTriggers = new Set<number>();
 
@@ -166,6 +208,7 @@ export function sysTurrets(ecs: Registry, room: Room) {
                     90
                 );
             }
+            ecs.events.push({ type: 'sound', soundId: spec.soundId, x: t.x, y: t.y });
             turret.cooldown = spec.cooldownMax;
         }
     }

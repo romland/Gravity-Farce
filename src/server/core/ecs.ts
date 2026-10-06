@@ -37,9 +37,13 @@ export interface Player {
 export interface Turret {
     active: boolean;
     hp: number;
+    hpMax: number;
     cooldown: number;
     turretType: number;
     orientUp: boolean;
+    triggerId?: number;
+    tileX: number;
+    tileY: number;
 }
 
 export interface Bullet {
