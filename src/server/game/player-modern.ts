@@ -4,8 +4,8 @@ import { normalizeAngle } from '../core/math';
 import type { Room } from '../Room';
 import { getShipPolygon, checkEnvironmentCollisions } from './player-shared';
 
-const GRAVITY = 0.012; const THRUST = 0.08;
-const DRAG = 0.996; const MAX_VEL = 8.0;
+const GRAVITY = 0.015; const THRUST = 0.10;
+const DRAG = 0.996; const MAX_VEL = 10.0;
 
 export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: number): Entity {
     const e = ecs.create();

@@ -59,46 +59,66 @@
         let camera = { x: 0, y: 0 };
         let particles = [];
 
-        const KNOWN_TILES = [
-            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E,
-            0x1F, 0x24, 0x25, 0x26, 
-            0x27, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 
-            0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
-            0x39, 0x3A, 0x5E, 0x5F, 0x60, 
-            0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 
-            0x67,
-            0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x73, 
-            0x74, 0x75, 0x76, 0x77, 0x79, 0x7A, 0x7B,
-            0x7D, 0x7E,
-            0x82, 0x83, 0x86, 0x88, 0x89,
-            0x87, 0x89, 0x8A, 0x8B, 0x8F, 0xD1, 
-            0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 
-            0xE7, 0xF0, 0xF1, 0xF2,
-            0xF3, 0xF8, 0xF9, 0xFA, 0xFB
-        ];
-
         const inputs = { up: false, left: false, right: false, shoot: false };
         
         function emitInputs() { socket.emit('input', inputs); }
 
+        let freecam = false;
+        let debugMode = false;
+        const camKeys = { up: false, down: false, left: false, right: false };
+
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'Shift' || e.code === 'KeyS') inputs.up = true;
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA') inputs.left = true;
-            if (e.code === 'ArrowRight' || e.code === 'KeyD') inputs.right = true;
-            if (e.code === 'Return' || e.code === 'ArrowUp' || e.code === 'KeyW') inputs.shoot = true;
-            emitInputs();
+            if (document.activeElement.tagName === 'INPUT') return;
+            
+            if (debugMode) {
+                if (e.code === 'KeyP') { socket.emit('debug_action', 'pause'); return; }
+                if (e.code === 'KeyC') { freecam = !freecam; return; }
+                if (e.code === 'KeyL' || e.code === 'KeyJ') {
+                    const lvl = prompt("Jump to level (0-99):");
+                    if (lvl !== null && !isNaN(parseInt(lvl))) {
+                        socket.emit('debug_action', 'jump', { levelIndex: parseInt(lvl) });
+                    }
+                    return;
+                }
+            }
+            
+            if (e.code === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyS' || e.code === 'Numpad5') inputs.up = true;
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'Numpad4') inputs.left = true;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Numpad6') inputs.right = true;
+            if (e.code === 'Return' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Numpad8') inputs.shoot = true;
+
+            if (freecam) {
+                if (e.code === 'ArrowUp') camKeys.up = true;
+                if (e.code === 'ArrowDown') camKeys.down = true;
+                if (e.code === 'ArrowLeft') camKeys.left = true;
+                if (e.code === 'ArrowRight') camKeys.right = true;
+            } else {
+                emitInputs();
+            }
         });
 
         window.addEventListener('keyup', (e) => {
-            if (e.code === 'Shift' || e.code === 'KeyS') inputs.up = false;
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA') inputs.left = false;
-            if (e.code === 'ArrowRight' || e.code === 'KeyD') inputs.right = false;
-            if (e.code === 'Return' || e.code === 'ArrowUp' || e.code === 'KeyW') inputs.shoot = false;
-            emitInputs();
+            if (e.code === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyS' || e.code === 'Numpad5') inputs.up = false;
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'Numpad4') inputs.left = false;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Numpad6') inputs.right = false;
+            if (e.code === 'Return' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Numpad8') inputs.shoot = false;
+
+            if (freecam) {
+                if (e.code === 'ArrowUp') camKeys.up = false;
+                if (e.code === 'ArrowDown') camKeys.down = false;
+                if (e.code === 'ArrowLeft') camKeys.left = false;
+                if (e.code === 'ArrowRight') camKeys.right = false;
+            } else {
+                emitInputs();
+            }
         });
 
         socket.on('connect', () => { myId = socket.id; });
+        
+        let tileDictionary = {};
+        socket.on('initTiles', (dict) => { tileDictionary = dict; });
+        socket.on('serverConfig', (config) => { debugMode = config.debugMode; });
+        
         socket.on('initLevel', (data) => { 
             level = data; 
             hud.innerText = level.name;
@@ -230,17 +250,25 @@
                 }
             }
 
-            let myPlayer = renderState.players[myId];
-            if (myPlayer) {
-                let targetX = myPlayer.x - VIEW_W / 2;
-                let targetY = myPlayer.y - VIEW_H / 2;
-                
-                // Clamp camera strictly to map bounds
-                targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
-                targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
+            if (freecam) {
+                const camSpeed = 15;
+                if (camKeys.up) camera.y -= camSpeed;
+                if (camKeys.down) camera.y += camSpeed;
+                if (camKeys.left) camera.x -= camSpeed;
+                if (camKeys.right) camera.x += camSpeed;
+            } else {
+                let myPlayer = renderState.players[myId];
+                if (myPlayer) {
+                    let targetX = myPlayer.x - VIEW_W / 2;
+                    let targetY = myPlayer.y - VIEW_H / 2;
+                    
+                    // Clamp camera strictly to map bounds
+                    targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
+                    targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
 
-                camera.x += (targetX - camera.x) * 0.1;
-                camera.y += (targetY - camera.y) * 0.1;
+                    camera.x += (targetX - camera.x) * 0.1;
+                    camera.y += (targetY - camera.y) * 0.1;
+                }
             }
 
             ctx.save();
@@ -289,7 +317,8 @@
                     for (let x = 0; x < level.rawMap[y].length; x++) {
                         const tile = level.rawMap[y][x];
                         if(tile !== 0) {
-                            if (KNOWN_TILES.includes(tile)) {
+                            const tDef = tileDictionary[tile];
+                            if (tDef && tDef.known) {
                                 ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
                             } else {
                                 ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';

@@ -19,6 +19,13 @@ in original
     (can't believe I did not remember this, it came so natural when I tried it! muscle memory!)
     there is no auto-fire in original
 
+    numpad 
+        5 thrust
+        4 turn left
+        6 turn right
+        8 fire
+
+
 level 50 is the race course
 
 
@@ -64,3 +71,4 @@ it very detailed. It will be used in a game. It's a 2D game...
 No perspective ... it's seen straight from the side and I want plain black background.
 
 ----
+https://www.gravityforce20.com/ looks fun, but eh, not really original GF

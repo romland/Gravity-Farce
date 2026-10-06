@@ -15,18 +15,20 @@ export class Room {
         });
     }
 
-    tick() {
+    tick(isPaused: boolean = false) {
         if (this.ecs.players.size === 0) return;
 
-        for (const [e, p] of this.ecs.players.entries()) {
-            if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
-        }
+        if (!isPaused) {
+            for (const [e, p] of this.ecs.players.entries()) {
+                if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
+            }
 
-        sysModernPlayers(this.ecs, this);
-        sysClassicPlayers(this.ecs, this);
-        sysWeapons(this.ecs);
-        sysTurrets(this.ecs, this);
-        sysBullets(this.ecs, this);
+            sysModernPlayers(this.ecs, this);
+            sysClassicPlayers(this.ecs, this);
+            sysWeapons(this.ecs);
+            sysTurrets(this.ecs, this);
+            sysBullets(this.ecs, this);
+        }
 
         sysNetworkSync(this.ecs, this.levelIndex, this.io);
     }

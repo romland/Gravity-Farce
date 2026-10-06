@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { getLevelData } from './levels';
 import { Room } from './Room';
+import { TILE_DICTIONARY } from './core/tiles';
 
 const app = express();
 const server = http.createServer(app);
@@ -10,7 +11,12 @@ const io = new Server(server);
 
 app.use(express.static('./src/client'));
 
+export const SERVER_CONFIG = {
+    debugMode: process.env.NODE_ENV !== 'production'
+};
+
 const rooms = new Map<number, Room>();
+let isServerPaused = false;
 
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
@@ -19,7 +25,7 @@ function getOrCreateRoom(index: number): Room {
     return rooms.get(index)!;
 }
 
-function handleTransition(id: string) {
+function handleTransitionToLevel(id: string, targetLevel: number) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
     
@@ -37,13 +43,23 @@ function handleTransition(id: string) {
     }
 
     socket.leave(`level_${pLevel}`);
-    pLevel++;
     
-    const newRoom = getOrCreateRoom(pLevel);
-    socket.join(`level_${pLevel}`);
+    const newRoom = getOrCreateRoom(targetLevel);
+    socket.join(`level_${targetLevel}`);
     
     socket.emit('initLevel', newRoom.level);
     newRoom.addPlayer(id, pType);
+}
+
+function handleTransition(id: string) {
+    let pLevel = 0;
+    for (const room of rooms.values()) {
+        if (room.ecs.getPlayerEntity(id) !== undefined) {
+            pLevel = room.levelIndex;
+            break;
+        }
+    }
+    handleTransitionToLevel(id, pLevel + 1);
 }
 
 io.on('connection', (socket) => {
@@ -53,8 +69,20 @@ io.on('connection', (socket) => {
     const room = getOrCreateRoom(0);
     
     socket.join('level_0');
+    socket.emit('serverConfig', SERVER_CONFIG);
+    socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern');
+
+    socket.on('debug_action', (action, payload) => {
+        if (!SERVER_CONFIG.debugMode) return;
+        if (action === 'pause') {
+            isServerPaused = !isServerPaused;
+        } else if (action === 'jump') {
+            const tgt = parseInt(payload?.levelIndex, 10);
+            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt);
+        }
+    });
 
     socket.on('input', (rawInputs) => {
         for (const room of rooms.values()) {
@@ -64,10 +92,10 @@ io.on('connection', (socket) => {
 
                 if (!p.isDead) {
                     p.inputs = {
-                        up: !!rawInputs?.up,
-                        left: !!rawInputs?.left,
-                        right: !!rawInputs?.right,
-                        shoot: !!rawInputs?.shoot
+                        up: Boolean(rawInputs?.up),
+                        left: Boolean(rawInputs?.left),
+                        right: Boolean(rawInputs?.right),
+                        shoot: Boolean(rawInputs?.shoot)
                     };
 
                     if (rawInputs?.shoot) {
@@ -87,8 +115,14 @@ io.on('connection', (socket) => {
 });
 
 setInterval(() => {
+    if (isServerPaused) {
+        for (let room of rooms.values()) {
+            room.tick(true);
+        }
+        return;
+    }
     for (let room of rooms.values()) {
-        room.tick();
+        room.tick(false);
     }
 }, 1000 / 60);
 

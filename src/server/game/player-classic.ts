@@ -4,10 +4,10 @@ import type { Room } from '../Room';
 import { getShipPolygon, checkEnvironmentCollisions } from './player-shared';
 
 const ROTATION_SPEED = 1000; 
-const GRAVITY = 0.008;
-const THRUST_IMPULSE = 0.065; 
+const GRAVITY = 0.010;
+const THRUST_IMPULSE = 0.070; 
 const DRAG = 0.997;
-const MAX_SPEED = 4.0; 
+const MAX_SPEED = 7.5; 
 const MAX_SAFE_LANDING_VY = 1.4;
 
 export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: number): Entity {
