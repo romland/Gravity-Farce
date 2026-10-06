@@ -1,4 +1,4 @@
-import type { LevelData } from './types';
+import type { LevelData } from './core/types';
 
 function createPRNG(seed: number) {
     return function() {

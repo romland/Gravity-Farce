@@ -9,6 +9,18 @@ export function lineIntersect(x1: number, y1: number, x2: number, y2: number, x3
     return null;
 }
 
+export function checkPolyIntersect(lines: Point[][], poly: Point[]): { isFlat: boolean, p1: Point, p2: Point } | null {
+    for (let i = 0; i < poly.length - 1; i++) {
+        const p1 = poly[i]; const p2 = poly[i+1];
+        for (let j = 0; j < lines.length; j++) {
+            if (lineIntersect(lines[j][0].x, lines[j][0].y, lines[j][1].x, lines[j][1].y, p1.x, p1.y, p2.x, p2.y)) {
+                return { isFlat: Math.abs(p1.y - p2.y) < 1.0, p1, p2 };
+            }
+        }
+    }
+    return null;
+}
+
 export function normalizeAngle(angle: number): number {
     let diff = -Math.PI / 2 - angle;
     while (diff < -Math.PI) diff += Math.PI * 2;

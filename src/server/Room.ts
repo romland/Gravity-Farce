@@ -1,9 +1,10 @@
 import { Server } from 'socket.io';
-import type { LevelData } from './types';
-import { Registry } from './ecs';
-import { spawnTurret, sysTurrets, sysBullets } from './combat';
-import { spawnModernPlayer, sysModernPlayers } from './player-modern';
-import { spawnClassicPlayer, sysClassicPlayers } from './player-classic';
+import type { LevelData } from './core/types';
+import { Registry } from './core/ecs';
+import { spawnTurret, sysTurrets, sysBullets } from './game/combat';
+import { spawnModernPlayer, sysModernPlayers } from './game/player-modern';
+import { spawnClassicPlayer, sysClassicPlayers } from './game/player-classic';
+import { sysWeapons, sysNetworkSync } from './game/systems';
 
 export class Room {
     public ecs = new Registry();
@@ -21,26 +22,11 @@ export class Room {
 
         sysModernPlayers(this.ecs, this);
         sysClassicPlayers(this.ecs, this);
+        sysWeapons(this.ecs);
         sysTurrets(this.ecs, this);
         sysBullets(this.ecs, this);
 
-        const state = { players: {} as any, turrets: [] as any, bullets: [] as any };
-        
-        for (const [e, p] of this.ecs.players.entries()) {
-            const t = this.ecs.transforms.get(e)!;
-            const v = this.ecs.velocities.get(e)!;
-            state.players[p.id] = { x: t.x, y: t.y, vx: v.vx, vy: v.vy, angle: t.angle, angleStep: p.angleStep, isDead: p.isDead, isLanded: p.isLanded, inputs: p.inputs };
-        }
-        for (const [e, turret] of this.ecs.turrets.entries()) {
-            const t = this.ecs.transforms.get(e)!;
-            state.turrets.push({ x: t.x, y: t.y, angle: t.angle, orientUp: turret.orientUp, active: turret.active });
-        }
-        for (const [e, b] of this.ecs.bullets.entries()) {
-            const t = this.ecs.transforms.get(e)!;
-            state.bullets.push({ x: t.x, y: t.y, isPlayer: b.isPlayer });
-        }
-
-        this.io.to(`level_${this.levelIndex}`).emit('state', state);
+        sysNetworkSync(this.ecs, this.levelIndex, this.io);
     }
 
     addPlayer(id: string, type: 'classic' | 'modern') {

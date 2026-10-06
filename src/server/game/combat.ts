@@ -1,6 +1,7 @@
-import { Registry, type Entity } from './ecs';
-import { lineIntersect } from './math';
-import type { Room } from './Room';
+import { Registry, type Entity, type Transform } from '../core/ecs';
+import { checkPolyIntersect } from '../core/math';
+import { lineIntersect } from '../core/math';
+import type { Room } from '../Room';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -29,6 +30,16 @@ export function killPlayer(ecs: Registry, e: Entity) {
     setTimeout(() => { p.respawnRequest = true; }, 3000);
 }
 
+export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18): boolean {
+    let crashed = false;
+    for (const [oe, op] of ecs.players.entries()) {
+        if (oe === e || op.isDead) continue;
+        const ot = ecs.transforms.get(oe)!;
+        if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { crashed = true; killPlayer(ecs, oe); }
+    }
+    return crashed;
+}
+
 export function sysBullets(ecs: Registry, room: Room) {
     for (const [e, b] of ecs.bullets.entries()) {
         const t = ecs.transforms.get(e)!;
@@ -38,14 +49,10 @@ export function sysBullets(ecs: Registry, room: Room) {
         t.x += v.vx; t.y += v.vy; b.life--;
 
         let hit = false;
-        const checkWalls = (walls: {x:number, y:number}[]) => {
-            for (let j = 0; j < walls.length - 1; j++) {
-                if (lineIntersect(ox, oy, t.x, t.y, walls[j].x, walls[j].y, walls[j+1].x, walls[j+1].y)) hit = true;
-            }
-        };
-        checkWalls(room.level.floor); checkWalls(room.level.ceiling);
 
         for (const [pe, p] of ecs.players.entries()) {
+        const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
+        if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) hit = true;
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {

@@ -1,7 +1,7 @@
-import { Registry, type Entity } from './ecs';
-import { killPlayer, spawnBullet } from './combat';
-import { lineIntersect } from './math';
-import type { Room } from './Room';
+import { Registry, type Entity } from '../core/ecs';
+import { killPlayer, checkPvPCollisions } from './combat';
+import { checkPolyIntersect } from '../core/math';
+import type { Room } from '../Room';
 
 const ROTATION_SPEED = 500; const GRAVITY = 0.008;
 const THRUST_IMPULSE = 0.065; const DRAG = 0.997;
@@ -29,7 +29,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         if (p.isLanded) {
             v.vx = 0; v.vy = 0; p.angleAcc = 54000; p.angleStep = 27; t.angle = -Math.PI / 2;
             if (p.inputs.up) p.isLanded = false; 
-            else { handleWeapons(ecs, e, t, v, p); continue; }
+            else { continue; }
         }
 
         if (p.inputs.left) p.angleAcc = (p.angleAcc - ROTATION_SPEED + 72000) % 72000;
@@ -48,8 +48,6 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         if (speed > MAX_SPEED) { v.vx = (v.vx / speed) * MAX_SPEED; v.vy = (v.vy / speed) * MAX_SPEED; }
         t.x += v.vx; t.y += v.vy;
 
-        handleWeapons(ecs, e, t, v, p);
-
         let crashed = false; let advancing = false;
         const cos = Math.cos(t.angle), sin = Math.sin(t.angle), w = 14, h = 14;
         const nose = { x: t.x + cos * w, y: t.y + sin * h };
@@ -61,29 +59,15 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         const isAngleUpright = Math.abs(p.angleStep - 27) <= 2;
         const land = (targetY: number) => { p.isLanded = true; t.y = targetY; v.vy = 0; v.vx = 0; p.angleAcc = 54000; p.angleStep = 27; t.angle = -Math.PI / 2; };
 
-        for (let i = 0; i < room.level.floor.length - 1; i++) {
-            const p1 = room.level.floor[i]; const p2 = room.level.floor[i + 1];
-            const isFlat = Math.abs(p1.y - p2.y) < 1.0;
-            for (let line of sl) {
-                if (lineIntersect(line[0].x, line[0].y, line[1].x, line[1].y, p1.x, p1.y, p2.x, p2.y)) {
-                    if (isFlat && v.vy <= MAX_SAFE_LANDING_VY && isAngleUpright) {
-                        if (v.vy >= 0 && t.y >= p1.y - 12) land(p1.y - 12);
-                    } else crashed = true;
-                }
-            }
+        const floorHit = checkPolyIntersect(sl, room.level.floor);
+        if (floorHit) {
+            if (floorHit.isFlat && v.vy <= MAX_SAFE_LANDING_VY && isAngleUpright) {
+                if (v.vy >= 0 && t.y >= floorHit.p1.y - 12) land(floorHit.p1.y - 12);
+            } else crashed = true;
         }
 
-        for (let i = 0; i < room.level.ceiling.length - 1; i++) {
-            for (let line of sl) {
-                if (lineIntersect(line[0].x, line[0].y, line[1].x, line[1].y, room.level.ceiling[i].x, room.level.ceiling[i].y, room.level.ceiling[i + 1].x, room.level.ceiling[i + 1].y)) crashed = true;
-            }
-        }
-
-        for (const [oe, op] of ecs.players.entries()) {
-            if (oe === e || op.isDead) continue;
-            const ot = ecs.transforms.get(oe)!;
-            if (Math.hypot(t.x - ot.x, t.y - ot.y) < 18) { crashed = true; killPlayer(ecs, oe); }
-        }
+        if (checkPolyIntersect(sl, room.level.ceiling)) crashed = true;
+        if (checkPvPCollisions(ecs, e, t, 18)) crashed = true;
 
         const checkPad = (pad: any, isEndPad: boolean) => {
             if (t.x > pad.x - 10 && t.x < pad.x + pad.w + 10 && t.y > pad.y - 30 && t.y < pad.y + 10) {
@@ -99,16 +83,5 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         checkPad(room.level.startPad, false); checkPad(room.level.endPad, true);
 
         if (crashed && !advancing) killPlayer(ecs, e);
-    }
-
-    function handleWeapons(ecs: Registry, e: Entity, t: any, v: any, p: any) {
-        if (p.gunCooldown > 0) p.gunCooldown--;
-        let activeShoot = p.inputs.shoot || p.shootLatch;
-        if (activeShoot && !p.prevShoot) p.gunCooldown = 0; // Arcade bypass
-        if (activeShoot && p.gunCooldown <= 0) {
-            spawnBullet(ecs, t.x + Math.cos(t.angle)*14, t.y + Math.sin(t.angle)*14, v.vx + Math.cos(t.angle)*5.0, v.vy + Math.sin(t.angle)*5.0, true, p.id);
-            p.gunCooldown = 10;
-        }
-        p.prevShoot = activeShoot; p.shootLatch = false;
     }
 }
