@@ -35,18 +35,20 @@
         const inputs = { up: false, left: false, right: false, shoot: false };
         
         function emitInputs() { socket.emit('input', inputs); }
+
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'ArrowUp' || e.code === 'KeyW') inputs.up = true;
+            if (e.code === 'Shift' || e.code === 'KeyS') inputs.up = true;
             if (e.code === 'ArrowLeft' || e.code === 'KeyA') inputs.left = true;
             if (e.code === 'ArrowRight' || e.code === 'KeyD') inputs.right = true;
-            if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'KeyS') inputs.shoot = true;
+            if (e.code === 'Return' || e.code === 'ArrowUp' || e.code === 'KeyW') inputs.shoot = true;
             emitInputs();
         });
+
         window.addEventListener('keyup', (e) => {
-            if (e.code === 'ArrowUp' || e.code === 'KeyW') inputs.up = false;
+            if (e.code === 'Shift' || e.code === 'KeyS') inputs.up = false;
             if (e.code === 'ArrowLeft' || e.code === 'KeyA') inputs.left = false;
             if (e.code === 'ArrowRight' || e.code === 'KeyD') inputs.right = false;
-            if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'KeyS') inputs.shoot = false;
+            if (e.code === 'Return' || e.code === 'ArrowUp' || e.code === 'KeyW') inputs.shoot = false;
             emitInputs();
         });
 

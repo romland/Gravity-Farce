@@ -3,3 +3,5 @@ old
 package-lock.json
 prompt.txt
 node_modules
+org
+.vscode
