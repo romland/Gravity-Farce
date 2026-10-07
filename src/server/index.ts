@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { getLevelData } from './levels';
 import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
+import { ServerProfiler } from './core/profiler';
 
 const app = express();
 const server = http.createServer(app);
@@ -128,16 +129,22 @@ io.on('connection', (socket) => {
     });
 });
 
+const profiler = new ServerProfiler(10000);
+
 setInterval(() => {
+    profiler.begin();
+
     if (isServerPaused) {
         for (let room of rooms.values()) {
             room.tick(true);
         }
-        return;
+    } else {
+        for (let room of rooms.values()) {
+            room.tick(false);
+        }
     }
-    for (let room of rooms.values()) {
-        room.tick(false);
-    }
+
+    profiler.end();
 }, 1000 / 60);
 
 server.listen(10000, () => console.log('TS Server running on http://localhost:10000'));

@@ -5,7 +5,7 @@ import { killPlayer, spawnBullet } from './combat';
 const TILE_SIZE = 32;
 
 // Set to an array of enemy debugIds to isolate logs, or null to log all waypoint hits
-const DEBUG_TARGET_IDS: number[] | null = [ 6, 8 ];
+const DEBUG_TARGET_IDS: number[] | null = [];//[ 6, 8 ];
 
 export interface FlyingEnemySpecs {
     hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in 68k binary
