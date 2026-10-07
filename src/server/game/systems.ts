@@ -14,12 +14,10 @@ export function sysWeapons(ecs: Registry) {
         
         let activeShoot = p.inputs.shoot || p.shootLatch;
         
+        // Allow fast manual clicking by resetting cooldown on new trigger pull,
+        // but maintain a small minimum delay to prevent macro/cheat spam
         if (activeShoot && !p.prevShoot) {
-            // Exploit fix: Allow fast trigger finger, but cap maximum spawn rate 
-            // so a modified client cannot spam 60 bullets a second.
-            if (p.gunCooldown > 3) {
-                p.gunCooldown = 3;
-            }
+            p.gunCooldown = Math.min(p.gunCooldown, 4);
         }
         
         if (activeShoot && p.gunCooldown <= 0) {
@@ -36,7 +34,8 @@ export function sysWeapons(ecs: Registry) {
                 p.id
             );
             
-            p.gunCooldown = p.type === 'classic' ? 10 : 15;
+            // Auto-fire is deliberately slow. Fast firing requires manual pressing.
+            p.gunCooldown = p.type === 'classic' ? 30 : 40;
         }
         
         p.prevShoot = activeShoot; 
