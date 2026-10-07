@@ -109,3 +109,12 @@ Make it in-theme with what the game is about and where its situated (caverns).
 https://www.gravityforce20.com/ looks fun, but eh, not really original GF  
 https://www.amigafuture.de/app.php/kb/viewarticle?a=3226 - oh fun  
 https://en.wikipedia.org/wiki/Gravity_Force  
+
+
+graphics resolution
+========================
+    Standard Tiles (Walls, Pickups): 128x128 px (Engine logic: 32x32)
+    Player Ship: 128x128 px (Engine logic: fits within 32x32)
+    Tanks: 128x96 px (Engine logic: 32x24)
+    Flying Enemies (e4, e5, etc.): 384x256 px (Engine logic: 96x64)
+    Turrets: 56x56 px (Engine logic: 14x14)

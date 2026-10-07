@@ -89,7 +89,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
         for (const [fe, flying] of ecs.flyingEnemies.entries()) {
             const ft = ecs.transforms.get(fe)!;
             if (Math.abs(ft.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ft.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active, width: flying.width, height: flying.height });
+                state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType });
             }
         }
         for (const [be, b] of ecs.bullets.entries()) {

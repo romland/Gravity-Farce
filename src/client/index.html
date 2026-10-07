@@ -51,8 +51,13 @@
         .fire-btn:active { background: rgba(255, 75, 43, 0.8); }
     </style>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="AssetManager.js"></script>
 </head>
 <body>
+    <div id="loading-screen" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#050505; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#4facfe; font-weight:bold; letter-spacing:2px;">
+        <img id="loader-img" src="assets/loader-detailed.webp" style="max-width:256px; margin-bottom:24px; display:none;" />
+        <div id="loading-text">INITIALIZING SYSTEMS...</div>
+    </div>
     <div id="hud">SECTOR SECURED: AWAITING DEPLOYMENT</div>
     <canvas id="gameCanvas"></canvas>
     <div id="touch-controls">
@@ -83,7 +88,8 @@
         }
         window.addEventListener('resize', resize); resize();
 
-        const socket = io();
+        const assetManager = new AssetManager();
+        const socket = io({ autoConnect: false });
         let myId = null;
         let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [] };
         let renderState = { players: {} }; 
@@ -328,7 +334,7 @@
         function drawShip(p, isMe) {
             if (p.isDead) return;
             ctx.save();
-            ctx.translate(p.x, p.y); 
+            ctx.translate(Math.round(p.x), Math.round(p.y)); 
             ctx.rotate(p.angle);
             
             ctx.beginPath();
@@ -364,7 +370,7 @@
         function drawTurret(t) {
             if (!t.active) return;
             ctx.save(); 
-            ctx.translate(t.x, t.y);
+            ctx.translate(Math.round(t.x), Math.round(t.y));
             
             const tileId = t.type || 0xAF;
             
@@ -418,7 +424,7 @@
             const w = t.width || 32;
             const h = t.height || 24;
             ctx.save(); 
-            ctx.translate(t.x, t.y);
+            ctx.translate(Math.round(t.x), Math.round(t.y));
             ctx.fillStyle = '#8a8a8a'; 
             ctx.fillRect(-w / 2, -h / 2, w, h);
             ctx.fillStyle = '#ff4b2b';
@@ -431,9 +437,16 @@
             const w = t.width || 96;
             const h = t.height || 64;
             ctx.save(); 
-            ctx.translate(t.x, t.y);
+            ctx.translate(Math.round(t.x), Math.round(t.y));
             ctx.rotate(t.angle);
             
+            const img = assetManager.get('0x' + t.enemyType.toString(16).toUpperCase());
+            if (img) {
+                ctx.drawImage(img, -w / 2, -h / 2, w, h);
+                ctx.restore();
+                return;
+            }
+
             ctx.fillStyle = '#ff8800'; 
             ctx.beginPath();
             ctx.moveTo(w, h / 2); ctx.lineTo(0, h); ctx.lineTo(0, 0);
@@ -469,6 +482,8 @@
 
         function gameLoop() {
             requestAnimationFrame(gameLoop);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.fillStyle = '#050505'; 
             ctx.fillRect(0, 0, VIEW_W, VIEW_H);
             if (!level) return;
@@ -622,7 +637,25 @@
             ctx.restore();
         }
 
-        requestAnimationFrame(gameLoop);
+        async function bootstrapGame() {
+            const loaderImg = document.getElementById('loader-img');
+            if (loaderImg.complete) loaderImg.style.display = 'block';
+            else loaderImg.onload = () => { loaderImg.style.display = 'block'; };
+            
+            try {
+                await assetManager.loadMultiple({
+                    // '0xE4': 'assets/enemies/e4-enemy.webp',
+                    '0xE5': 'assets/enemies/e5-enemy-384x256.webp'
+                });
+                document.getElementById('loading-screen').style.display = 'none';
+                socket.connect();
+                requestAnimationFrame(gameLoop);
+            } catch (err) {
+                document.getElementById('loading-text').innerText = 'ASSET MOUNT FAILURE';
+                console.error('Asset load error:', err);
+            }
+        }
+        bootstrapGame();
     </script>
 </body>
 </html>
