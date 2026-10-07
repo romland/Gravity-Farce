@@ -83,13 +83,13 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
         for (const [te, tank] of ecs.tanks.entries()) {
             const tt = ecs.transforms.get(te)!;
             if (Math.abs(tt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(tt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.tanks.push({ x: tt.x, y: tt.y, active: tank.active, width: tank.width, height: tank.height });
+                state.tanks.push({ x: tt.x, y: tt.y, active: tank.active, width: tank.width, height: tank.height, debugId: tank.debugId });
             }
         }
         for (const [fe, flying] of ecs.flyingEnemies.entries()) {
             const ft = ecs.transforms.get(fe)!;
             if (Math.abs(ft.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ft.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType });
+                state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType, debugId: flying.debugId });
             }
         }
         for (const [be, b] of ecs.bullets.entries()) {

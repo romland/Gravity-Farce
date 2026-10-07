@@ -430,6 +430,12 @@
             ctx.fillStyle = '#ff4b2b';
             ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
             ctx.restore();
+
+            if (debugMode && t.debugId !== undefined) {
+                ctx.fillStyle = '#0f0';
+                ctx.font = '10px monospace';
+                ctx.fillText(`ID:${t.debugId} (TANK)`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
+            }
         }
 
         function drawFlyingEnemy(t) {
@@ -443,16 +449,20 @@
             const img = assetManager.get('0x' + t.enemyType.toString(16).toUpperCase());
             if (img) {
                 ctx.drawImage(img, -w / 2, -h / 2, w, h);
-                ctx.restore();
-                return;
+            } else {
+                ctx.fillStyle = '#ff8800'; 
+                ctx.beginPath();
+                ctx.moveTo(w, h / 2); ctx.lineTo(0, h); ctx.lineTo(0, 0);
+                ctx.closePath();
+                ctx.fill();
             }
-
-            ctx.fillStyle = '#ff8800'; 
-            ctx.beginPath();
-            ctx.moveTo(w, h / 2); ctx.lineTo(0, h); ctx.lineTo(0, 0);
-            ctx.closePath();
-            ctx.fill();
             ctx.restore();
+
+            if (debugMode && t.debugId !== undefined) {
+                ctx.fillStyle = '#0f0';
+                ctx.font = '10px monospace';
+                ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
+            }
         }
 
         // Global debug function to dump the enemy map to the console

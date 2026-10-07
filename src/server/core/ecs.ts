@@ -50,6 +50,7 @@ export interface Turret {
 export interface Tank {
     active: boolean;
     hp: number;
+    debugId: number;
     moveTimer: number;
     dirX: number;
     dirY: number;
@@ -61,6 +62,7 @@ export interface Tank {
 export interface FlyingEnemy {
     active: boolean;
     hp: number;
+    debugId: number;
     enemyType: number;
     scoreValue: number;
     directionState: number; // Offset +$02

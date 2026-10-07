@@ -11,6 +11,7 @@ import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 export class Room {
     public ecs = new Registry();
     private initialRawMap?: number[][];
+    private debugEnemyCounter = 0;
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
         if (level.rawMap) {
@@ -42,6 +43,8 @@ export class Room {
     }
 
     private spawnEntities() {
+        this.debugEnemyCounter = 0;
+
         this.level.entities.forEach(ent => {
             if (ent.type === 'turret') {
                 spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
@@ -49,10 +52,12 @@ export class Room {
             if (ent.type === 'path_node' && ent.props?.index === 0) {
                 // We spawn one tank at the start of a path sequence (node 0)
                 // To increase density, we could spawn on multiple node indices later
-                spawnTank(this.ecs, ent.x, ent.y);
+                this.debugEnemyCounter++;
+                spawnTank(this.ecs, ent.x, ent.y, this.debugEnemyCounter);
             }
             if (ent.type === 'flying_enemy') {
-                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC);
+                this.debugEnemyCounter++;
+                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter);
             }
         });
     }

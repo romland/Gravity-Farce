@@ -4,6 +4,9 @@ import { killPlayer, spawnBullet } from './combat';
 
 const TILE_SIZE = 32;
 
+// Set to an array of enemy debugIds to isolate logs, or null to log all waypoint hits
+const DEBUG_TARGET_IDS: number[] | null = [ 6, 8 ];
+
 export interface FlyingEnemySpecs {
     hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in 68k binary
     speedScalar: number;
@@ -44,7 +47,7 @@ const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
 
 let globalWaveTimer = 0;
 
-export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number): Entity {
+export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number): Entity {
     const specs = FLYING_ENEMY_TEMPLATES[type] || FLYING_ENEMY_TEMPLATES[0xE4];
 
     const e = ecs.create();
@@ -52,6 +55,7 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
     ecs.flyingEnemies.set(e, {
         active: true,
         hp: specs.hp,
+        debugId,
         enemyType: type,
         scoreValue: specs.scoreValue,
         speedScalar: specs.speedScalar,
@@ -65,6 +69,15 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         fireTimer: 120 + Math.floor(Math.random() * 60),
         burstRemaining: 0
     });
+
+    // Note: This may log twice in rapid succession on initial connect due to the
+    // client's dev-reload mechanism automatically requesting a level reset/jump.
+    if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(debugId)) {
+        // console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Spawned! ID: ${debugId} | Type: 0x${type.toString(16).toUpperCase()} | Pos: ${x.toFixed(1)},${y.toFixed(1)}`);
+        const tileX = Math.floor(x / TILE_SIZE);
+        const tileY = Math.floor(y / TILE_SIZE);
+        console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Spawned! ID: ${debugId} | Type: 0x${type.toString(16).toUpperCase()} | Pos: ${x.toFixed(1)},${y.toFixed(1)} | Started at: [Col ${tileX}, Row ${tileY}]`);
+    }    
     return e;
 }
 
@@ -114,6 +127,10 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
                 else if (tileId === 0xF8) newState = 8;  // Up-Right
                 
                 if (newState !== enemy.directionState) {
+                    if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(enemy.debugId)) {
+                        // console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Data: ${JSON.stringify(enemy)}`);
+                        console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Started at: [Col ${tileX}, Row ${tileY}] | Data: ${JSON.stringify(enemy)}`);
+                    }
                     enemy.directionState = newState;
                     enemy.maneuverStep = 2; // Start 24-frame blindfold
                     // t.x = tileX * TILE_SIZE + TILE_SIZE / 2;

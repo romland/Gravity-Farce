@@ -7,12 +7,13 @@ const TANK_SPEED = 1.0; // Pixels per frame
 const TILE_SIZE = 32;
 const MOVEMENT_FRAMES = TILE_SIZE / TANK_SPEED; // E.g., 16 frames to traverse one 32px tile
 
-export function spawnTank(ecs: Registry, x: number, y: number): Entity {
+export function spawnTank(ecs: Registry, x: number, y: number, debugId: number): Entity {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: 0 });
     ecs.tanks.set(e, {
         active: true,
         hp: 1,
+        debugId,
         moveTimer: 0,
         dirX: 1, // Default start direction
         dirY: 0,
