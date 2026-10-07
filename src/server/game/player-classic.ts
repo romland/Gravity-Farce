@@ -25,7 +25,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         respawnRequest: false,
         angleAcc: 54000,
         angleStep: 27,
-        isLanded: false
+        isLanded: false,
+        score: 0
     });
     return e;
 }

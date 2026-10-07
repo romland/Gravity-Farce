@@ -437,6 +437,7 @@
                     }
                     r.isDead = s.isDead; 
                     r.inputs = s.inputs;
+                    r.score = s.score;
                 }
             }
 
@@ -449,6 +450,7 @@
             } else {
                 let myPlayer = renderState.players[myId];
                 if (myPlayer) {
+                hud.innerText = `${level.name} | SCORE: ${myPlayer.score.toString().padStart(6, '0')}`;
                     let targetX = myPlayer.x - VIEW_W / 2;
                     let targetY = myPlayer.y - VIEW_H / 2;
                     
@@ -542,9 +544,16 @@
                 }
             }
 
-            ctx.fillStyle = '#ff8';
             for (let b of serverState.bullets) {
-                ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+                if (b.isPlayer) {
+                    ctx.fillStyle = '#ff8';
+                    ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+                } else {
+                    ctx.fillStyle = '#f44';
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
             updateAndDrawParticles(ctx);
 

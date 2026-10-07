@@ -144,6 +144,12 @@ export function sysBullets(ecs: Registry, room: Room) {
                         turret.active = false;
                         ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
                         destroyTurretTile(room, turret.tileX, turret.tileY);
+
+                    const shooterEntity = ecs.getPlayerEntity(b.ownerId);
+                    if (shooterEntity !== undefined) {
+                        const shooter = ecs.players.get(shooterEntity);
+                        if (shooter) shooter.score += getTurretSpecByTile(turret.turretType).scoreValue;
+                    }
                     }
                     break;
                 }
@@ -199,8 +205,12 @@ export function sysTurrets(ecs: Registry, room: Room) {
             for (const vec of spec.vectors) {
                 spawnBullet(
                     ecs,
-                    t.x + spec.muzzleOffset.x,
-                    t.y + spec.muzzleOffset.y,
+                    // IMPNOTE: The original Amiga GF engine uses a 16x16 tile grid.
+                    // Our modernized engine uses TILE_SIZE = 32. Since muzzle offsets are
+                    // raw byte extracts relative to a 16x16 tile center, we must scale them by 2
+                    // to ensure the bullets spawn exactly at the upscaled visual barrel locations.
+                    t.x + (spec.muzzleOffset.x * 2),
+                    t.y + (spec.muzzleOffset.y * 2),
                     vec.vx * speed,
                     vec.vy * speed,
                     false,

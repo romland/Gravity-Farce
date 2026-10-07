@@ -22,7 +22,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         respawnRequest: false,
         angleAcc: 0,
         angleStep: 0,
-        isLanded: false
+        isLanded: false,
+        score: 0
     });
     return e;
 }

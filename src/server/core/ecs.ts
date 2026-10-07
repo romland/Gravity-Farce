@@ -32,6 +32,7 @@ export interface Player {
     angleAcc: number;
     angleStep: number;
     isLanded: boolean;
+    score: number;
 }
 
 export interface Turret {
