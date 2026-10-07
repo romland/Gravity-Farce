@@ -41,10 +41,10 @@ const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
     9: { x: 0.707, y: 0.707 },  // F9: Down-Right
     10: { x: -0.707, y: 0.707 },// FA: Down-Left
     11: { x: -0.707, y: -0.707 },// FB: Up-Left
-    12: { x: 1.0, y: 0.0 },     // FC: Right (Maneuver)
-    13: { x: 0.0, y: 1.0 },     // FD: Down (Maneuver)
-    14: { x: 0.0, y: -1.0 },    // FE: Up (Maneuver, turns Enemy 8 upwards)
-    15: { x: -1.0, y: 0.0 }     // FF: Left (Maneuver)
+    12: { x: 0.0, y: -1.0 },    // FC: Up (Routes through shaft to FB)
+    13: { x: -1.0, y: 0.0 },    // FD: Left (Routes to F1)
+    14: { x: 0.0, y: -1.0 },    // FE: Up (Routes to F2)
+    15: { x: 1.0, y: 0.0 }      // FF: Right (Routes to F3)
 };
 
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
@@ -68,8 +68,8 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         height: specs.height,
         directionState: 0,
         maneuverStep: 0,
-        lastWaypointX: -1,
-        lastWaypointY: -1,
+        startX: x,
+        startY: y,
         fireTimer: 120 + Math.floor(Math.random() * 60),
         burstRemaining: 0
     });
@@ -128,15 +128,24 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
                 } else {
                     let newState = tileId - 0xF0;
                     if (newState !== enemy.directionState) {
-                        if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(enemy.debugId)) {
-                        // console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Data: ${JSON.stringify(enemy)}`);
-                        console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Started at: [Col ${tileX}, Row ${tileY}] | Data: ${JSON.stringify(enemy)}`);
+                        const centerX = tileX * TILE_SIZE + TILE_SIZE / 2;
+                        const centerY = tileY * TILE_SIZE + TILE_SIZE / 2;
+                        const currentDir = DIRECTION_VECTORS[enemy.directionState] || DIRECTION_VECTORS[0];
+                        const dotProduct = (centerX - t.x) * currentDir.x + (centerY - t.y) * currentDir.y;
+
+                        // Only change direction once the enemy has reached/passed the exact center of the waypoint tile
+                        if (dotProduct <= 0) {
+                            if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(enemy.debugId)) {
+                                const startCol = Math.floor(enemy.startX / TILE_SIZE);
+                                const startRow = Math.floor(enemy.startY / TILE_SIZE);
+                                console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${centerX.toFixed(1)},${centerY.toFixed(1)} | Started at: [Col ${startCol}, Row ${startRow}] | Data: ${JSON.stringify(enemy)}`);
+                            }
+                            enemy.directionState = newState;
+                            enemy.maneuverStep = 2; // Start 24-frame blindfold
+                            t.x = centerX; // Snap to exact center to clear floating-point drift
+                            t.y = centerY;
+                        }
                     }
-                    enemy.directionState = newState;
-                    enemy.maneuverStep = 2; // Start 24-frame blindfold
-                    // t.x = tileX * TILE_SIZE + TILE_SIZE / 2;
-                    // t.y = tileY * TILE_SIZE + TILE_SIZE / 2;
-                }
                 }
             }
         } else {

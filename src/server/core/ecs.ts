@@ -72,6 +72,8 @@ export interface FlyingEnemy {
     height: number;
     fireTimer: number;
     burstRemaining: number;
+    startX: number;
+    startY: number;
 }
 
 export interface HomingMissile {
