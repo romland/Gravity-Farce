@@ -184,8 +184,8 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xCE: { id: 0xCE, description: 'Gravity Well (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
     0xCF: { id: 0xCF, description: 'Gravity Well (Pulls UP)', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
     // D0 - Pickup package: fuel
-    0xD1: { id: 0xD1, description: 'Pickup package / objective', known: true },
-    0xD2: { id: 0xD2, description: 'Pickup package / objective', known: true },
+    0xD1: { id: 0xD1, description: 'Pickup package (Small)', entity: { type: 'cargo', props: { typeId: 0xD1 } }, known: true },
+    0xD2: { id: 0xD2, description: 'Pickup package (Large)', entity: { type: 'cargo', props: { typeId: 0xD2 } }, known: true },
     
     0xD6: { id: 0xD6, description: 'Pickup package bonus: double shot; every key press shoots two bullets', known: true },
 

@@ -27,7 +27,9 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         angleAcc: 54000,
         angleStep: 27,
         isLanded: false,
-        score
+         score,
+         cargoStack: [],
+         unloadTimer: 0
     });
     return e;
 }
@@ -37,6 +39,10 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         if (p.type !== 'classic' || p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
+
+         const weight = p.cargoStack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
+         const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
+         const weightThrust = THRUST_IMPULSE * (1.0 - (weight * 0.15));
 
         if (p.isLanded) {
             v.vx = 0; 
@@ -64,8 +70,8 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         t.angle = (p.angleStep * (Math.PI * 2)) / 36;
 
         if (p.inputs.up) {
-            v.vx += Math.cos(t.angle) * THRUST_IMPULSE;
-            v.vy += Math.sin(t.angle) * THRUST_IMPULSE;
+             v.vx += Math.cos(t.angle) * weightThrust;
+             v.vy += Math.sin(t.angle) * weightThrust;
         }
         
         // Gravity Wells / Magnets (0xCC - 0xCF)
@@ -84,7 +90,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
 
         v.vx *= DRAG; 
         v.vy *= DRAG; 
-        v.vy += GRAVITY;
+         v.vy += weightGravity;
         
         const speed = Math.hypot(v.vx, v.vy);
         if (speed > MAX_SPEED) { 

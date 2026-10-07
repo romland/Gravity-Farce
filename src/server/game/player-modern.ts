@@ -24,7 +24,9 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         angleAcc: 0,
         angleStep: 0,
         isLanded: false,
-        score
+         score,
+         cargoStack: [],
+         unloadTimer: 0
     });
     return e;
 }
@@ -34,6 +36,10 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         if (p.type !== 'modern' || p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
+
+         const weight = p.cargoStack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
+         const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
+         const weightThrust = THRUST * (1.0 - (weight * 0.15));
 
         if (p.isLanded) {
             v.vx = 0; 
@@ -58,8 +64,8 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         t.angle += v.angularVelocity;
 
         if (p.inputs.up) {
-            v.vx += Math.cos(t.angle) * THRUST;
-            v.vy += Math.sin(t.angle) * THRUST;
+             v.vx += Math.cos(t.angle) * weightThrust;
+             v.vy += Math.sin(t.angle) * weightThrust;
         }
         
         // Gravity Wells / Magnets (0xCC - 0xCF)
@@ -76,7 +82,7 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
             }
         }
 
-        v.vy += GRAVITY;
+         v.vy += weightGravity;
         v.vx *= DRAG; 
         v.vy *= DRAG;
 

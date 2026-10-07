@@ -7,6 +7,7 @@ import { spawnClassicPlayer, sysClassicPlayers } from './game/player-classic';
 import { sysWeapons, sysNetworkSync } from './game/systems';
 import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
+import { spawnCargo, sysCargo } from './game/cargo';
 
 export class Room {
     public ecs = new Registry();
@@ -34,6 +35,7 @@ export class Room {
             sysTurrets(this.ecs, this);
             sysTanks(this.ecs, this);
             sysFlyingEnemies(this.ecs, this);
+             sysCargo(this.ecs, this);
             sysBullets(this.ecs, this);
         }
 
@@ -59,6 +61,9 @@ export class Room {
                 this.debugEnemyCounter++;
                 spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter);
             }
+             if (ent.type === 'cargo') {
+                 spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
+             }
         });
     }
 
@@ -154,6 +159,9 @@ export class Room {
         for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) {
             this.ecs.destroy(e);
         }
+         for (const [e] of Array.from(this.ecs.cargos.entries())) {
+             this.ecs.destroy(e);
+         }
         this.spawnEntities();
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
     }    
