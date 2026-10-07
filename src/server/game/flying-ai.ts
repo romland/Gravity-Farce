@@ -4,34 +4,60 @@ import { killPlayer, spawnBullet } from './combat';
 
 const TILE_SIZE = 32;
 
-const CARDINAL_VECTORS = [
-    { x: 1.0, y: 0.0 },  // Right
-    { x: 0.0, y: 1.0 },  // Down
-    { x: -1.0, y: 0.0 }, // Left
-    { x: 0.0, y: -1.0 }  // Up
-];
+export interface FlyingEnemySpecs {
+    hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in 68k binary
+    speedScalar: number;
+    scoreValue: number;
+    canShoot: boolean;  // Word 4 Bit 1 (0x02) Weapon Flag
+}
+
+// Memory-verified template structs mapped directly from RAM $00031570 (Tile E3 is Index 0)
+const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
+    0xE4: { hp: 8,  speedScalar: 1.0, scoreValue: 100, canShoot: true },
+    0xE5: { hp: -1, speedScalar: 1.0, scoreValue: 200, canShoot: false }, 
+    0xE6: { hp: 6,  speedScalar: 1.0, scoreValue: 100, canShoot: false },
+    0xE7: { hp: 3,  speedScalar: 1.0, scoreValue: 150, canShoot: true },
+    0xE8: { hp: 5,  speedScalar: 1.0, scoreValue: 250, canShoot: false },
+    0xE9: { hp: 12, speedScalar: 1.0, scoreValue: 90,  canShoot: false },
+    0xEA: { hp: 12, speedScalar: 1.0, scoreValue: 100, canShoot: false },
+    0xEB: { hp: -1, speedScalar: 1.0, scoreValue: 100, canShoot: false }, 
+    0xEC: { hp: 6,  speedScalar: 1.0, scoreValue: 75,  canShoot: false },
+    0xED: { hp: 6,  speedScalar: 1.0, scoreValue: 200, canShoot: false },
+    0xEE: { hp: 9,  speedScalar: 1.0, scoreValue: 100, canShoot: false },
+    0xEF: { hp: 25, speedScalar: 1.0, scoreValue: 80,  canShoot: false }
+};
+
+const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
+    0: { x: 1.0, y: 0.0 },   // F0: Right
+    1: { x: 0.0, y: 1.0 },   // F1: Down
+    2: { x: -1.0, y: 0.0 },  // F2: Left
+    3: { x: 0.0, y: -1.0 },  // F3: Up
+    8: { x: 0.707, y: -0.707 }, // F8: Up-Right
+    9: { x: 0.707, y: 0.707 },  // F9: Down-Right
+    10: { x: -0.707, y: 0.707 },// FA: Down-Left
+    11: { x: -0.707, y: -0.707 }// FB: Up-Left
+};
 
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
-
-const CORNER_TABLES: Record<number, number[]> = {
-    8:  [0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 1,-1, 0,-1, 1,-1, 0,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,0, 1,-1, 1,0, 1,-1, 1,0, 1,0, 1,0, 1,0, 1,0, 1,0],
-    9:  [1,0, 1,0, 1,0, 1,0, 1,0, 1,0, 1,1, 1,0, 1,1, 1,0, 1,1, 1,1, 1,1, 1,1, 0,1, 1,1, 0,1, 1,1, 0,1, 0,1, 0,1, 0,1, 0,1, 0,1],
-    10: [0,1, 0,1, 0,1, 0,1, 0,1, 0,1, -1,1, 0,1, -1,1, 0,1, -1,1, -1,1, -1,1, -1,1, -1,0, -1,1, -1,0, -1,1, -1,0, -1,0, -1,0, -1,0, -1,0, -1,0],
-    11: [-1,0, -1,0, -1,0, -1,0, -1,0, -1,0, -1,-1, -1,0, -1,-1, -1,0, -1,-1, -1,-1, -1,-1, -1,-1, 0,-1, -1,-1, 0,-1, -1,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1]
-};
 
 let globalWaveTimer = 0;
 
 export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number): Entity {
+    const specs = FLYING_ENEMY_TEMPLATES[type] || FLYING_ENEMY_TEMPLATES[0xE4];
+
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: 0 });
     ecs.flyingEnemies.set(e, {
         active: true,
-        hp: 3,
+        hp: specs.hp,
         enemyType: type,
-        scoreValue: type === 0xE7 ? 250 : 100,
+        scoreValue: specs.scoreValue,
+        speedScalar: specs.speedScalar,
+        canShoot: specs.canShoot,
         directionState: 0,
         maneuverStep: 0,
+        lastWaypointX: -1,
+        lastWaypointY: -1,
         fireTimer: 120 + Math.floor(Math.random() * 60),
         burstRemaining: 0
     });
@@ -48,8 +74,8 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         if (!enemy.active) continue;
         const t = ecs.transforms.get(e)!;
 
-        // 1. Probabilistic PRNG Projectile Firing ($00030E00)
-        if (--enemy.fireTimer <= 0) {
+        // 1. Firing Loop (Bit 1 / 0x02 Capability Check)
+        if (enemy.canShoot && --enemy.fireTimer <= 0) {
             const angle = Math.random() * Math.PI * 2;
             const bulletSpeed = 1.5 + Math.random() * 1.0;
             const vx = Math.cos(angle) * bulletSpeed;
@@ -59,15 +85,12 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             ecs.events.push({ type: 'sound', soundId: 10, x: t.x, y: t.y });
 
             if (enemy.burstRemaining > 0) {
-                // Completed follow-up shot -> long cooldown
                 enemy.burstRemaining = 0;
                 enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
             } else if (Math.random() < 0.35) {
-                // PRNG match (~35% chance): Queue a rapid second shot in 8-12 frames
                 enemy.burstRemaining = 1;
                 enemy.fireTimer = 8 + Math.floor(Math.random() * 5);
             } else {
-                // Single shot -> direct long cooldown
                 enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
             }
         }
@@ -79,30 +102,35 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             const tileId = room.level.rawMap[tileY]?.[tileX];
 
             if (tileId !== undefined && tileId >= 0xF0 && tileId <= 0xFB) {
-                enemy.directionState = tileId - 0xF0;
+                let newState = enemy.directionState;
+                if (tileId >= 0xF0 && tileId <= 0xF3) newState = tileId - 0xF0;
+                else if (tileId === 0xF9) newState = 9;  // Down-Right
+                else if (tileId === 0xFA) newState = 10; // Down-Left
+                else if (tileId === 0xFB) newState = 11; // Up-Left
+                else if (tileId === 0xF8) newState = 8;  // Up-Right
+                
+                if (newState !== enemy.directionState) {
+                    enemy.directionState = newState;
+                    enemy.maneuverStep = 2; // Start 24-frame blindfold
+                    // t.x = tileX * TILE_SIZE + TILE_SIZE / 2;
+                    // t.y = tileY * TILE_SIZE + TILE_SIZE / 2;
+                }
             }
-        }
-
-        // 3. Movement Wave / Cornering ($0003100A)
-        if (enemy.directionState >= 8) {
-            const table = CORNER_TABLES[enemy.directionState] || CORNER_TABLES[8];
-            t.x += table[enemy.maneuverStep] * 0.75;
-            t.y += table[enemy.maneuverStep + 1] * 0.75;
-
+        } else {
             enemy.maneuverStep += 2;
             if (enemy.maneuverStep >= 48) {
                 enemy.maneuverStep = 0;
-                enemy.directionState = (enemy.directionState - 8) % 4;
             }
-        } else {
-            const dir = CARDINAL_VECTORS[enemy.directionState % 4];
-            const speed = WAVE_SPEED_MODIFIERS[waveIndex];
-
-            t.x += dir.x * speed;
-            t.y += dir.y * speed;
         }
 
-        // 4. Player Impact Collision
+        // 3. Movement Integration
+        const dir = DIRECTION_VECTORS[enemy.directionState] || DIRECTION_VECTORS[0];
+        const moveSpeed = WAVE_SPEED_MODIFIERS[waveIndex]; // Unmodified native speed
+
+        t.x += dir.x * moveSpeed;
+        t.y += dir.y * moveSpeed;
+
+        // 4. Collision Check
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe);

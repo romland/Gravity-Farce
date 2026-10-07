@@ -61,10 +61,11 @@ export interface FlyingEnemy {
     hp: number;
     enemyType: number;
     scoreValue: number;
-    speedScalar: number;
     directionState: number; // Offset +$02
-    maneuverStep: number;   // Offset +$1A
-    attackCooldown: number;
+    maneuverStep: number;   // Offset +$1A (24-frame blindfold timer)
+    canShoot: boolean;
+    fireTimer: number;
+    burstRemaining: number;
 }
 
 export interface HomingMissile {

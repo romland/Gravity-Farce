@@ -185,14 +185,18 @@ export function sysBullets(ecs: Registry, room: Room) {
                         // Using a generic 24x24 bounding box until specific hitboxes are dumped
                         if (Math.abs(t.x - ft.x) <= 12 && Math.abs(t.y - ft.y) <= 12) {
                             hit = true;
-                            flying.hp--;
-                            if (flying.hp <= 0) {
-                                flying.active = false;
-                                ecs.events.push({ type: 'poof', x: ft.x, y: ft.y });
-                                const shooterEntity = ecs.getPlayerEntity(b.ownerId);
-                                if (shooterEntity !== undefined) {
-                                    const shooter = ecs.players.get(shooterEntity);
-                                    if (shooter) shooter.score += flying.scoreValue;
+                            
+                            // Ensure indestructible (-1 HP) enemies are not deleted by underflow
+                            if (flying.hp !== -1) {
+                                flying.hp--;
+                                if (flying.hp <= 0) {
+                                    flying.active = false;
+                                    ecs.events.push({ type: 'poof', x: ft.x, y: ft.y });
+                                    const shooterEntity = ecs.getPlayerEntity(b.ownerId);
+                                    if (shooterEntity !== undefined) {
+                                        const shooter = ecs.players.get(shooterEntity);
+                                        if (shooter) shooter.score += flying.scoreValue;
+                                    }
                                 }
                             }
                             break;

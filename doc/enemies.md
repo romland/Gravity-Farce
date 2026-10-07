@@ -59,11 +59,28 @@ Flying enemies are managed via a active entity table at `$000378F6` populated fr
 
 ### Entity Template Structure (`$00031570` Array)
 
-22-byte (`$16`) struct indexed by (Tile ID - `0xE3`):
+22-byte (`$16`) struct indexed by (Tile ID - `0xE3`). 
 
+**The Base Tile Quirk:** The engine uses Tile `0xE3` (Multiplayer P2 Start) as a mathematical baseline. Subtracting `$E3` from an active enemy tile yields its struct index. This means Index 0 (`$00031570` to `$00031585`) is entirely empty `0000` padding in the ROM, and the first valid flying enemy (`0xE4`) sits at Index 1.
+
+* `+$00` [Word]: Hit Points (`FFFF` = Invulnerable / -1).
 * `+$06` [Word]: Score Value (`0064` = 100 points, `00FA` = 250 points).
-* `+$08` [Word]: Base Speed Scalar (`03E8` = 1.0x, `07D0` = 2.0x, `09C4` = 2.5x).
-* `+$0A` [Long]: Flight Pattern Data Base Pointer.
+* `+$08` [Word]: Weapon Firing Cooldown / PRNG Threshold (`0000` = Non-shooting entity).
+* `+$0A` [Word]: Capabilities Mask (Bit 1 / `0x02` = Can Shoot).
+
+#### Verified Specifications (`0xE4` - `0xEF`)
+* **`0xE4`**: 8 HP, 2.0x speed, Shoots (100 pts)
+* **`0xE5`**: Invulnerable, 0.0x speed (Stationary Mine), No Shoot (200 pts)
+* **`0xE6`**: 6 HP, 2.0x speed, No Shoot (100 pts)
+* **`0xE7`**: 3 HP, 1.0x speed, Shoots (150 pts)
+* **`0xE8`**: 5 HP, 1.0x speed, No Shoot (250 pts)
+* **`0xE9`**: 12 HP, 6.0x speed, No Shoot (90 pts)
+* **`0xEA`**: 12 HP, 5.0x speed, No Shoot (100 pts)
+* **`0xEB`**: Invulnerable, 0.0x speed (Stationary Mine), No Shoot (100 pts)
+* **`0xEC`**: 6 HP, 2.5x speed, No Shoot (75 pts)
+* **`0xED`**: 6 HP, 3.0x speed, No Shoot (200 pts)
+* **`0xEE`**: 9 HP, 3.5x speed, No Shoot (100 pts)
+* **`0xEF`**: 25 HP, 12.0x speed, No Shoot (80 pts)
 
 ### Active Entity Structure (`$000378F6` Array)
 
@@ -89,9 +106,9 @@ At `$00030F0E`, the engine samples tile map `$00050460` at the enemy's current 8
 
 * **Direct Cardinal Nodes (`0xF0`–`0xF3`):** Subtracts `0xF0` and writes values `0`–`3` directly into direction state `+$02` (0=Right, 1=Down, 2=Left, 3=Up).
 * **Swarm Sync Nodes (`0xF4`–`0xF7`):** Evaluates sign bit of global state `$0003181C` (`bmi.w` branch). Depending on state, forces turns in opposite directions to split or sync swarms.
-* **Micro-Maneuvers / Diagonal Cornering (`0xF8`–`0xFB`):**
-* Sets direction state `+$02` to `8`–`11` and initializes step counter `+$1A` to `0`.
-* Indexes 24-frame (48-byte) vector tables at `$00031242`, interpolating between cardinal and diagonal steps across tile boundaries.
+* **Diagonal Reflectors (`0xF8`–`0xFB`):**
+* Sets direction state `+$02` to `8`–`11` (8=Up-Right `0xF8`, 9=Down-Right `0xF9`, 10=Down-Left `0xFA`, 11=Up-Left `0xFB`).
+* Triggers a 24-frame blindfold cycle (`+$1A`) during direction transitions to prevent re-triggering waypoint checks until clear.
 * **Way-Point Blindfold:** While step counter `+$1A` is non-zero, routine `$00030F0E` **bypasses tile checking entirely**. This prevents enemies from snapping or re-triggering adjacent waypoint nodes while completing turns.
 
 ### Flying Enemy Firing Mechanics (`$00030E00`–`$00030ECE`)
