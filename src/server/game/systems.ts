@@ -25,16 +25,29 @@ export function sysWeapons(ecs: Registry) {
         if (activeShoot && p.gunCooldown <= 0) {
             const offset = 14; 
             const bSpeed = p.type === 'classic' ? 4.0 : 2.2; 
-            
-            spawnBullet(
-                ecs, 
-                t.x + Math.cos(t.angle) * offset, 
-                t.y + Math.sin(t.angle) * offset, 
-                v.vx + Math.cos(t.angle) * bSpeed, 
-                v.vy + Math.sin(t.angle) * bSpeed, 
-                true, 
-                p.id
-            );
+
+             if (p.doubleShotAmmo > 0) {
+                 const perpX = -Math.sin(t.angle) * 6;
+                 const perpY = Math.cos(t.angle) * 6;
+                 const noseX = t.x + Math.cos(t.angle) * offset;
+                 const noseY = t.y + Math.sin(t.angle) * offset;
+                 const bulletVx = v.vx + Math.cos(t.angle) * bSpeed;
+                 const bulletVy = v.vy + Math.sin(t.angle) * bSpeed;
+
+                 spawnBullet(ecs, noseX + perpX, noseY + perpY, bulletVx, bulletVy, true, p.id);
+                 spawnBullet(ecs, noseX - perpX, noseY - perpY, bulletVx, bulletVy, true, p.id);
+                 p.doubleShotAmmo--;
+             } else {
+                 spawnBullet(
+                     ecs, 
+                     t.x + Math.cos(t.angle) * offset, 
+                     t.y + Math.sin(t.angle) * offset, 
+                     v.vx + Math.cos(t.angle) * bSpeed, 
+                     v.vy + Math.sin(t.angle) * bSpeed, 
+                     true, 
+                     p.id
+                 );
+             }
             
             // Auto-fire is deliberately slow. Fast firing requires manual pressing.
             p.gunCooldown = p.type === 'classic' ? 30 : 40;
@@ -58,6 +71,8 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             bullets: [] as any,
             tanks: [] as any,
             flying: [] as any,
+            cargos: [] as any,
+            powerups: [] as any,
             events: [] as any
         };
         
@@ -90,6 +105,18 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             const ft = ecs.transforms.get(fe)!;
             if (Math.abs(ft.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ft.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
                 state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType, debugId: flying.debugId });
+            }
+        }
+        for (const [ce, cargo] of ecs.cargos.entries()) {
+            const ct = ecs.transforms.get(ce)!;
+            if (Math.abs(ct.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ct.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.cargos.push({ x: ct.x, y: ct.y, typeId: cargo.typeId, weight: cargo.weight });
+            }
+        }
+        for (const [pue, powerup] of ecs.powerups.entries()) {
+            const put = ecs.transforms.get(pue)!;
+            if (Math.abs(put.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(put.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.powerups.push({ x: put.x, y: put.y, typeId: powerup.typeId });
             }
         }
         for (const [be, b] of ecs.bullets.entries()) {

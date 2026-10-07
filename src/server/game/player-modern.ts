@@ -26,7 +26,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         isLanded: false,
          score,
          cargoStack: [],
-         unloadTimer: 0
+         unloadTimer: 0,
+         doubleShotAmmo: 0
     });
     return e;
 }

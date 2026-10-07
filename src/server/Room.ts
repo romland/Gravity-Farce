@@ -8,6 +8,7 @@ import { sysWeapons, sysNetworkSync } from './game/systems';
 import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 import { spawnCargo, sysCargo } from './game/cargo';
+import { spawnPowerup, sysPowerups } from './game/powerups';
 
 export class Room {
     public ecs = new Registry();
@@ -36,6 +37,7 @@ export class Room {
             sysTanks(this.ecs, this);
             sysFlyingEnemies(this.ecs, this);
              sysCargo(this.ecs, this);
+             sysPowerups(this.ecs, this);
             sysBullets(this.ecs, this);
         }
 
@@ -63,6 +65,9 @@ export class Room {
             }
              if (ent.type === 'cargo') {
                  spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
+             }
+             if (ent.type === 'powerup') {
+                 spawnPowerup(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD6);
              }
         });
     }
@@ -160,6 +165,9 @@ export class Room {
             this.ecs.destroy(e);
         }
          for (const [e] of Array.from(this.ecs.cargos.entries())) {
+             this.ecs.destroy(e);
+         }
+         for (const [e] of Array.from(this.ecs.powerups.entries())) {
              this.ecs.destroy(e);
          }
         this.spawnEntities();

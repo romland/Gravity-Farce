@@ -9,10 +9,7 @@ Some python RE-related files:
     Code dump:
         engine_code.asm
 
-RE conversation -- some nice nuggets on code in there:
-    Z:\saved-pages\_Gemini - direct access to Google AI (06_10_2026 03_11_34).html
-
-The more crates you carry, the heavier you are (gravity is meaner)
+The more crates you carry, the heavier you are (gravity? is meaner)
     - Need to dig out HOW MUCH heavier
     - also, seems you can only carry the larger crates if you are not carrying anything else? or?
       ah, no, you can at least carry ONE small crater and still pick up a larger one

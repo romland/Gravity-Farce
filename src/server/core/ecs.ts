@@ -35,6 +35,7 @@ export interface Player {
     score: number;
     cargoStack: number[];
     unloadTimer: number;
+    doubleShotAmmo: number;
 }
 
 export interface Turret {
@@ -102,6 +103,14 @@ export interface Cargo {
     height: number;
 }
 
+export interface Powerup {
+    active: boolean;
+    typeId: number;
+    charges: number;
+    width: number;
+    height: number;
+}
+
 export class Registry {
     private nextId = 1;
     public transforms = new Map<Entity, Transform>();
@@ -112,6 +121,7 @@ export class Registry {
     public flyingEnemies = new Map<Entity, FlyingEnemy>();
     public homingMissiles = new Map<Entity, HomingMissile>();
     public cargos = new Map<Entity, Cargo>();
+    public powerups = new Map<Entity, Powerup>();
     public bullets = new Map<Entity, Bullet>();
     public events: GameEvent[] = [];
 
@@ -129,6 +139,7 @@ export class Registry {
         this.homingMissiles.delete(e);
         this.bullets.delete(e);
         this.cargos.delete(e);
+        this.powerups.delete(e);
     }
 
     getPlayerEntity(id: string): Entity | undefined {

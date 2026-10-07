@@ -183,11 +183,14 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xCD: { id: 0xCD, description: 'Gravity Well (Pulls DOWN)', entity: { type: 'trigger', props: { id: 0xCD } }, known: true },
     0xCE: { id: 0xCE, description: 'Gravity Well (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
     0xCF: { id: 0xCF, description: 'Gravity Well (Pulls UP)', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
-    // D0 - Pickup package: fuel
+    0xD0: { id: 0xD0, description: 'Powerup: Fuel Pod (+50,000 Fuel)', entity: { type: 'powerup', props: { typeId: 0xD0 } }, known: true },
     0xD1: { id: 0xD1, description: 'Pickup package (Small)', entity: { type: 'cargo', props: { typeId: 0xD1 } }, known: true },
     0xD2: { id: 0xD2, description: 'Pickup package (Large)', entity: { type: 'cargo', props: { typeId: 0xD2 } }, known: true },
     
-    0xD6: { id: 0xD6, description: 'Pickup package bonus: double shot; every key press shoots two bullets', known: true },
+    0xD5: { id: 0xD5, description: 'Powerup: Overcharge', entity: { type: 'powerup', props: { typeId: 0xD5 } }, known: true },
+    0xD6: { id: 0xD6, description: 'Powerup: Double Shot (100 charges)', entity: { type: 'powerup', props: { typeId: 0xD6 } }, known: true },
+    0xD7: { id: 0xD7, description: 'Powerup: Spread Weapon', entity: { type: 'powerup', props: { typeId: 0xD7 } }, known: true },
+    0xD8: { id: 0xD8, description: 'Powerup: Utility Boost', entity: { type: 'powerup', props: { typeId: 0xD8 } }, known: true },
 
 
     0xDA: { id: 0xDA, description: 'Race objective 1 (invisible start line)', known: true },

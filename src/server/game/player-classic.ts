@@ -29,7 +29,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         isLanded: false,
          score,
          cargoStack: [],
-         unloadTimer: 0
+         unloadTimer: 0,
+         doubleShotAmmo: 0
     });
     return e;
 }

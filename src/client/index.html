@@ -91,7 +91,7 @@
         const assetManager = new AssetManager();
         const socket = io({ autoConnect: false });
         let myId = null;
-        let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [] };
+        let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [], cargos: [], powerups: [] };
         let renderState = { players: {} }; 
         let level = null;
         let camera = { x: 0, y: 0 };
@@ -465,6 +465,73 @@
             }
         }
 
+        function drawCargo(c) {
+            ctx.save();
+            ctx.translate(Math.round(c.x), Math.round(c.y));
+            const size = c.weight === 2 ? 24 : 18;
+            const isLarge = c.weight === 2;
+            
+            ctx.shadowBlur = 6;
+            ctx.shadowColor = isLarge ? 'rgba(230, 126, 34, 0.5)' : 'rgba(241, 196, 15, 0.5)';
+            
+            ctx.fillStyle = isLarge ? '#2c1e14' : '#1e2417';
+            ctx.strokeStyle = isLarge ? '#e67e22' : '#f1c40f';
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(-size / 2, -size / 2, size, size, 3);
+            } else {
+                ctx.rect(-size / 2, -size / 2, size, size);
+            }
+            ctx.fill();
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = isLarge ? '#f39c12' : '#f1c40f';
+            ctx.font = 'bold 10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(isLarge ? 'C2' : 'C1', 0, 1);
+            
+            ctx.restore();
+        }
+
+        function drawPowerup(p) {
+            ctx.save();
+            ctx.translate(Math.round(p.x), Math.round(p.y));
+            const radius = 10;
+            let label = 'PWR';
+            let color = '#3498db';
+            
+            if (p.typeId === 0xD0) { label = 'FUEL'; color = '#e67e22'; }
+            if (p.typeId === 0xD5) { label = 'PWR'; color = '#e74c3c'; }
+            else if (p.typeId === 0xD6) { label = '2X'; color = '#2ecc71'; }
+            else if (p.typeId === 0xD7) { label = '3X'; color = '#9b59b6'; }
+            else if (p.typeId === 0xD8) { label = 'UTL'; color = '#f39c12'; }
+            
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = color;
+            
+            ctx.fillStyle = 'rgba(10, 14, 20, 0.9)';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 9px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, 0, 1);
+            
+            ctx.restore();
+        }
+
         // Global debug function to dump the enemy map to the console
         window.printEnemyPathMap = function() {
             if (!level || !level.rawMap) {
@@ -603,6 +670,14 @@
                     ctx.fillStyle = '#4a9'; 
                     ctx.fillRect(pad.x, pad.y, pad.w || 20, 4);
                 });
+            }
+
+            if (serverState.cargos) {
+                serverState.cargos.forEach(drawCargo);
+            }
+            
+            if (serverState.powerups) {
+                serverState.powerups.forEach(drawPowerup);
             }
 
             if (serverState.turrets) {
