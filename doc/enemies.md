@@ -94,17 +94,27 @@ At `$00030F0E`, the engine samples tile map `$00050460` at the enemy's current 8
 * Indexes 24-frame (48-byte) vector tables at `$00031242`, interpolating between cardinal and diagonal steps across tile boundaries.
 * **Way-Point Blindfold:** While step counter `+$1A` is non-zero, routine `$00030F0E` **bypasses tile checking entirely**. This prevents enemies from snapping or re-triggering adjacent waypoint nodes while completing turns.
 
+### Flying Enemy Firing Mechanics (`$00030E00`–`$00030ECE`)
+
+Flying enemy weapons are completely un-aimed, non-directional hazards driven by system registers:
+
+* **PRNG Gate & Burst Logic (`$0003603E`):**
+Firing is evaluated by XORing the system PRNG register (`$00037F6A`) with frame ticks (`$00030B18`).
+* Primary firing runs on a 150–240 frame interval (~3.0s–4.8s).
+* A secondary PRNG check gives an approximate 30–40% chance to queue a rapid follow-up shot 8–12 frames after the first, producing occasional 2-shot bursts.
 
 
-### Pseudo-Random Firing Mechanics (`$00030E00`–`$00030ECE`)
+* **Trajectory Synthesis (`$00030E00`–`$00030E8C`):**
+The engine unpacks 4 raw byte digits from system tick/PRNG registers (`$00036032`–`$00036035` and `$0003603A`–`$0003603D`) into registers $D0$–$D3$.
+* $VX$ and $VY$ are assembled directly from these PRNG digits.
+* Fixed offset biases are added from `$00030B1A` ($+1.0$ fixed $VX$) and `$00030B1E` ($+0.0$ $VY$).
+* **No player tracking or vector normalization ($\Delta X / \text{dist}$) occurs.**
 
-Flying enemy firing is completely un-aimed and independent of player position:
 
-1. **PRNG Parsing:** Unpacks 4 raw byte digits from system tick / PRNG registers (`$00036032`–`$00036035` and `$0003603A`–`$0003603D`) into registers $D0$–$D3$.
-2. **Velocity Synthesis:** Assembles raw digits into fixed-point velocity components ($VX, VY$).
-3. **Bias Addition:** Adds fixed offset biases from `$00030B1A` ($+1.0$ fixed).
-4. **Muzzle Positioning:** Reads muzzle offsets from table `$000315C8` based on direction state `+$02` and adds them to absolute enemy position ($D1, D2$).
-5. **Spawner Invocation:** Sets `$000348D6 = #$0000` and executes `jsr $000348BE` to spawn an un-aimed projectile into `$00034C6A`.
+* **Muzzle Positioning (`$000315C8`):**
+Applies direction-dependent muzzle offsets from table `$000315C8` based on entity direction state `+$02`, shifting the spawn position to the active front/side of the enemy sprite.
+* **Spawner Call & Bullet Lifespan (`$000348BE`):**
+Sets `$000348D6 = #$0000` (NPC projectile mode) and calls `jsr $000348BE` with `D0 = #150` ($0096) frames lifetime. Active bullets despawn after **3.0 seconds** (at 50Hz PAL) or upon solid wall/player impact.
 
 ---
 
@@ -133,3 +143,17 @@ Iterates through active player projectiles in `$00034C6A` and checks coordinates
 1. **HP Reduction:** On valid collision, decrements hit points at struct offset `+$16` (`subq.w #$01, ($0016, a2)`).
 2. **Destruction State:** When HP reaches `0`, sets enemy active state `+$00` to `#$0032` (Exploding).
 3. **Explosion Particles:** Loads particle velocity vectors from table `$00036188` and calls `jsr $000348BE` (Mode `0`) to emit explosion debris.
+
+### Active Projectile Array Layout ($00034C6A)
+Entities allocated by universal spawner `$000348BE` use a 20-byte ($14) struct:
+* +$00 [Word]: Lifespan Countdown Timer (Decremented by 1 each frame; despawns at 0).
+* +$02 [Long]: Absolute Fixed-Point X Position.
+* +$06 [Long]: Absolute Fixed-Point Y Position.
+* +$0A [Long]: Horizontal Velocity Vector (VX).
+* +$0E [Long]: Vertical Velocity Vector (VY).
+* +$12 [Word]: Spawner Mode / Weapon Identifier ($000348D6).
+
+### Bullet Lifespan Standards
+* Initial Duration (D0): 150 frames (#$0096).
+* Effective Lifetime: 3.0 seconds at 50Hz (PAL) / 2.5 seconds at 60Hz (NTSC).
+

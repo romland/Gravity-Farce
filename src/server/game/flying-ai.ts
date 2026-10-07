@@ -11,7 +11,6 @@ const CARDINAL_VECTORS = [
     { x: 0.0, y: -1.0 }  // Up
 ];
 
-// Continuous sub-pixel speed modulation table ($000313C2)
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
 
 const CORNER_TABLES: Record<number, number[]> = {
@@ -33,7 +32,8 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         scoreValue: type === 0xE7 ? 250 : 100,
         directionState: 0,
         maneuverStep: 0,
-        fireTimer: 120 + Math.floor(Math.random() * 60) // Staggered fire interval
+        fireTimer: 120 + Math.floor(Math.random() * 60),
+        burstRemaining: 0
     });
     return e;
 }
@@ -41,7 +41,6 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
 export function sysFlyingEnemies(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
 
-    // Advance global wave step ($00031084: add.w #$0008, $000311FA)
     const waveIndex = Math.floor(globalWaveTimer / 8) % 8;
     globalWaveTimer = (globalWaveTimer + 1) % 64;
 
@@ -49,18 +48,28 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         if (!enemy.active) continue;
         const t = ecs.transforms.get(e)!;
 
-        // 1. Pseudo-Random Projectile Firing ($00030E00)
+        // 1. Probabilistic PRNG Projectile Firing ($00030E00)
         if (--enemy.fireTimer <= 0) {
-            enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
-
-            // Random firing trajectory generated from PRNG
             const angle = Math.random() * Math.PI * 2;
             const bulletSpeed = 1.5 + Math.random() * 1.0;
             const vx = Math.cos(angle) * bulletSpeed;
             const vy = Math.sin(angle) * bulletSpeed;
 
-            spawnBullet(ecs, t.x + 16, t.y + 16, vx, vy, false, 'npc', 120);
+            spawnBullet(ecs, t.x + 16, t.y + 16, vx, vy, false, 'npc', 150);
             ecs.events.push({ type: 'sound', soundId: 10, x: t.x, y: t.y });
+
+            if (enemy.burstRemaining > 0) {
+                // Completed follow-up shot -> long cooldown
+                enemy.burstRemaining = 0;
+                enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
+            } else if (Math.random() < 0.35) {
+                // PRNG match (~35% chance): Queue a rapid second shot in 8-12 frames
+                enemy.burstRemaining = 1;
+                enemy.fireTimer = 8 + Math.floor(Math.random() * 5);
+            } else {
+                // Single shot -> direct long cooldown
+                enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
+            }
         }
 
         // 2. Waypoint Grid Check
@@ -74,7 +83,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             }
         }
 
-        // 3. Smooth Movement Integration ($0003100A)
+        // 3. Movement Wave / Cornering ($0003100A)
         if (enemy.directionState >= 8) {
             const table = CORNER_TABLES[enemy.directionState] || CORNER_TABLES[8];
             t.x += table[enemy.maneuverStep] * 0.75;
