@@ -105,4 +105,6 @@ it very detailed. It will be used in a game. It's a 2D game...
 No perspective ... it's seen straight from the side and I want plain black background.
 
 ----
-https://www.gravityforce20.com/ looks fun, but eh, not really original GF
+https://www.gravityforce20.com/ looks fun, but eh, not really original GF  
+https://www.amigafuture.de/app.php/kb/viewarticle?a=3226 - oh fun  
+https://en.wikipedia.org/wiki/Gravity_Force  
