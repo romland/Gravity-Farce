@@ -106,6 +106,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x6C: { id: 0x6C, description: "Decorative base", known: true },
     0x6D: { id: 0x6D, description: "Decorative base", known: true },
     0x6E: { id: 0x6E, description: "Decorative base", known: true },
+
+    // 0x70 left-wall magnets / gravity well
+    // 0xCE magnet trigger zone
+
     0x73: { id: 0x73, description: "bottom thin rock?", known: true },
     0x74: { id: 0x74, description: "vertical left thin rock", known: true },
     0x75: { id: 0x75, description: "horizontal thinner upper rock", known: true },
@@ -134,7 +138,6 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     // // b5 (lvl 49) some turret
     // 0xb7: { id: 0xb7, description: 'turret pointing east shooting straight east', entity: { type: 'turret', }, known: true },
     // 0xba: { id: 0xba, description: 'turret pointing up shooting 5 directions (half circle) sideways/upwards (9 or 10 hits needed) -- seen on e.g. lvl 49', entity: { type: 'turret', }, known: true },
-
     0xae: { id: 0xae, description: 'turret 4-way cone variant (type 4)', entity: { type: 'turret', props: { turretType: 0xAE } }, known: true },
     0xaf: { id: 0xaf, description: 'turret pointing up, 3-way cone (type 1)', entity: { type: 'turret', props: { turretType: 0xAF } }, known: true },
     0xb0: { id: 0xb0, description: 'turret pointing up, 4-way cone (type 3)', entity: { type: 'turret', props: { turretType: 0xB0 } }, known: true },
@@ -148,18 +151,30 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xb9: { id: 0xb9, description: 'angled turret variant, diagonal left stream (type 8)', entity: { type: 'turret', props: { turretType: 0xB9 } }, known: true },
     0xba: { id: 0xba, description: 'turret pointing up, 5-way half-circle fan (type 13)', entity: { type: 'turret', props: { turretType: 0xBA } }, known: true },
 
+    // 0xBD: { id: 0xBD, description: 'Solid Lethal Walls', solid: true, known: true },
+    // // 0x00: { id: 0x00, description: '', known: true },
+    // 0xBE: { id: 0xBE, description: 'trigger area for when (af?) turrets start shooting?', known: true },
+    // 0xBF: { id: 0xBF, description: 'trigger area for when (b0?) turrets start shooting?', known: true },
+    // 0xC1: { id: 0xC1, description: 'trigger area for when (b2?) turrets start shooting?', known: true },
+    // // c4 (lvl49) some turret trigger area
+    // 0xC6: { id: 0xC6, description: 'trigger area for when (b7?) turrets start shooting ... maybe?', known: true },
+    // 0xC9: { id: 0xC9, description: 'trigger area for when (ba?) turrets start shooting ... maybe?', known: true },
+    0xBD: { id: 0xBD, description: "Trigger zone for turret 0xAE (3-way cone variant)", known: true },
+    0xBE: { id: 0xBE, description: "Trigger zone for turret 0xAF (3-way cone up)", known: true },
+    0xBF: { id: 0xBF, description: "Trigger zone for turret 0xB0 (4-way cone up)", known: true },
+    0xC0: { id: 0xC0, description: "Trigger zone for turret 0xB1 (4-way cone variant)", known: true },
+    0xC1: { id: 0xC1, description: "Trigger zone for turret 0xB2 (straight up stream)", known: true },
+    0xC2: { id: 0xC2, description: "Trigger zone for turret 0xB3 (ceiling straight down)", known: true },
+    0xC3: { id: 0xC3, description: "Trigger zone for turret 0xB4 (ceiling straight down variant)", known: true },
+    0xC4: { id: 0xC4, description: "Trigger zone for turret 0xB5 (angled turret diagonal left)", known: true },
+    0xC5: { id: 0xC5, description: "Trigger zone for turret 0xB6 (straight down stream)", known: true },
+    0xC6: { id: 0xC6, description: "Trigger zone for turret 0xB7 (straight east stream)", known: true },
+    0xC7: { id: 0xC7, description: "Trigger zone for turret 0xB8 (straight west stream)", known: true },
+    0xC8: { id: 0xC8, description: "Trigger zone for turret 0xB9 (angled turret variant)", known: true },
+    0xC9: { id: 0xC9, description: "Trigger zone for turret 0xBA (5-way half-circle fan)", known: true },
+    0xCA: { id: 0xCA, description: "Trigger zone for turret 0xBB (heavy 3-way cone)", known: true },
+    0xCB: { id: 0xCB, description: "Trigger zone for turret 0xBC (heavy 3-way cone variant)", known: true },
 
-    0xBD: { id: 0xBD, description: 'Solid Lethal Walls', solid: true, known: true },
-
-    // 0x00: { id: 0x00, description: '', known: true },
-    0xBE: { id: 0xBE, description: 'trigger area for when (af?) turrets start shooting?', known: true },
-    0xBF: { id: 0xBF, description: 'trigger area for when (b0?) turrets start shooting?', known: true },
-    0xC1: { id: 0xC1, description: 'trigger area for when (b2?) turrets start shooting?', known: true },
-
-    // c4 (lvl49) some turret trigger area
-
-    0xC6: { id: 0xC6, description: 'trigger area for when (b7?) turrets start shooting ... maybe?', known: true },
-    0xC9: { id: 0xC9, description: 'trigger area for when (ba?) turrets start shooting ... maybe?', known: true },
 
     0xCC: { id: 0xCC, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
     0xCF: { id: 0xCF, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
