@@ -8,7 +8,7 @@ const GRAVITY = 0.015; const THRUST = 0.10;
 const DRAG = 0.996; const MAX_VEL = 10.0;
 const MAGNET_FORCE = THRUST * 0.5; // Scaled to 50% of engine power
 
-export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: number): Entity {
+export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: number, score: number = 0): Entity {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: -Math.PI / 2 });
     ecs.velocities.set(e, { vx: 0, vy: 0, angularVelocity: 0 });
@@ -24,7 +24,7 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         angleAcc: 0,
         angleStep: 0,
         isLanded: false,
-        score: 0
+        score
     });
     return e;
 }

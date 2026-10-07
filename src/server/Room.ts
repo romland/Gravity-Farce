@@ -80,13 +80,16 @@ export class Room {
         }
 
         if (chosenX !== null) {
+            let preservedScore = 0;
             const existing = this.ecs.getPlayerEntity(id);
             if (existing !== undefined) {
+                const oldP = this.ecs.players.get(existing);
+                if (oldP) preservedScore = oldP.score;
                 this.ecs.destroy(existing);
             }
             
-            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!);
-            else spawnModernPlayer(this.ecs, id, chosenX, chosenY!);
+            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, preservedScore);
+            else spawnModernPlayer(this.ecs, id, chosenX, chosenY!, preservedScore);
 
             const playerEntity = this.ecs.getPlayerEntity(id);
             if (playerEntity !== undefined) {

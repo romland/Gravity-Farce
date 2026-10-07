@@ -11,7 +11,7 @@ const MAGNET_FORCE = THRUST_IMPULSE * 0.5; // Scaled to 50% of engine power
 const MAX_SPEED = 7.5; 
 const MAX_SAFE_LANDING_VY = 1.4;
 
-export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: number): Entity {
+export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: number, score: number = 0): Entity {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: -Math.PI / 2 });
     ecs.velocities.set(e, { vx: 0, vy: 0, angularVelocity: 0 });
@@ -27,7 +27,7 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         angleAcc: 54000,
         angleStep: 27,
         isLanded: false,
-        score: 0
+        score
     });
     return e;
 }
