@@ -1,0 +1,1 @@
+(Bonus find: the block right below it at 0003401A processes tiles >= 0x3B, which we know are the Race Checkpoints, packing them into a 6-byte struct array at $00034040!)

@@ -5,6 +5,8 @@ import { spawnTurret, sysTurrets, sysBullets } from './game/combat';
 import { spawnModernPlayer, sysModernPlayers } from './game/player-modern';
 import { spawnClassicPlayer, sysClassicPlayers } from './game/player-classic';
 import { sysWeapons, sysNetworkSync } from './game/systems';
+import { spawnTank, sysTanks } from './game/tank-ai';
+import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 
 export class Room {
     public ecs = new Registry();
@@ -14,9 +16,7 @@ export class Room {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
-        level.entities.forEach(ent => {
-            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
-        });
+        this.spawnEntities();
     }
 
     tick(isPaused: boolean = false) {
@@ -31,12 +31,30 @@ export class Room {
             sysClassicPlayers(this.ecs, this);
             sysWeapons(this.ecs);
             sysTurrets(this.ecs, this);
+            sysTanks(this.ecs, this);
+            sysFlyingEnemies(this.ecs, this);
             sysBullets(this.ecs, this);
         }
 
         sysNetworkSync(this.ecs, this.levelIndex, this.io);
         
         this.ecs.events = [];
+    }
+
+    private spawnEntities() {
+        this.level.entities.forEach(ent => {
+            if (ent.type === 'turret') {
+                spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
+            }
+            if (ent.type === 'path_node' && ent.props?.index === 0) {
+                // We spawn one tank at the start of a path sequence (node 0)
+                // To increase density, we could spawn on multiple node indices later
+                spawnTank(this.ecs, ent.x, ent.y);
+            }
+            if (ent.type === 'flying_enemy') {
+                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC);
+            }
+        });
     }
 
     addPlayer(id: string, type: 'classic' | 'modern') {
@@ -125,9 +143,13 @@ export class Room {
         for (const [e] of Array.from(this.ecs.turrets.entries())) {
             this.ecs.destroy(e);
         }
-        this.level.entities.forEach(ent => {
-            if (ent.type === 'turret') spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
-        });
+        for (const [e] of Array.from(this.ecs.tanks.entries())) {
+            this.ecs.destroy(e);
+        }
+        for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) {
+            this.ecs.destroy(e);
+        }
+        this.spawnEntities();
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
     }    
 }

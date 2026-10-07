@@ -1,6 +1,8 @@
 import { Registry } from '../core/ecs';
 import { spawnBullet } from './combat';
 import { Server } from 'socket.io';
+import { sysTanks } from './tank-ai';
+import { sysFlyingEnemies } from './flying-ai';
 
 export function sysWeapons(ecs: Registry) {
     for (const [e, p] of ecs.players.entries()) {
@@ -54,6 +56,8 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             players: {} as any, 
             turrets: [] as any, 
             bullets: [] as any,
+            tanks: [] as any,
+            flying: [] as any,
             events: [] as any
         };
         
@@ -74,6 +78,18 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
         for (const [he, missile] of ecs.homingMissiles.entries()) {
             if (Math.abs(missile.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(missile.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
                 state.bullets.push({ x: missile.x, y: missile.y, isPlayer: false }); // Rendered via bullet sync channel for scannability
+            }
+        }
+        for (const [te, tank] of ecs.tanks.entries()) {
+            const tt = ecs.transforms.get(te)!;
+            if (Math.abs(tt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(tt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.tanks.push({ x: tt.x, y: tt.y, active: tank.active });
+            }
+        }
+        for (const [fe, flying] of ecs.flyingEnemies.entries()) {
+            const ft = ecs.transforms.get(fe)!;
+            if (Math.abs(ft.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ft.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.flying.push({ x: ft.x, y: ft.y, angle: ft.angle, active: flying.active });
             }
         }
         for (const [be, b] of ecs.bullets.entries()) {

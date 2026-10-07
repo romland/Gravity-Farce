@@ -47,6 +47,25 @@ export interface Turret {
     tileY: number;
 }
 
+export interface Tank {
+    active: boolean;
+    hp: number;
+    moveTimer: number;
+    dirX: number;
+    dirY: number;
+    scoreValue: number;
+}
+
+export interface FlyingEnemy {
+    active: boolean;
+    hp: number;
+    enemyType: number;
+    scoreValue: number;
+    speedScalar: number;
+    directionState: number; // Offset +$02
+    maneuverStep: number;   // Offset +$1A
+}
+
 export interface HomingMissile {
     active: boolean;
     x: number;
@@ -68,6 +87,8 @@ export class Registry {
     public velocities = new Map<Entity, Velocity>();
     public players = new Map<Entity, Player>();
     public turrets = new Map<Entity, Turret>();
+    public tanks = new Map<Entity, Tank>();
+    public flyingEnemies = new Map<Entity, FlyingEnemy>();
     public homingMissiles = new Map<Entity, HomingMissile>();
     public bullets = new Map<Entity, Bullet>();
     public events: GameEvent[] = [];
@@ -81,6 +102,8 @@ export class Registry {
         this.velocities.delete(e);
         this.players.delete(e);
         this.turrets.delete(e);
+        this.tanks.delete(e);
+        this.flyingEnemies.delete(e);
         this.homingMissiles.delete(e);
         this.bullets.delete(e);
     }

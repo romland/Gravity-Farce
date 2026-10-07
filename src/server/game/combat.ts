@@ -106,6 +106,7 @@ export function sysBullets(ecs: Registry, room: Room) {
         b.life--;
 
         let hit = false;
+        let hitX = t.x; let hitY = t.y;
 
         for (const [pe, p] of ecs.players.entries()) {
             const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
@@ -152,6 +153,51 @@ export function sysBullets(ecs: Registry, room: Room) {
                     }
                     }
                     break;
+                }
+            }
+            
+            if (!hit) {
+                for (const [te, tank] of ecs.tanks.entries()) {
+                    if (!tank.active) continue;
+                    const tt = ecs.transforms.get(te)!;
+                    // Authentic Amiga Tank Hitbox: 16x12 (X: ±8, Y: ±6)
+                    if (Math.abs(t.x - tt.x) <= 8 && Math.abs(t.y - tt.y) <= 6) {
+                        hit = true;
+                        tank.hp--;
+                        if (tank.hp <= 0) {
+                            tank.active = false;
+                            ecs.events.push({ type: 'poof', x: tt.x, y: tt.y });
+                            
+                            const shooterEntity = ecs.getPlayerEntity(b.ownerId);
+                            if (shooterEntity !== undefined) {
+                                const shooter = ecs.players.get(shooterEntity);
+                                if (shooter) shooter.score += 100; // Hardcoded #$00000064 in 000360BC
+                            }
+                        }
+                        break;
+                    }
+                }
+                
+                if (!hit) {
+                    for (const [fe, flying] of ecs.flyingEnemies.entries()) {
+                        if (!flying.active) continue;
+                        const ft = ecs.transforms.get(fe)!;
+                        // Using a generic 24x24 bounding box until specific hitboxes are dumped
+                        if (Math.abs(t.x - ft.x) <= 12 && Math.abs(t.y - ft.y) <= 12) {
+                            hit = true;
+                            flying.hp--;
+                            if (flying.hp <= 0) {
+                                flying.active = false;
+                                ecs.events.push({ type: 'poof', x: ft.x, y: ft.y });
+                                const shooterEntity = ecs.getPlayerEntity(b.ownerId);
+                                if (shooterEntity !== undefined) {
+                                    const shooter = ecs.players.get(shooterEntity);
+                                    if (shooter) shooter.score += flying.scoreValue;
+                                }
+                            }
+                            break;
+                        }
+                    }
                 }
             }
         }

@@ -85,7 +85,7 @@
 
         const socket = io();
         let myId = null;
-        let serverState = { players: {}, bullets: [], turrets: [] };
+        let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [] };
         let renderState = { players: {} }; 
         let level = null;
         let camera = { x: 0, y: 0 };
@@ -413,6 +413,56 @@
             ctx.restore();
         }
 
+        function drawTank(t) {
+            if (!t.active) return;
+            ctx.save(); 
+            ctx.translate(t.x, t.y);
+            ctx.fillStyle = '#8a8a8a'; 
+            ctx.fillRect(-10, -10, 20, 20); // Basic tank chassis
+            ctx.fillStyle = '#ff4b2b';
+            ctx.fillRect(-4, -4, 8, 8); // Tank core
+            ctx.restore();
+        }
+
+        function drawFlyingEnemy(t) {
+            if (!t.active) return;
+            ctx.save(); 
+            ctx.translate(t.x, t.y);
+            ctx.rotate(t.angle);
+            
+            ctx.fillStyle = '#ff8800'; 
+            ctx.beginPath();
+            ctx.moveTo(12, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Global debug function to dump the enemy map to the console
+        window.printEnemyPathMap = function() {
+            if (!level || !level.rawMap) {
+                console.log("Map not loaded yet.");
+                return;
+            }
+            let out = `\n--- ENEMY PATH DEBUG MAP: ${level.name} ---\n`;
+            for (let y = 0; y < level.rawMap.length; y++) {
+                let rowStr = "";
+                for (let x = 0; x < level.rawMap[y].length; x++) {
+                    const t = level.rawMap[y][x];
+                    if (t >= 0xE4 && t <= 0xEF) rowStr += t.toString(16).toUpperCase();
+                    else if (t >= 0xF0 && t <= 0xFB) rowStr += t.toString(16).toUpperCase();
+                    else if (t >= 0x32 && t <= 0x3A) rowStr += "T" + (t - 0x32);
+                    else if (tileDictionary[t] && tileDictionary[t].solid) rowStr += "██";
+                    else rowStr += "..";
+                }
+                // Only print rows that actually have enemies or paths to save console space
+                if (rowStr.match(/[EFT][0-9A-F]/)) {
+                    out += `${y.toString().padStart(3, '0')} | ${rowStr}\n`;
+                }
+            }
+            console.log(out);
+        };
+
         function gameLoop() {
             requestAnimationFrame(gameLoop);
             ctx.fillStyle = '#050505'; 
@@ -517,6 +567,14 @@
 
             if (serverState.turrets) {
                 serverState.turrets.forEach(drawTurret);
+            }
+            
+            if (serverState.tanks) {
+                serverState.tanks.forEach(drawTank);
+            }
+            
+            if (serverState.flying) {
+                serverState.flying.forEach(drawFlyingEnemy);
             }
             
             for (let id in renderState.players) {
