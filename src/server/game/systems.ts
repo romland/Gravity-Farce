@@ -72,6 +72,11 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
                 state.turrets.push({ x: tt.x, y: tt.y, angle: tt.angle, orientUp: turret.orientUp, active: turret.active, type: turret.turretType });
             }
         }
+        for (const [he, missile] of ecs.homingMissiles.entries()) {
+            if (Math.abs(missile.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(missile.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
+                state.bullets.push({ x: missile.x, y: missile.y, isPlayer: false }); // Rendered via bullet sync channel for scannability
+            }
+        }
         for (const [be, b] of ecs.bullets.entries()) {
             const bt = ecs.transforms.get(be)!;
             if (Math.abs(bt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(bt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {

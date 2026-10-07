@@ -47,6 +47,15 @@ export interface Turret {
     tileY: number;
 }
 
+export interface HomingMissile {
+    active: boolean;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    targetId?: string;
+}
+
 export interface Bullet {
     life: number;
     isPlayer: boolean;
@@ -59,6 +68,7 @@ export class Registry {
     public velocities = new Map<Entity, Velocity>();
     public players = new Map<Entity, Player>();
     public turrets = new Map<Entity, Turret>();
+    public homingMissiles = new Map<Entity, HomingMissile>();
     public bullets = new Map<Entity, Bullet>();
     public events: GameEvent[] = [];
 
@@ -71,6 +81,7 @@ export class Registry {
         this.velocities.delete(e);
         this.players.delete(e);
         this.turrets.delete(e);
+        this.homingMissiles.delete(e);
         this.bullets.delete(e);
     }
 
