@@ -9,22 +9,24 @@ export interface FlyingEnemySpecs {
     speedScalar: number;
     scoreValue: number;
     canShoot: boolean;  // Word 4 Bit 1 (0x02) Weapon Flag
+    width: number;
+    height: number;
 }
 
 // Memory-verified template structs mapped directly from RAM $00031570 (Tile E3 is Index 0)
 const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
-    0xE4: { hp: 8,  speedScalar: 1.0, scoreValue: 100, canShoot: true },
-    0xE5: { hp: -1, speedScalar: 1.0, scoreValue: 200, canShoot: false }, 
-    0xE6: { hp: 6,  speedScalar: 1.0, scoreValue: 100, canShoot: false },
-    0xE7: { hp: 3,  speedScalar: 1.0, scoreValue: 150, canShoot: true },
-    0xE8: { hp: 5,  speedScalar: 1.0, scoreValue: 250, canShoot: false },
-    0xE9: { hp: 12, speedScalar: 1.0, scoreValue: 90,  canShoot: false },
-    0xEA: { hp: 12, speedScalar: 1.0, scoreValue: 100, canShoot: false },
-    0xEB: { hp: -1, speedScalar: 1.0, scoreValue: 100, canShoot: false }, 
-    0xEC: { hp: 6,  speedScalar: 1.0, scoreValue: 75,  canShoot: false },
-    0xED: { hp: 6,  speedScalar: 1.0, scoreValue: 200, canShoot: false },
-    0xEE: { hp: 9,  speedScalar: 1.0, scoreValue: 100, canShoot: false },
-    0xEF: { hp: 25, speedScalar: 1.0, scoreValue: 80,  canShoot: false }
+    0xE4: { hp: 8,  speedScalar: 1.0, scoreValue: 100, canShoot: true,  width: 96, height: 64 },
+    0xE5: { hp: -1, speedScalar: 1.0, scoreValue: 200, canShoot: false, width: 96, height: 64 }, 
+    0xE6: { hp: 6,  speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xE7: { hp: 3,  speedScalar: 1.0, scoreValue: 150, canShoot: true,  width: 96, height: 64 },
+    0xE8: { hp: 5,  speedScalar: 1.0, scoreValue: 250, canShoot: false, width: 96, height: 64 },
+    0xE9: { hp: 12, speedScalar: 1.0, scoreValue: 90,  canShoot: false, width: 96, height: 64 },
+    0xEA: { hp: 12, speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xEB: { hp: -1, speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 }, 
+    0xEC: { hp: 6,  speedScalar: 1.0, scoreValue: 75,  canShoot: false, width: 96, height: 64 },
+    0xED: { hp: 6,  speedScalar: 1.0, scoreValue: 200, canShoot: false, width: 96, height: 64 },
+    0xEE: { hp: 9,  speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xEF: { hp: 25, speedScalar: 1.0, scoreValue: 80,  canShoot: false, width: 96, height: 64 }
 };
 
 const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
@@ -54,6 +56,8 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         scoreValue: specs.scoreValue,
         speedScalar: specs.speedScalar,
         canShoot: specs.canShoot,
+        width: specs.width,
+        height: specs.height,
         directionState: 0,
         maneuverStep: 0,
         lastWaypointX: -1,

@@ -19,6 +19,8 @@ export interface TurretSpec {
     muzzleOffset: Point;
     soundId: number;
     vectors: Vector2D[];
+    width: number;
+    height: number;
 }
 
 // Fixed-point direction vector tables ($000359FA–$00035AEA)
@@ -110,5 +112,6 @@ export function getTriggerIdForTurretTile(turretTileId: number): number {
 }
 
 export function getTurretSpecByTile(tileId: number): TurretSpec {
-    return TURRET_SPECS_BY_TILE[tileId] || TURRET_SPECS_BY_TILE[0xAF];
+    const raw = TURRET_SPECS_BY_TILE[tileId] || TURRET_SPECS_BY_TILE[0xAF];
+    return { width: 14, height: 14, ...raw };
 }

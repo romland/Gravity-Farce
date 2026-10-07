@@ -54,6 +54,8 @@ export interface Tank {
     dirX: number;
     dirY: number;
     scoreValue: number;
+    width: number;
+    height: number;
 }
 
 export interface FlyingEnemy {
@@ -64,6 +66,8 @@ export interface FlyingEnemy {
     directionState: number; // Offset +$02
     maneuverStep: number;   // Offset +$1A (24-frame blindfold timer)
     canShoot: boolean;
+    width: number;
+    height: number;
     fireTimer: number;
     burstRemaining: number;
 }

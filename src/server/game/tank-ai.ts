@@ -3,7 +3,7 @@ import type { Room } from '../Room';
 import { killPlayer } from './combat';
 import { spawnBullet } from './combat';
 
-const TANK_SPEED = 2.0; // Pixels per frame
+const TANK_SPEED = 1.0; // Pixels per frame
 const TILE_SIZE = 32;
 const MOVEMENT_FRAMES = TILE_SIZE / TANK_SPEED; // E.g., 16 frames to traverse one 32px tile
 
@@ -16,7 +16,9 @@ export function spawnTank(ecs: Registry, x: number, y: number): Entity {
         moveTimer: 0,
         dirX: 1, // Default start direction
         dirY: 0,
-        scoreValue: 50
+        scoreValue: 50,
+        width: 32,
+        height: 24
     });
     return e;
 }

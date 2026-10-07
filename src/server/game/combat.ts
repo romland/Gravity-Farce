@@ -138,7 +138,8 @@ export function sysBullets(ecs: Registry, room: Room) {
             for (const [te, turret] of ecs.turrets.entries()) {
                 if (!turret.active) continue;
                 const tt = ecs.transforms.get(te)!;
-                if (Math.abs(t.x - tt.x) <= 7 && Math.abs(t.y - tt.y) <= 7) {
+                const spec = getTurretSpecByTile(turret.turretType);
+                if (Math.abs(t.x - tt.x) <= spec.width / 2 && Math.abs(t.y - tt.y) <= spec.height / 2) {
                     hit = true;
                     turret.hp--;
                     if (turret.hp <= 0) {
@@ -160,8 +161,8 @@ export function sysBullets(ecs: Registry, room: Room) {
                 for (const [te, tank] of ecs.tanks.entries()) {
                     if (!tank.active) continue;
                     const tt = ecs.transforms.get(te)!;
-                    // Authentic Amiga Tank Hitbox: 16x12 (X: ±8, Y: ±6)
-                    if (Math.abs(t.x - tt.x) <= 8 && Math.abs(t.y - tt.y) <= 6) {
+                    // Amiga Tank Hitbox: 16x12 (X: ±8, Y: ±6)
+                    if (Math.abs(t.x - tt.x) <= tank.width / 2 && Math.abs(t.y - tt.y) <= tank.height / 2) {
                         hit = true;
                         tank.hp--;
                         if (tank.hp <= 0) {
@@ -182,8 +183,9 @@ export function sysBullets(ecs: Registry, room: Room) {
                     for (const [fe, flying] of ecs.flyingEnemies.entries()) {
                         if (!flying.active) continue;
                         const ft = ecs.transforms.get(fe)!;
-                        // Using a generic 24x24 bounding box until specific hitboxes are dumped
-                        if (Math.abs(t.x - ft.x) <= 12 && Math.abs(t.y - ft.y) <= 12) {
+                        const dx = t.x - ft.x;
+                        const dy = t.y - ft.y;
+                        if (dx >= 0 && dx <= flying.width && dy >= 0 && dy <= flying.height) {
                             hit = true;
                             
                             // Ensure indestructible (-1 HP) enemies are not deleted by underflow
