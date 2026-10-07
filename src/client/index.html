@@ -369,16 +369,14 @@
             const tileId = t.type || 0xAF;
             
             // Orientation and mounting alignment per Amiga tile ID
-            if (tileId === 0xB3 || tileId === 0xB4) {
-                ctx.rotate(Math.PI); // Ceiling mounted - pointing down
+            if (tileId === 0xB6) {
+                ctx.rotate(Math.PI); // Ceiling mounted - pointing down (Native)
             } else if (tileId === 0xB7) {
                 ctx.rotate(Math.PI / 2); // Wall mounted - facing east
             } else if (tileId === 0xB8) {
                 ctx.rotate(-Math.PI / 2); // Wall mounted - facing west
-            } else if (tileId === 0xB5 || tileId === 0xB9) {
-                ctx.rotate(-Math.PI / 4); // Diagonal wall mount
             } else {
-                ctx.rotate(t.angle || 0); // Floor mounted / default angle
+                ctx.rotate(0); // Floor mounted / default angle (Native UP)
             }
             
             // Base mount plate
@@ -389,7 +387,7 @@
             
             // Housing & Barrels matching exact firing patterns
             ctx.fillStyle = '#666';
-            if (tileId === 0xBA) {
+            if (tileId === 0xBA || tileId === 0xB4 || tileId === 0xB5 || tileId === 0xB9) {
                 // 5-way half-circle fan
                 ctx.fillRect(-10, -12, 4, 12);
                 ctx.fillRect(-5, -16, 4, 16);

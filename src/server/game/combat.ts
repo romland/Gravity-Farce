@@ -14,7 +14,7 @@ export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy:
 
 export function spawnTurret(ecs: Registry, x: number, y: number, turretType: number = 0xAF, orientUp: boolean = false, triggerId?: number) {
     const e = ecs.create();
-    ecs.transforms.set(e, { x, y, angle: orientUp ? -Math.PI/2 : Math.PI/2 });
+    ecs.transforms.set(e, { x, y, angle: 0 }); // Angle 0 ensures rendering matches true Upward physics 
     const resolvedTriggerId = triggerId !== undefined ? triggerId : (turretType - 0xAD);
     const spec = getTurretSpecByTile(turretType);
     const tileX = Math.floor(x / 32);

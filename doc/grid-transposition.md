@@ -4,9 +4,9 @@
 > The Amiga level data is column-major and transposed relative to standard row-major parsing (`world_x = raw_y`, `world_y = raw_x`). 
 > **Failing to not account for this transposition might introduce bugs:**
 > 1. **Physics Collisions:** Force vectors will push in wrong directions (e.g., `0xCE` gravity will thrust ships UP into ceilings instead of LEFT down tunnels).
-> 2. **Turret Combat:** Turrets will fire inward into their own wall tiles, despawning bullets on frame 0.
-> 3. **Tile Mutations:** Destructible terrain edits using `[x][y]` instead of `[y][x]` will erase solid wall tiles on the wrong side of the level.
-> 4. **Trigger Bounds:** Proximity triggers will check vertical columns instead of horizontal tunnel ranges, firing hazards through solid rock.
+> 2. **Tile Mutations:** Destructible terrain edits using `[x][y]` instead of `[y][x]` will erase solid wall tiles on the wrong side of the level.
+> 3. **Trigger Bounds:** Proximity triggers will check vertical columns instead of horizontal tunnel ranges, firing hazards through solid rock.
+> *(Note: Turret vectors are completely unaffected by map transposition. They natively map to true screen space!)*
 
 ---
 
@@ -48,16 +48,6 @@ const vy = field3 / 1000;
 * **Coordinates:** `tileX = Math.floor(worldX / 32)`, `tileY = Math.floor(worldY / 32)`
 * **Array Indexing:** Always use `rawMap[tileY][tileX]`.
 * *Note:* Mutating `rawMap[tileX][tileY]` deletes tiles across the diagonal axis.
-
-### Turret Mounting & Rotation
-
-Angles align relative to transposed surface normals to prevent frame-0 self-collisions:
-
-* **Floor ($0^\circ$):** `0xAE`–`0xB2`, `0xBA`
-* **Ceiling ($180^\circ$ / `Math.PI`):** `0xB3`, `0xB6`, `0xBB`, `0xBC`
-* **East Wall ($+90^\circ$ / `Math.PI / 2`):** `0xB7`
-* **West Wall ($-90^\circ$ / `-Math.PI / 2`):** `0xB8`
-* **Diagonal Mount ($-45^\circ$ / `-Math.PI / 4`):** `0xB4`, `0xB5`, `0xB9`
 
 ### Triggers, Spawns & Hitboxes
 

@@ -44,16 +44,25 @@ const VEC_STRAIGHT_WEST: Vector2D[] = [
     { vx: -1.0, vy: 0.0 }
 ];
 
-const VEC_ANGLED_LEFT: Vector2D[] = [
-    { vx: -0.866, vy: -0.5 },
-    { vx: -0.5,   vy: -0.866 }
+const VEC_8WAY_ARC: Vector2D[] = [
+    { vx: -1.0,   vy: 0.0 },
+    { vx: -0.901, vy: -0.434 },
+    { vx: -0.623, vy: -0.782 },
+    { vx: -0.223, vy: -0.975 },
+    { vx: 0.223,  vy: -0.975 },
+    { vx: 0.623,  vy: -0.782 },
+    { vx: 0.901,  vy: -0.434 },
+    { vx: 1.0,    vy: 0.0 }
 ];
 
-const VEC_WIDE_FAN: Vector2D[] = [
-    { vx: -0.923, vy: -0.382 },
-    { vx: -0.382, vy: -0.923 },
-    { vx: 0.382,  vy: -0.923 },
-    { vx: 0.923,  vy: -0.382 }
+const VEC_7WAY_FAN: Vector2D[] = [
+    { vx: -1.880, vy: 0.684 },
+    { vx: -1.000, vy: 0.0 },
+    { vx: -1.414, vy: -1.414 },
+    { vx: 0.0,    vy: -1.000 },
+    { vx: 1.414,  vy: -1.414 },
+    { vx: 1.000,  vy: 0.0 },
+    { vx: 1.880,  vy: 0.684 }
 ];
 
 const VEC_5WAY_FAN: Vector2D[] = [
@@ -78,30 +87,15 @@ export const TURRET_SPECS_BY_TILE: Record<number, TurretSpec> = {
     0xB1: { typeId: 4,  hpMax: 5, cooldownMax: 80, muzzleOffset: { x: 1,  y: 3 }, soundId: 10, vectors: VEC_4WAY_UP },
     0xB2: { typeId: 5,  hpMax: 5, cooldownMax: 40, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP },
     0xB3: { typeId: 6,  hpMax: 5, cooldownMax: 40, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP },
-    0xB4: { typeId: 7,  hpMax: 8, cooldownMax: 70, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_ANGLED_LEFT },
-    0xB5: { typeId: 8,  hpMax: 8, cooldownMax: 70, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_ANGLED_LEFT },
+    0xB4: { typeId: 7,  hpMax: 8, cooldownMax: 70, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC },
+    0xB5: { typeId: 8,  hpMax: 8, cooldownMax: 70, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC },
     0xB6: { typeId: 9,  hpMax: 5, cooldownMax: 40, muzzleOffset: { x: 2,  y: 7 }, soundId: 9,  vectors: VEC_STRAIGHT_DOWN },
     0xB7: { typeId: 10, hpMax: 5, cooldownMax: 40, muzzleOffset: { x: 6,  y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_EAST },
     0xB8: { typeId: 11, hpMax: 5, cooldownMax: 40, muzzleOffset: { x: -1, y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_WEST },
-    0xB9: { typeId: 12, hpMax: 8, cooldownMax: 80, muzzleOffset: { x: -1, y: 0 }, soundId: 10, vectors: VEC_WIDE_FAN },
+    0xB9: { typeId: 12, hpMax: 8, cooldownMax: 80, muzzleOffset: { x: -1, y: 0 }, soundId: 10, vectors: VEC_7WAY_FAN },
     0xBA: { typeId: 13, hpMax: 9, cooldownMax: 40, muzzleOffset: { x: 1,  y: 2 }, soundId: 12, vectors: VEC_5WAY_FAN },
-    0xBB: { typeId: 14, hpMax: 9, cooldownMax: 80, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_DOWN },
-    0xBC: { typeId: 15, hpMax: 9, cooldownMax: 80, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_DOWN }
-};
-
-export const TILE_TO_TURRET_TYPE: Record<number, number> = {
-    0xAE: 4,  // 4-Way Cone Variant
-    0xAF: 1,  // 3-Way Cone Up
-    0xB0: 3,  // 4-Way Cone Up
-    0xB1: 5,  // Straight Up Variant
-    0xB2: 5,  // Straight Up
-    0xB3: 9,  // Straight Down
-    0xB4: 9,  // Straight Down Variant
-    0xB5: 8,  // Angled / Diagonal Stream
-    0xB7: 10, // Straight East
-    0xB8: 11, // Straight West
-    0xB9: 8,  // Angled Variant
-    0xBA: 13  // 5-Way Fan
+    0xBB: { typeId: 14, hpMax: 9, cooldownMax: 80, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP },
+    0xBC: { typeId: 15, hpMax: 9, cooldownMax: 80, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP }
 };
 
 export function getTriggerIdForTurretTile(turretTileId: number): number {
