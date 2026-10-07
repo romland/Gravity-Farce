@@ -6,6 +6,7 @@ import { getShipPolygon, checkEnvironmentCollisions } from './player-shared';
 
 const GRAVITY = 0.015; const THRUST = 0.10;
 const DRAG = 0.996; const MAX_VEL = 10.0;
+const MAGNET_FORCE = THRUST * 0.5; // Scaled to 50% of engine power
 
 export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: number): Entity {
     const e = ecs.create();
@@ -59,6 +60,20 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         if (p.inputs.up) {
             v.vx += Math.cos(t.angle) * THRUST;
             v.vy += Math.sin(t.angle) * THRUST;
+        }
+        
+        // Gravity Wells / Magnets (0xCC - 0xCF)
+        if (room.level && room.level.rawMap) {
+            const tileX = Math.floor(t.x / 32);
+            const tileY = Math.floor(t.y / 32);
+            const tileId = room.level.rawMap[tileY]?.[tileX];
+            
+            if (tileId !== undefined) {
+                if (tileId === 0xCC) v.vx += MAGNET_FORCE; // Right (Dir 01)
+                if (tileId === 0xCD) v.vy += MAGNET_FORCE; // Down  (Dir 01)
+                if (tileId === 0xCE) v.vx -= MAGNET_FORCE; // Left  (Dir 00)
+                if (tileId === 0xCF) v.vy -= MAGNET_FORCE; // Up    (Dir 00)
+            }
         }
 
         v.vy += GRAVITY;

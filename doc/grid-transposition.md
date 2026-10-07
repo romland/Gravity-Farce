@@ -1,8 +1,8 @@
-# Amiga Grid Transposition & Physics Specification
+# Amiga Grid Transposition Specification
 
 > **DO NOT ASSUME STANDARD 2D CARTESIAN MAP INDEXING OR DIRECT VECTOR ASSIGNMENT.**
 > The Amiga level data is column-major and transposed relative to standard row-major parsing (`world_x = raw_y`, `world_y = raw_x`). 
-> **Failing to not account for this transposition might introduce bugs:**
+> **Failing to account for this transposition will introduce bugs in map memory access:**
 > 1. **Physics Collisions:** Force vectors will push in wrong directions (e.g., `0xCE` gravity will thrust ships UP into ceilings instead of LEFT down tunnels).
 > 2. **Tile Mutations:** Destructible terrain edits using `[x][y]` instead of `[y][x]` will erase solid wall tiles on the wrong side of the level.
 > 3. **Trigger Bounds:** Proximity triggers will check vertical columns instead of horizontal tunnel ranges, firing hazards through solid rock.
@@ -23,25 +23,14 @@ Reading column-major memory into a row-major grid transposes the 2D matrix acros
 
 ---
 
-## 2. Vector Struct Mapping
+## 2. Subsystem Impact & Logic Rules
 
-16-byte force table entry: `[field1, field2, field3, field4]` (4 longwords).
-
-* `field3` = Amiga Y-axis delta (maps to TS `world_x`)
-* `field4` = Amiga X-axis delta (maps to TS `world_y`)
-
-```typescript
-// Velocity delta mapping
-const vx = field4 / 1000;
-const vy = field3 / 1000;
-
-// Example (Tile 0xCE): field3 = 0, field4 = -1000 => (vx: -1.0, vy: 0.0) [Straight Left]
-
-```
-
----
-
-## 3. Subsystem Impact & Logic Rules
+### Physics & Vectors are NATIVE (Not Transposed)
+**CRITICAL:** The transposition applies *exclusively* to the 4200-byte map buffer layout. It does **NOT** apply to the physics engine, entity rendering, or orce vectors. 
+* `(Vx, Vy)` vector arrays for bullets are standard screen-space Cartesian (`+Y = Down`).
+* Gravity Well force magnitudes are standard screen-space.
+* Turret muzzle offsets are standard screen-space.
+**Do not swap X and Y fields when reading structs.**
 
 ### Tile Access & Mutations
 

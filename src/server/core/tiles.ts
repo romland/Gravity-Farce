@@ -179,9 +179,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xCA: { id: 0xCA, description: "Trigger zone for turret 0xBB (heavy 3-way cone)", known: true },
     0xCB: { id: 0xCB, description: "Trigger zone for turret 0xBC (heavy 3-way cone variant)", known: true },
 
-
-    0xCC: { id: 0xCC, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
-    0xCF: { id: 0xCF, description: 'Gravity Well / Trigger', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
+    0xCC: { id: 0xCC, description: 'Gravity Well (Pulls RIGHT)', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
+    0xCD: { id: 0xCD, description: 'Gravity Well (Pulls DOWN)', entity: { type: 'trigger', props: { id: 0xCD } }, known: true },
+    0xCE: { id: 0xCE, description: 'Gravity Well (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
+    0xCF: { id: 0xCF, description: 'Gravity Well (Pulls UP)', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
     // D0 - Pickup package: fuel
     0xD1: { id: 0xD1, description: 'Pickup package / objective', known: true },
     0xD2: { id: 0xD2, description: 'Pickup package / objective', known: true },

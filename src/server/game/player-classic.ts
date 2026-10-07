@@ -7,6 +7,7 @@ const ROTATION_SPEED = 1000;
 const GRAVITY = 0.010;
 const THRUST_IMPULSE = 0.070; 
 const DRAG = 0.997;
+const MAGNET_FORCE = THRUST_IMPULSE * 0.5; // Scaled to 50% of engine power
 const MAX_SPEED = 7.5; 
 const MAX_SAFE_LANDING_VY = 1.4;
 
@@ -65,6 +66,20 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         if (p.inputs.up) {
             v.vx += Math.cos(t.angle) * THRUST_IMPULSE;
             v.vy += Math.sin(t.angle) * THRUST_IMPULSE;
+        }
+        
+        // Gravity Wells / Magnets (0xCC - 0xCF)
+        if (room.level && room.level.rawMap) {
+            const tileX = Math.floor(t.x / 32);
+            const tileY = Math.floor(t.y / 32);
+            const tileId = room.level.rawMap[tileY]?.[tileX];
+            
+            if (tileId !== undefined) {
+                if (tileId === 0xCC) v.vx += MAGNET_FORCE; // Right (Dir 01)
+                if (tileId === 0xCD) v.vy += MAGNET_FORCE; // Down  (Dir 01)
+                if (tileId === 0xCE) v.vx -= MAGNET_FORCE; // Left  (Dir 00)
+                if (tileId === 0xCF) v.vy -= MAGNET_FORCE; // Up    (Dir 00)
+            }
         }
 
         v.vx *= DRAG; 
