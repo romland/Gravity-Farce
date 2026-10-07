@@ -1,29 +1,39 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { killPlayer } from './combat';
+import { killPlayer, spawnBullet } from './combat';
 
 const TILE_SIZE = 32;
 
-// The standard vectors from $000313C2
-const VECTORS = [
-    { vx: 1.0, vy: 0.0 },   // State 0: Right
-    { vx: 0.0, vy: 1.0 },   // State 1: Down
-    { vx: -1.0, vy: 0.0 },  // State 2: Left
-    { vx: 0.0, vy: -1.0 }   // State 3: Up
+const CARDINAL_VECTORS = [
+    { x: 1.0, y: 0.0 },  // Right
+    { x: 0.0, y: 1.0 },  // Down
+    { x: -1.0, y: 0.0 }, // Left
+    { x: 0.0, y: -1.0 }  // Up
 ];
+
+// Continuous sub-pixel speed modulation table ($000313C2)
+const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
+
+const CORNER_TABLES: Record<number, number[]> = {
+    8:  [0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 1,-1, 0,-1, 1,-1, 0,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,0, 1,-1, 1,0, 1,-1, 1,0, 1,0, 1,0, 1,0, 1,0, 1,0],
+    9:  [1,0, 1,0, 1,0, 1,0, 1,0, 1,0, 1,1, 1,0, 1,1, 1,0, 1,1, 1,1, 1,1, 1,1, 0,1, 1,1, 0,1, 1,1, 0,1, 0,1, 0,1, 0,1, 0,1, 0,1],
+    10: [0,1, 0,1, 0,1, 0,1, 0,1, 0,1, -1,1, 0,1, -1,1, 0,1, -1,1, -1,1, -1,1, -1,1, -1,0, -1,1, -1,0, -1,1, -1,0, -1,0, -1,0, -1,0, -1,0, -1,0],
+    11: [-1,0, -1,0, -1,0, -1,0, -1,0, -1,0, -1,-1, -1,0, -1,-1, -1,0, -1,-1, -1,-1, -1,-1, -1,-1, 0,-1, -1,-1, 0,-1, -1,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1, 0,-1]
+};
+
+let globalWaveTimer = 0;
 
 export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number): Entity {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: 0 });
-    
     ecs.flyingEnemies.set(e, {
         active: true,
         hp: 3,
         enemyType: type,
         scoreValue: type === 0xE7 ? 250 : 100,
-        speedScalar: 2.0, 
-        directionState: 0, 
-        maneuverStep: 0    // Matches Amiga +$1A
+        directionState: 0,
+        maneuverStep: 0,
+        fireTimer: 120 + Math.floor(Math.random() * 60) // Staggered fire interval
     });
     return e;
 }
@@ -31,44 +41,59 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
 export function sysFlyingEnemies(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
 
+    // Advance global wave step ($00031084: add.w #$0008, $000311FA)
+    const waveIndex = Math.floor(globalWaveTimer / 8) % 8;
+    globalWaveTimer = (globalWaveTimer + 1) % 64;
+
     for (const [e, enemy] of ecs.flyingEnemies.entries()) {
         if (!enemy.active) continue;
         const t = ecs.transforms.get(e)!;
 
-        // 1. Waypoint Overlap Check (Only if maneuver step is 0)
+        // 1. Pseudo-Random Projectile Firing ($00030E00)
+        if (--enemy.fireTimer <= 0) {
+            enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
+
+            // Random firing trajectory generated from PRNG
+            const angle = Math.random() * Math.PI * 2;
+            const bulletSpeed = 1.5 + Math.random() * 1.0;
+            const vx = Math.cos(angle) * bulletSpeed;
+            const vy = Math.sin(angle) * bulletSpeed;
+
+            spawnBullet(ecs, t.x + 16, t.y + 16, vx, vy, false, 'npc', 120);
+            ecs.events.push({ type: 'sound', soundId: 10, x: t.x, y: t.y });
+        }
+
+        // 2. Waypoint Grid Check
         if (enemy.maneuverStep === 0) {
             const tileX = Math.floor(t.x / TILE_SIZE);
             const tileY = Math.floor(t.y / TILE_SIZE);
             const tileId = room.level.rawMap[tileY]?.[tileX];
 
             if (tileId !== undefined && tileId >= 0xF0 && tileId <= 0xFB) {
-                const waypointId = tileId - 0xF0;
-                // Amiga directly writes Waypoint ID to Trajectory State
-                enemy.directionState = waypointId;
+                enemy.directionState = tileId - 0xF0;
             }
         }
 
-        // 2. Integration
+        // 3. Smooth Movement Integration ($0003100A)
         if (enemy.directionState >= 8) {
-            // State 8-11: 24-Frame Micro-Maneuver ($000311FC)
+            const table = CORNER_TABLES[enemy.directionState] || CORNER_TABLES[8];
+            t.x += table[enemy.maneuverStep] * 0.75;
+            t.y += table[enemy.maneuverStep + 1] * 0.75;
+
             enemy.maneuverStep += 2;
             if (enemy.maneuverStep >= 48) {
-                enemy.maneuverStep = 0; // Maneuver complete, regains map vision next frame
+                enemy.maneuverStep = 0;
+                enemy.directionState = (enemy.directionState - 8) % 4;
             }
-            
-            // Placeholder logic: Maintain approximate path momentum until table is dumped
-            const vec = VECTORS[enemy.directionState % 4];
-            t.x += vec.vx * (enemy.speedScalar * 0.5);
-            t.y += vec.vy * (enemy.speedScalar * 0.5);
         } else {
-            // Standard Cardinal Movement
-            const vec = VECTORS[enemy.directionState % 4];
-            t.x += vec.vx * enemy.speedScalar;
-            t.y += vec.vy * enemy.speedScalar;
-            t.angle = Math.atan2(vec.vy, vec.vx);
+            const dir = CARDINAL_VECTORS[enemy.directionState % 4];
+            const speed = WAVE_SPEED_MODIFIERS[waveIndex];
+
+            t.x += dir.x * speed;
+            t.y += dir.y * speed;
         }
-        
-        // 3. Player Collision
+
+        // 4. Player Impact Collision
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe);

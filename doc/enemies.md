@@ -1,85 +1,135 @@
 # Enemy Systems & Artificial Intelligence
 
-## 1. Ground Units (Tanks)
+## 1. Universal Projectile & Particle Spawner (`$000348BE`)
 
-Ground Tanks are simple, non-shooting patrol hazards that navigate a contiguous line of path nodes (`0x32`–`0x3A`).
+All non-player projectiles, particles, and ship thruster trails are allocated through a centralized spawner routine at `$000348BE`.
 
-### Memory Structure (`$0003769E` Array)
-Each Tank occupies a 12-byte (`$0C`) struct:
-* `+$00` [Word]: Active Status Flag.
-* `+$02` [Word]: World X Coordinate (Pixels).
-* `+$04` [Word]: World Y Coordinate (Pixels).
-* `+$06` [Word]: X Velocity / Direction Step.
-* `+$08` [Word]: Y Velocity / Direction Step.
-* `+$0A` [Word]: Grid Traversal Timer.
+### Spawner Mode Register (`$000348D6`)
 
-### Grid Traversal AI (`$00035C24` & `$00035CD4`)
-The engine uses a strict cell-based movement algorithm, utilizing an internal 8x8 pixel grid (hence `LSR.W #$03` division math):
+Before calling `jsr $000348BE`, the calling routine writes an integer mode selector to `$000348D6`:
 
-1. **Node Detection:** When the Traversal Timer (`+$0A`) reaches `0`, the tank stops moving. It samples adjacent tiles in the level map to find the next path node.
-2. **Vector Assignment:** It sets the X/Y velocity variables (`+$06`, `+$08`) to point toward the next node.
-3. **Timer Reset:** It resets the Traversal Timer to exactly `8` (`MOVE.W #$0008, ($000A, A0)`).
-4. **Movement Phase:** For the next 8 frames, it bypasses node detection. It simply adds the velocity to the pixel coordinates and decrements the timer (`SUBQ.W #$01, ($000A, A0)`). 
+* `#$0000`: **NPC Bullet / Particle Emission** — Flying enemy firing (`$00030ECE`), engine exhaust, and enemy explosion fragments (`$00034B96`).
+* `#$0001`: **Primary Weapon** — Player ship primary fire (`$00032372`) and Ground Turret targeting fire (`$000360DA`).
+* `#$0003`: **Player Thrust Trail** — Particle trail behind player ship (`$00035FE8`).
 
-Once the timer hits 0, it has perfectly arrived at the exact center of the next 8x8 cell, and the cycle repeats.
+### Active Projectile Array (`$00034C6A`)
 
-### Hitbox & Collision (`$00036042`)
-Tanks have a strict, asymmetrical bounding box:
-* **X-Axis:** ±8 pixels
-* **Y-Axis:** ±6 pixels
-Destroying a tank awards exactly `100` points (`#$00000064`), and transitions the tank to state `#$0015` (Exploding), which triggers the particle spawner at `$000348BE`.
+Allocated entities are written to a fixed array at `$00034C6A`. Each entry is a 20-byte (`$14`) struct:
 
-## 2. Advanced Enemies (Flying / Combat)
-Complex flying enemies (`0xE4` - `0xEF`, including `0xEC`) use a rigid waypoint and cardinal vector system.
-
-### Template Array (`$00031570`)
-Each advanced enemy type is defined by a 22-byte (`$16`) template struct.
-When parsing the map, the engine subtracts `0xE3` from the Tile ID to index this table.
-
-* `+$06` [Word]: **Score Value** (`0064` = 100 points, `00FA` = 250 points).
-* `+$08` [Word]: **Speed Scalar** (`03E8` = 1.0x, `07D0` = 2.0x, `09C4` = 2.5x).
-* `+$0A` [Long]: **Flight Pattern Base Pointer**.
-* *(Gap: Bytes `$0E` through `$14` are present but not fully mapped).*
-
-### Active Enemy Array (`$000378F6`)
-When spawned (`$00033F74`), the engine provisions a 32-byte (`$20`) struct for the active entity.
-
-* `+$00` [Word]: Active Flag / State.
-* `+$02` [Word]: Internal Trajectory State Timer / Direction Index.
-* `+$04` [Long]: Absolute X Coordinate (Pixels).
-* `+$08` [Long]: Absolute Y Coordinate (Pixels).
-* `+$12` [Long]: Current Velocity Base.
-* `+$1C` [Long]: Active Behavior Pointer (e.g., `$0003153A`).
-
-### Flight Paths & Movement (`$00030B50` & `$000313C2`)
-The Amiga does not use curves or sine waves for these enemies. They fly in perfect cardinal lines.
-The engine reads 32-bit fixed-point vectors from `$000313C2`:
-* State 0: `X: 1, Y: 0` (Right)
-* State 1: `X: 0, Y: 1` (Down)
-* State 2: `X: -1, Y: 0` (Left)
-* State 3: `X: 0, Y: -1` (Up)
-
-### Waypoints (`0xF0` - `0xFB`)
-The engine uses these tiles as rigid directional triggers (Evaluated at `$00030F0E`).
-
-1. The engine checks the map tile at the enemy's current coordinates.
-2. If the tile is `>= 0xF0`, it subtracts `0xF0` to derive a Waypoint ID (`0` through `11`).
-3. If the ID is `0` through `3`, it writes the ID directly into the enemy's State (`$0002, A0`), instantly changing its direction to Right, Down, Left, or Up.
-4. **Swarm Sync (IDs `4` - `11`):** Higher waypoints branch to conditional logic that reads a global state variable (`$0003181C`). If the level toggles this state, enemies hitting `0xF4` will turn UP instead of LEFT, creating synchronized swarm patterns.
-5. **State Freezing:** The Amiga compares the state against `#$0008` (`00030B70 cmp.w #$0008`). If a waypoint forces the state to `8` or higher (like `0xF8`), the enemy halts movement entirely. In the modern port, we apply a modulo (`waypointId % 4`) to safely route them back inward.
-5. **Micro-Maneuvers (`0xF8` - `0xFB`):** Setting state to 8+ triggers a special 24-frame movement sequence (`$000311FC`).
-   * The engine reads a custom X/Y velocity vector from a 48-byte table at `$00031242`.
-   * It updates the enemy's internal frame counter (`+$1A`).
-   * **Crucially**, while `+$1A` is non-zero, the waypoint map reader (`$00030F0E`) completely ignores the map. This acts as a 24-frame blindfold, allowing enemies to gracefully execute complex intersection maneuvers and fly over gaps in the track without snapping or re-triggering nodes.
+* `+$00` [Word]: Active Life Counter / Type (`$0000` = Inactive, `$FFFF` = Array Terminator).
+* `+$02` [Long]: Fixed-Point X Coordinate (Pixel position $\times 1000$).
+* `+$06` [Long]: Fixed-Point Y Coordinate (Pixel position $\times 1000$).
+* `+$0A` [Long]: Horizontal Velocity Vector ($VX$).
+* `+$0E` [Long]: Vertical Velocity Vector ($VY$).
 
 ---
 
-## 3. Current Implementation Gaps (Pending Reverse Engineering)
+## 2. Ground Entities & Turrets (`$0003769E` Array)
 
-### Gap 1: Tank Weapon RNG
-* **Status:** Tanks (`0x32`) fire upward randomly.
-* **Missing:** The exact global routine that iterates the tanks and spawns the bullet.
+Ground entities occupy a fixed array starting at `$0003769E`. Each entity uses a 12-byte (`$0C`) struct:
 
-### Gap 2: Advanced Enemy Weapons
-* **Status:** Flying enemies (`0xEC`) fire at the player.
-* **Missing:** We know `F8`-`FB` execute micro-maneuvers, but we have not yet found the bullet spawner routines. They must be handled in a separate iteration loop over `$000378F6`.
+* `+$00` [Word]: Entity Active Flag (`0` = Empty, `1` = Active, `2` = Exploding).
+* `+$02` [Word]: World X Coordinate (Pixels).
+* `+$04` [Word]: World Y Coordinate (Pixels).
+* `+$06` [Word]: Horizontal Movement Vector / Direction Step.
+* `+$08` [Word]: Vertical Movement Vector / Direction Step.
+* `+$0A` [Word]: Grid Traversal Timer.
+
+### Ground Patrol Tanks (`$00035C24` & `$00035CD4`)
+
+Non-shooting patrol tanks navigate level path nodes (`0x32`–`0x3A`) using an 8x8 pixel tile grid:
+
+1. **Cell Alignment:** When traversal timer (`+$0A`) reaches `0`, the tank samples adjacent tiles on the 8x8 grid (`lsr.w #$03`).
+2. **Vector Update:** Sets movement steps (`+$06`, `+$08`) toward the adjacent path node tile.
+3. **Timer Reset:** Resets traversal timer (`+$0A`) to `8` (`move.w #$0008, ($000A, a0)`).
+4. **Integration:** Moves for 8 frames, updating pixel coordinates and decrementing `+$0A` until centered on the next 8x8 cell.
+5. **Collision Box:** Tanks use a bounding box of $\pm8\text{px}$ (X) by $\pm6\text{px}$ (Y) checked at `$00036042`. Destroying a tank awards 100 points (`#$00000064`) and sets state to `0x15` (Exploding).
+
+### Stationary Ground Turrets (`$00036040`–`$000360DA`)
+
+* **Targeting Iteration:** Routine `$00036040` loops over active entities in `$0003769E`.
+* **Proximity Check:** Measures absolute distance between player position (`$00034C6A`) and turret coordinates (`+$04`). Engagement triggers when distance $< 200\text{px}$ (`$0003606E`).
+* **Aimed Firing:** Calculates directional vectors toward player position and calls `jsr $000348BE` with spawner mode `$000348D6 = #$0001`.
+
+---
+
+## 3. Flying Enemies (`$000378F6` Array)
+
+Flying enemies are managed via a active entity table at `$000378F6` populated from static template definitions at `$00031570`.
+
+### Entity Template Structure (`$00031570` Array)
+
+22-byte (`$16`) struct indexed by (Tile ID - `0xE3`):
+
+* `+$06` [Word]: Score Value (`0064` = 100 points, `00FA` = 250 points).
+* `+$08` [Word]: Base Speed Scalar (`03E8` = 1.0x, `07D0` = 2.0x, `09C4` = 2.5x).
+* `+$0A` [Long]: Flight Pattern Data Base Pointer.
+
+### Active Entity Structure (`$000378F6` Array)
+
+32-byte (`$20`) struct provisioned by spawn routine `$00033F74`:
+
+* `+$00` [Word]: Active State (`$0000` = Inactive/Dead, `$0014` = Active, `$0032` = Exploding).
+* `+$02` [Word]: Direction State (0=Right, 1=Down, 2=Left, 3=Up, 4..7=Conditional Swarm, 8..11=Cornering).
+* `+$04` [Long]: Absolute Fixed-Point X Position.
+* `+$08` [Long]: Absolute Fixed-Point Y Position.
+* `+$16` [Word]: Hit Points (Default = 3).
+* `+$1A` [Word]: Cornering Step Counter (Increments by 2 per frame up to 48).
+
+### Movement & Speed Wave Table (`$0003100A`, `$000313C2`, `$000311FA`)
+
+Flying enemies do not move at static linear rates. Speed is modulated continuously by a global wave timer:
+
+* **Global Wave Index (`$000311FA`):** Increments by `8` each frame (`0, 8, 16, 24, 32, 40, 48, 56`), resetting at `64` (`$00031084`–`$00031098`).
+* **Wave Displacement Table (`$000313C2`):** Stores signed sub-pixel displacement vectors per step. Entries vary in magnitude (including zero-velocity frames), causing enemies to decelerate, linger, and accelerate along cardinal paths.
+
+### Waypoint Traversal & Blindfold Logic (`$00030F0E`)
+
+At `$00030F0E`, the engine samples tile map `$00050460` at the enemy's current 8x8 grid coordinates (`lsr.l #$03` on pixel X/Y):
+
+* **Direct Cardinal Nodes (`0xF0`–`0xF3`):** Subtracts `0xF0` and writes values `0`–`3` directly into direction state `+$02` (0=Right, 1=Down, 2=Left, 3=Up).
+* **Swarm Sync Nodes (`0xF4`–`0xF7`):** Evaluates sign bit of global state `$0003181C` (`bmi.w` branch). Depending on state, forces turns in opposite directions to split or sync swarms.
+* **Micro-Maneuvers / Diagonal Cornering (`0xF8`–`0xFB`):**
+* Sets direction state `+$02` to `8`–`11` and initializes step counter `+$1A` to `0`.
+* Indexes 24-frame (48-byte) vector tables at `$00031242`, interpolating between cardinal and diagonal steps across tile boundaries.
+* **Way-Point Blindfold:** While step counter `+$1A` is non-zero, routine `$00030F0E` **bypasses tile checking entirely**. This prevents enemies from snapping or re-triggering adjacent waypoint nodes while completing turns.
+
+
+
+### Pseudo-Random Firing Mechanics (`$00030E00`–`$00030ECE`)
+
+Flying enemy firing is completely un-aimed and independent of player position:
+
+1. **PRNG Parsing:** Unpacks 4 raw byte digits from system tick / PRNG registers (`$00036032`–`$00036035` and `$0003603A`–`$0003603D`) into registers $D0$–$D3$.
+2. **Velocity Synthesis:** Assembles raw digits into fixed-point velocity components ($VX, VY$).
+3. **Bias Addition:** Adds fixed offset biases from `$00030B1A` ($+1.0$ fixed).
+4. **Muzzle Positioning:** Reads muzzle offsets from table `$000315C8` based on direction state `+$02` and adds them to absolute enemy position ($D1, D2$).
+5. **Spawner Invocation:** Sets `$000348D6 = #$0000` and executes `jsr $000348BE` to spawn an un-aimed projectile into `$00034C6A`.
+
+---
+
+## 4. Bullet Collision & Hit Detection (`$00034ABE`)
+
+Routine `$00034ABE` handles player bullet impact against flying enemies.
+
+### Spatial Bounding Window
+
+Iterates through active player projectiles in `$00034C6A` and checks coordinates against flying enemies in `$000378F6`:
+
+```assembly
+00034ad2 2005                 move.l d5,d0          ; d0 = Bullet Pixel X
+00034ad4 90aa 0004           sub.l ($0004,a2),d0   ; d0 = BulletX - EnemyX
+00034ad8 0c80 0000 0030      cmp.l #$00000030,d0   ; Check Width: 0 <= d0 <= 48px
+00034aea 2006                 move.l d6,d0          ; d0 = Bullet Pixel Y
+00034aec 90aa 0008           sub.l ($0008,a2),d0   ; d0 = BulletY - EnemyY
+00034af0 0c80 0000 0020      cmp.l #$00000020,d0   ; Check Height: 0 <= d0 <= 32px
+
+```
+
+* Bounding box is an unsigned $48 \times 32\text{px}$ rectangle relative to the enemy's top-left origin.
+
+### Damage Application (`$00034B10`–`$00034BCE`)
+
+1. **HP Reduction:** On valid collision, decrements hit points at struct offset `+$16` (`subq.w #$01, ($0016, a2)`).
+2. **Destruction State:** When HP reaches `0`, sets enemy active state `+$00` to `#$0032` (Exploding).
+3. **Explosion Particles:** Loads particle velocity vectors from table `$00036188` and calls `jsr $000348BE` (Mode `0`) to emit explosion debris.

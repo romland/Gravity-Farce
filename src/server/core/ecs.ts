@@ -64,6 +64,7 @@ export interface FlyingEnemy {
     speedScalar: number;
     directionState: number; // Offset +$02
     maneuverStep: number;   // Offset +$1A
+    attackCooldown: number;
 }
 
 export interface HomingMissile {

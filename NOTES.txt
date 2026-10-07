@@ -60,10 +60,10 @@ in original
     00035130 0640 0002                add.w #$0002,d0
 
 
-level 50 is the race course
+- level 50 is the race course
+- Enemy bullets has random momentum/speed -- they can be really slow sometimes and linger REALLY long
 
-
-Register	Amiga Hex	24-bit Hex
+- Register	Amiga Hex	24-bit Hex
 COLOR00	0000	#000000	Black (Background / Transparent)
 COLOR01	0FFF	#FFFFFF	White
 COLOR02	0E62	#EE6622	Orange / Copper
@@ -103,6 +103,7 @@ Art
 I need 2026 art for this graphic, which is from the old Amiga game Gravity Force ... spice it up and make
 it very detailed. It will be used in a game. It's a 2D game...
 No perspective ... it's seen straight from the side and I want plain black background.
+Make it in-theme with what the game is about and where its situated (caverns).
 
 ----
 https://www.gravityforce20.com/ looks fun, but eh, not really original GF  
