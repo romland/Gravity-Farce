@@ -40,7 +40,11 @@ const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
     8: { x: 0.707, y: -0.707 }, // F8: Up-Right
     9: { x: 0.707, y: 0.707 },  // F9: Down-Right
     10: { x: -0.707, y: 0.707 },// FA: Down-Left
-    11: { x: -0.707, y: -0.707 }// FB: Up-Left
+    11: { x: -0.707, y: -0.707 },// FB: Up-Left
+    12: { x: 1.0, y: 0.0 },     // FC: Right (Maneuver)
+    13: { x: 0.0, y: 1.0 },     // FD: Down (Maneuver)
+    14: { x: 0.0, y: -1.0 },    // FE: Up (Maneuver, turns Enemy 8 upwards)
+    15: { x: -1.0, y: 0.0 }     // FF: Left (Maneuver)
 };
 
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
@@ -118,16 +122,13 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             const tileY = Math.floor(t.y / TILE_SIZE);
             const tileId = room.level.rawMap[tileY]?.[tileX];
 
-            if (tileId !== undefined && tileId >= 0xF0 && tileId <= 0xFB) {
-                let newState = enemy.directionState;
-                if (tileId >= 0xF0 && tileId <= 0xF3) newState = tileId - 0xF0;
-                else if (tileId === 0xF9) newState = 9;  // Down-Right
-                else if (tileId === 0xFA) newState = 10; // Down-Left
-                else if (tileId === 0xFB) newState = 11; // Up-Left
-                else if (tileId === 0xF8) newState = 8;  // Up-Right
-                
-                if (newState !== enemy.directionState) {
-                    if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(enemy.debugId)) {
+            if (tileId !== undefined && tileId >= 0xF0 && tileId <= 0xFF) {
+                if (tileId >= 0xF4 && tileId <= 0xF7) {
+                    // Ignore swarm sync nodes F4-F7 for now
+                } else {
+                    let newState = tileId - 0xF0;
+                    if (newState !== enemy.directionState) {
+                        if (DEBUG_TARGET_IDS === null || DEBUG_TARGET_IDS.includes(enemy.debugId)) {
                         // console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Data: ${JSON.stringify(enemy)}`);
                         console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Waypoint Hit! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Waypoint: 0x${tileId.toString(16).toUpperCase()} | State: ${enemy.directionState} -> ${newState} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | Started at: [Col ${tileX}, Row ${tileY}] | Data: ${JSON.stringify(enemy)}`);
                     }
@@ -135,6 +136,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
                     enemy.maneuverStep = 2; // Start 24-frame blindfold
                     // t.x = tileX * TILE_SIZE + TILE_SIZE / 2;
                     // t.y = tileY * TILE_SIZE + TILE_SIZE / 2;
+                }
                 }
             }
         } else {

@@ -480,7 +480,7 @@
                     if (t >= 0xE4 && t <= 0xEF) {
                         rowStr += t.toString(16).toUpperCase();
                     }
-                    else if (t >= 0xF0 && t <= 0xFB) rowStr += t.toString(16).toUpperCase();
+                    else if (t >= 0xF0 && t <= 0xFF) rowStr += t.toString(16).toUpperCase();
                     else if (t >= 0x32 && t <= 0x3A) rowStr += "T" + (t - 0x32);
                     else if (tileDictionary[t] && tileDictionary[t].solid) {
                         rowStr += "██";

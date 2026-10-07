@@ -220,4 +220,8 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xF9: { id: 0xF9, description: 'Waypoint Node 9', known: false },
     0xFA: { id: 0xFA, description: 'Waypoint Node 10', known: false },
     0xFB: { id: 0xFB, description: 'Waypoint Node 11', known: false },
+    0xFC: { id: 0xFC, description: 'Waypoint Node 12', known: false },
+    0xFD: { id: 0xFD, description: 'Waypoint Node 13', known: false },
+    0xFE: { id: 0xFE, description: 'Waypoint Node 14', known: false },
+    0xFF: { id: 0xFF, description: 'Waypoint Node 15', known: false },
 };
