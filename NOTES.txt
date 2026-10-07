@@ -59,6 +59,8 @@ in original
     0003512a 3039 0003 7f40           move.w $00037f40 [00a3],d0
     00035130 0640 0002                add.w #$0002,d0
 
+In Ported Version, in client console:
+    - printEnemyPathMap()
 
 - level 50 is the race course
 - Enemy bullets has random momentum/speed -- they can be really slow sometimes and linger REALLY long

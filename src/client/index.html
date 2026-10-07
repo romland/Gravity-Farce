@@ -471,16 +471,27 @@
                 console.log("Map not loaded yet.");
                 return;
             }
+
             let out = `\n--- ENEMY PATH DEBUG MAP: ${level.name} ---\n`;
             for (let y = 0; y < level.rawMap.length; y++) {
                 let rowStr = "";
                 for (let x = 0; x < level.rawMap[y].length; x++) {
                     const t = level.rawMap[y][x];
-                    if (t >= 0xE4 && t <= 0xEF) rowStr += t.toString(16).toUpperCase();
+                    if (t >= 0xE4 && t <= 0xEF) {
+                        rowStr += t.toString(16).toUpperCase();
+                    }
                     else if (t >= 0xF0 && t <= 0xFB) rowStr += t.toString(16).toUpperCase();
                     else if (t >= 0x32 && t <= 0x3A) rowStr += "T" + (t - 0x32);
-                    else if (tileDictionary[t] && tileDictionary[t].solid) rowStr += "██";
-                    else rowStr += "..";
+                    else if (tileDictionary[t] && tileDictionary[t].solid) {
+                        rowStr += "██";
+                    } else if (t >= 0xAE && t <= 0xCB) {
+                        // Turrets and zones: 0xAE to 0xCB
+                        rowStr += "~~";
+                    } else if (t == 0x0) {
+                        rowStr += "  ";
+                    } else {
+                        rowStr += "..";
+                    }
                 }
                 // Only print rows that actually have enemies or paths to save console space
                 if (rowStr.match(/[EFT][0-9A-F]/)) {
