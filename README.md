@@ -2,7 +2,7 @@
 **There are many gravity games, many copy-cats and some predecessors.**  
 But `Gravity Force` was simply the best.  
 
-It was in the backlog for 30-40 years and I finally got around to finding out **why** it was awesome.  
+It was in the backlog for 30-35 years and I finally got around to finding out **why** it was awesome.  
 So I decided to throw some hours at it and here we have a (in spirit) port that will run in the browser.
 
 ### Server and Cheating
