@@ -78,12 +78,18 @@ export class Room {
     }
 
     addPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
+        if (this.ecs.players.size === 0) {
+            this.resetLevel();
+        }        
         this.trySpawnPlayer(id, type, stats);
     }
 
     removePlayer(id: string) {
         const e = this.ecs.getPlayerEntity(id);
         if (e !== undefined) this.ecs.destroy(e);
+        if (this.ecs.players.size === 0) {
+            this.resetLevel();
+        }
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {

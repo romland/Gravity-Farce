@@ -143,22 +143,51 @@ function handleTransition(id: string) {
 				})) : [
 					{ rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
 					{ rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
-					{ rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
+					{ rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
 					{ rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
-					{ rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100% CLEARED' : `${enemiesLeft} SURVIVED`, isMe: true, isNewPb: false }
+					{ rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
 				];
 
 			boards.push({ title: mode === 'MP' ? 'MATCH RUN SUMMARY' : 'RUN STATS SUMMARY', entries: runSummaryEntries });
-			boards.push({ title: `FASTEST (${mode})`, entries: ctxFastest });
-			boards.push({ title: `SNEAKIEST (${mode})`, entries: ctxSneak });
-			boards.push({ title: `ECO-RUN (${mode})`, entries: ctxEco });
-			if (rClear) boards.push({ title: `100% CLEARED (${mode})`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
-			if (rSharpshooter) boards.push({ title: `SHARPSHOOTER (${mode})`, entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, p.uuid, rSharpshooter.isNewPb, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) });
+			boards.push({ title: `BLITZ RUN`, entries: ctxFastest });
+			boards.push({ title: `COMBAT ELITE`, entries: ctxSneak });
+			boards.push({ title: `HYDRO-CRUISE`, entries: ctxEco });
+			if (rClear) {
+                boards.push({ 
+                    title: `100% CLEARED`,
+                    entries: buildLeaderboardContext(
+                        'sp_cleared',
+                        pLevel,
+                        mode,
+                        physicsHash,
+                        p.uuid,
+                        rClear.isNewPb,
+                        x => formatTimeMs(x.value)
+                    )
+                });
+            }
+
+			if (rSharpshooter) {
+                boards.push({
+                    title: `SHARPSHOOTER`,
+                    entries:
+                    buildLeaderboardContext(
+                        'sp_sharpshooter',
+                        pLevel,
+                        mode,
+                        physicsHash,
+                        p.uuid,
+                        rSharpshooter.isNewPb,
+                        x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)
+                    )
+                });
+            }
             
             if (enemiesLeft > 0) {
-                boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED (MISSED 100% CLEARED)`, color: '#e74c3c' });
+                // (MISSED 100% CLEARED)
+                boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c' });
             } else {
-                boards.push({ isFootnote: true, text: `NO SURVIVORS (100% CLEARED!)`, color: '#2ecc71' });
+                // boards.push({ isFootnote: true, text: `NO SURVIVORS (100% CLEARED!)`, color: '#2ecc71' });
             }
 
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
