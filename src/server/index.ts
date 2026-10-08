@@ -6,7 +6,7 @@ import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
-import { recordDB, formatTimeMs } from './core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext } from './core/records';
 import { authDB } from './core/auth';
 
 const app = express();
@@ -102,26 +102,26 @@ function handleTransition(id: string) {
             const mode = oldRoom.ecs.players.size > 1 ? 'MP' : 'SP';
             const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 });
             
-            recordDB.submitRecord('sp_fastest', pLevel, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
-            recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
-            recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
+            const rFast = recordDB.submitRecord('sp_fastest', pLevel, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
+            const rSneak = recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
+            const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
 
+            let rClear = null;
             const enemiesLeft = oldRoom.ecs.turrets.size + oldRoom.ecs.tanks.size + oldRoom.ecs.flyingEnemies.size;
             if (enemiesLeft === 0) {
-                recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
+                rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
             }
 
-            const topFastest = recordDB.getRecords('sp_fastest', pLevel, mode, physicsHash).slice(0, 5);
-            const topSneakiest = recordDB.getRecords('sp_sneakiest', pLevel, mode, physicsHash).slice(0, 5);
-            const topEco = recordDB.getRecords('sp_eco', pLevel, mode, physicsHash).slice(0, 5);
-            const topCleared = recordDB.getRecords('sp_cleared', pLevel, mode, physicsHash).slice(0, 5);
+            const ctxFastest = buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, p.uuid, rFast.isNewPb, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0'));
+            const ctxSneak = buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, p.uuid, rSneak.isNewPb, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0));
+            const ctxEco = buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, p.uuid, rEco.isNewPb, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0));
 
             const boards = [
-                { title: `FASTEST (${mode})`, entries: topFastest.map(x => ({ ...x, displayValue: formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0') })) },
-                { title: `SNEAKIEST (${mode})`, entries: topSneakiest.map(x => ({ ...x, displayValue: String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0) })) },
-                { title: `ECO-RUN (${mode})`, entries: topEco.map(x => ({ ...x, displayValue: String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0) })) }
+                { title: `FASTEST (${mode})`, entries: ctxFastest },
+                { title: `SNEAKIEST (${mode})`, entries: ctxSneak },
+                { title: `ECO-RUN (${mode})`, entries: ctxEco }
             ];
-            if (topCleared.length > 0) boards.push({ title: `100% CLEARED (${mode})`, entries: topCleared.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) });
+            if (rClear) boards.push({ title: `100% CLEARED (${mode})`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
             
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
 

@@ -1,6 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
-import { recordDB, formatTimeMs } from '../core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
 
 export function sysRacing(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
@@ -49,7 +49,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                 const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 }); 
 
                 // Save Fastest Individual Lap
-                recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
+                const rLap = recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
                     playerId: p.uuid,
                     alias: p.alias,
                     value: lapTime,
@@ -63,7 +63,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                         ecs.events.push({ type: 'floating_text', text: 'FINISHED!', color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                         p.score += 5000;
                     
-                    recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
+                    const rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
                         playerId: p.uuid,
                         alias: p.alias,
                         value: now - p.race.startTime,
@@ -71,12 +71,12 @@ export function sysRacing(ecs: Registry, room: Room) {
                     });
                     
                     // Fetch top 5 for both categories and push a targeted UI event to the player
-                    const topLaps = recordDB.getRecords('fastest_lap', room.levelIndex, mode, physicsHash).slice(0, 5);
-                    const topRaces = recordDB.getRecords('race_time', room.levelIndex, mode, physicsHash).slice(0, 5);
+                    const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, x => formatTimeMs(x.value));
+                    const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, x => formatTimeMs(x.value));
                     
                     room.emitToPlayer(p.id, 'show_leaderboard', [
-                        { title: `TOP ${mode} RACE TIMES`, entries: topRaces.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) },
-                        { title: `TOP ${mode} LAP TIMES`, entries: topLaps.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) }
+                        { title: `TOP ${mode} RACE TIMES`, entries: ctxRaces },
+                        { title: `TOP ${mode} LAP TIMES`, entries: ctxLaps }
                     ]);
 
                     } else {

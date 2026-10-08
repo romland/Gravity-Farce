@@ -70,6 +70,12 @@
             border-radius: 6px; cursor: pointer; text-align: center; font-size: 16px; margin-top: auto;
         }
         .btn-close:hover { background: #3a9ade; }
+        
+        @keyframes pulse-pb {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script>
     <script src="AssetManager.js"></script>
@@ -361,8 +367,9 @@
         boards.forEach(b => {
             html += `<div class="board-title">${b.title}</div><table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
             b.entries.forEach((e, idx) => {
-                let isMe = e.playerId === myUuid ? 'style="color:#2ecc71"' : '';
-                html += `<tr ${isMe}><td>#${idx+1}</td><td>${e.alias}</td><td style="text-align:right">${e.displayValue || formatTimeMs(e.value)}</td></tr>`;
+                let isMe = e.isMe ? 'style="color:#2ecc71"' : (e.rankLabel === '...' ? 'style="color:#555"' : '');
+                let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
+                html += `<tr ${isMe}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
             });
             html += `</table>`;
         });

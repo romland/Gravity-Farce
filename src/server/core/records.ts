@@ -25,6 +25,12 @@ export interface Leaderboard {
     entries: RecordEntry[];
 }
 
+export interface SubmitResult {
+    isNewPb: boolean;
+    rank: number; // 1-based rank. -1 if they didn't make the cut.
+}
+
+
 /**
  * A generic, JSON-backed persistent data store for game records.
  * Automatically categorizes records by game mode, map, and physics rulesets.
@@ -69,8 +75,8 @@ export class RecordManager {
         physicsHash: string, 
         sort: SortOrder,
         entry: Omit<RecordEntry, 'timestamp'>,
-        limit: number = 10
-    ): boolean {
+        limit: number = 100
+    ): SubmitResult {
         const key = this.getCompositeKey(metric, level, mode, physicsHash);
         
         if (!this.db[key]) {
@@ -78,7 +84,8 @@ export class RecordManager {
         }
 
         const board = this.db[key];
-        
+        let isNewPb = false;
+
         // Enforce 1 Entry Per Player (Personal Best)
         const existingIdx = board.entries.findIndex(e => e.playerId === entry.playerId);
         if (existingIdx !== -1) {
@@ -96,11 +103,11 @@ export class RecordManager {
 
             if (isBetter) {
                 board.entries[existingIdx] = { ...existing, ...entry, timestamp: Date.now() };
-            } else {
-                return false; // Did not beat their own PB
+                isNewPb = true;
             }
         } else {
             board.entries.push({ ...entry, timestamp: Date.now() });
+            isNewPb = true;
         }
 
         // Sort dynamically based on the metric's requirement
@@ -121,14 +128,14 @@ export class RecordManager {
             board.entries = board.entries.slice(0, limit);
         }
 
-        // If the entry is still in the array after slicing, it made the leaderboard!
-        const madeLeaderboard = board.entries.some(e => e.playerId === entry.playerId);
-        
-        if (madeLeaderboard) {
+        const finalIdx = board.entries.findIndex(e => e.playerId === entry.playerId);
+        const madeLeaderboard = finalIdx !== -1;
+
+        if (madeLeaderboard && isNewPb) {
             this.save();
         }
 
-        return madeLeaderboard;
+        return { isNewPb: madeLeaderboard && isNewPb, rank: madeLeaderboard ? finalIdx + 1 : -1 };
     }
 
     public getRecords(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string): RecordEntry[] {
@@ -154,4 +161,40 @@ export function formatTimeMs(diff: number): string {
     let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
     let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
     return `${m}:${s}.${ms}`;
+}
+
+/**
+ * Builds a contextual array for the client UI showing the Top N, plus the player's immediate neighbors.
+ */
+export function buildLeaderboardContext(
+    metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string,
+    playerId: string, isNewPb: boolean, formatFn: (e: RecordEntry) => string, topN: number = 5
+) {
+    const records = recordDB.getRecords(metric, level, mode, physicsHash);
+    const pIdx = records.findIndex(e => e.playerId === playerId);
+    const results = [];
+    
+    for (let i = 0; i < Math.min(topN, records.length); i++) {
+        results.push({
+            rankLabel: `#${i+1}`, alias: records[i].alias, displayValue: formatFn(records[i]),
+            isMe: i === pIdx, isNewPb: i === pIdx && isNewPb
+        });
+    }
+    
+    if (pIdx >= topN) {
+        if (pIdx > topN) {
+            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false });
+        }
+        if (pIdx - 1 >= topN) {
+            results.push({ rankLabel: `#${pIdx}`, alias: records[pIdx-1].alias, displayValue: formatFn(records[pIdx-1]), isMe: false });
+        }
+        results.push({ rankLabel: `#${pIdx+1}`, alias: records[pIdx].alias, displayValue: formatFn(records[pIdx]), isMe: true, isNewPb });
+        if (pIdx + 1 < records.length) {
+            results.push({ rankLabel: `#${pIdx+2}`, alias: records[pIdx+1].alias, displayValue: formatFn(records[pIdx+1]), isMe: false });
+        }
+    } else if (pIdx === -1 && records.length > 0) {
+         results.push({ rankLabel: '...', alias: 'DID NOT QUALIFY', displayValue: '', isMe: true });
+    }
+    
+    return results;
 }
