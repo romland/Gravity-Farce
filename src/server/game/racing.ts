@@ -1,6 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
-import { recordDB } from '../core/records';
+import { recordDB, formatTimeMs } from '../core/records';
 
 export function sysRacing(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
@@ -75,8 +75,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                     const topRaces = recordDB.getRecords('race_time', room.levelIndex, mode, physicsHash).slice(0, 5);
                     
                     room.emitToPlayer(p.id, 'show_leaderboard', [
-                        { title: `TOP ${mode} RACE TIMES`, entries: topRaces },
-                        { title: `TOP ${mode} LAP TIMES`, entries: topLaps }
+                        { title: `TOP ${mode} RACE TIMES`, entries: topRaces.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) },
+                        { title: `TOP ${mode} LAP TIMES`, entries: topLaps.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) }
                     ]);
 
                     } else {

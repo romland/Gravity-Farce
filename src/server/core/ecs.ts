@@ -48,6 +48,7 @@ export interface Player {
     angleStep: number;
     isLanded: boolean;
     score: number;
+    joinedAt: number;
     cargoStack: number[];
     unloadTimer: number;
     doubleShotAmmo: number;

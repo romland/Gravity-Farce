@@ -30,4 +30,5 @@ export interface PlayerStats {
     race?: PlayerRaceState;
     uuid?: string;
     alias?: string;
+    joinedAt?: number;
 }

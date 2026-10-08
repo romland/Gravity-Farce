@@ -346,10 +346,10 @@
         if (!modal) return; // Failsafe in case HTML wasn't added
         let html = '';
         boards.forEach(b => {
-            html += `<div class="board-title">${b.title}</div><table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">TIME</th></tr>`;
+            html += `<div class="board-title">${b.title}</div><table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
             b.entries.forEach((e, idx) => {
                 let isMe = e.playerId === myUuid ? 'style="color:#2ecc71"' : '';
-                html += `<tr ${isMe}><td>#${idx+1}</td><td>${e.alias}</td><td style="text-align:right">${formatTimeMs(e.value)}</td></tr>`;
+                html += `<tr ${isMe}><td>#${idx+1}</td><td>${e.alias}</td><td style="text-align:right">${e.displayValue || formatTimeMs(e.value)}</td></tr>`;
             });
             html += `</table>`;
         });
