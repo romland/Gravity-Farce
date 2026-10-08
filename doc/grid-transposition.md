@@ -1,8 +1,7 @@
 # Amiga Grid Transposition Specification
 
-> **DO NOT ASSUME STANDARD 2D CARTESIAN MAP INDEXING OR DIRECT VECTOR ASSIGNMENT.**
-> The Amiga level data is column-major and transposed relative to standard row-major parsing (`world_x = raw_y`, `world_y = raw_x`). 
-> **Failing to account for this transposition will introduce bugs in map memory access:**
+> The original level data is column-major and transposed relative to standard row-major parsing (`world_x = raw_y`, `world_y = raw_x`). 
+> **Be careful and do account for this transposition or there will be bugs in map memory access:**
 > 1. **Physics Collisions:** Force vectors will push in wrong directions (e.g., `0xCE` gravity will thrust ships UP into ceilings instead of LEFT down tunnels).
 > 2. **Tile Mutations:** Destructible terrain edits using `[x][y]` instead of `[y][x]` will erase solid wall tiles on the wrong side of the level.
 > 3. **Trigger Bounds:** Proximity triggers will check vertical columns instead of horizontal tunnel ranges, firing hazards through solid rock.

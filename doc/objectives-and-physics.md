@@ -1,7 +1,5 @@
 # Single-Player Objectives, Cargo & Physics Systems
 
-This document outlines the reverse-engineered mechanics for Cargo (crates), Fuel pods, Buffs, and the Base-10 (BCD) physics engine in the Amiga *Gravity Force* binary.
-
 ## 1. The "Unpacked Decimal" Physics Engine
 
 The engine **does not use standard binary fixed-point math** for its core velocity and trigonometry. It uses Unpacked Decimal Arrays (Base-10). Instead of a single 32-bit integer, velocities and physics limits are stored as 4-byte arrays representing human-readable decimal digits: `[Integer, Tenths, Hundredths, Thousandths]`.
