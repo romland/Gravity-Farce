@@ -48,21 +48,23 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
     
-    let pLevel = 0;
-    let pType: 'classic'|'modern' = 'modern';
+    const pLevel = playerRooms.get(id) ?? 0;
+    let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK' };
+    let pType: 'classic'|'modern' = stats.shipType || 'modern';
     
     for (const room of rooms.values()) {
         const e = room.ecs.getPlayerEntity(id);
         if (e !== undefined) {
                 const p = room.ecs.players.get(e)!;
-            pLevel = room.levelIndex;
                 pType = p.type;
-                playerSessionStats.set(id, {
+            stats = {
                     score: p.score,
                     doubleShotAmmo: p.doubleShotAmmo,
                     uuid: p.uuid,
-                    alias: p.alias
-                });
+                alias: p.alias,
+                shipType: p.type
+            };
+            playerSessionStats.set(id, stats);
             room.removePlayer(id);
             break;
         }
@@ -79,15 +81,14 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     
     socket.emit('initLevel', newRoom.level);
     socket.emit('levelIndex', newRoom.levelIndex);
-        newRoom.addPlayer(id, pType, playerSessionStats.get(id));
+    newRoom.addPlayer(id, pType, stats);
 }
 
 function handleTransition(id: string) {
-    let pLevel = 0;
+    let pLevel = playerRooms.get(id) ?? 0;
     let oldRoom = null;
     for (const room of rooms.values()) {
         if (room.ecs.getPlayerEntity(id) !== undefined) {
-            pLevel = room.levelIndex;
             oldRoom = room;
             break;
         }
@@ -123,10 +124,17 @@ function handleTransition(id: string) {
             if (topCleared.length > 0) boards.push({ title: `100% CLEARED (${mode})`, entries: topCleared.map(x => ({ ...x, displayValue: formatTimeMs(x.value) })) });
             
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
+
+            playerSessionStats.set(id, {
+                score: p.score,
+                doubleShotAmmo: p.doubleShotAmmo,
+                uuid: p.uuid,
+                alias: p.alias,
+                shipType: p.type
+            });
+            oldRoom.removePlayer(id);
         }
     }
-
-    handleTransitionToLevel(id, pLevel + 1);
 }
 
 io.on('connection', (socket) => {
@@ -171,6 +179,13 @@ io.on('connection', (socket) => {
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
             if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, true);
+        }
+    });
+
+    socket.on('next_level', () => {
+        const current = playerRooms.get(socket.id);
+        if (current !== undefined) {
+            handleTransitionToLevel(socket.id, current + 1);
         }
     });
 
