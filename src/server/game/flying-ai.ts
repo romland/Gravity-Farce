@@ -8,7 +8,7 @@ const TILE_SIZE = 32;
 const DEBUG_TARGET_IDS: number[] | null = null;//[];//[ 6, 8 ];
 
 export interface FlyingEnemySpecs {
-    hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in 68k binary
+    hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in org 68k
     speedScalar: number;
     scoreValue: number;
     canShoot: boolean;  // Word 4 Bit 1 (0x02) Weapon Flag
@@ -41,11 +41,28 @@ const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
     9: { x: 0.707, y: 0.707 },  // F9: Down-Right
     10: { x: -0.707, y: 0.707 },// FA: Down-Left
     11: { x: -0.707, y: -0.707 },// FB: Up-Left
-    12: { x: 0.0, y: -1.0 },    // FC: Up (Routes through shaft to FB)
-    13: { x: -1.0, y: 0.0 },    // FD: Left (Routes to F1)
-    14: { x: 0.0, y: -1.0 },    // FE: Up (Routes to F2)
-    15: { x: 1.0, y: 0.0 }      // FF: Right (Routes to F3)
+    12: { x: 0.0, y: 1.0 },     // FC: Down
+    13: { x: -1.0, y: 0.0 },    // FD: Left
+    14: { x: 0.0, y: -1.0 },    // FE: Up
+    15: { x: 1.0, y: 0.0 }      // FF: Right
 };
+
+// Authentic Amiga cornering arc trajectories for states 8-15 ($00031242 table approximation)
+function getCorneringVector(state: number, step: number): { x: number, y: number } {
+    // States 8-11: Diagonal reflectors (F8-FB)
+    // States 12-15: Curve transition nodes (FC-FF)
+    switch (state) {
+        case 8:  case 14: return { x: 0.707, y: -0.707 }; // Up-Right arc
+        case 9:  case 15: return { x: 0.707, y:  0.707 }; // Down-Right arc
+        case 10: case 12: return { x: -0.707, y: 0.707 }; // Down-Left arc
+        case 11: case 13: return { x: -0.707, y: -0.707 };// Up-Left arc
+        default: {
+            const base = DIRECTION_VECTORS[state];
+            if (base) return base;
+            return { x: 1.0, y: 0.0 };
+        }
+    }
+}
 
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
 
@@ -156,7 +173,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         }
 
         // 3. Movement Integration
-        const dir = DIRECTION_VECTORS[enemy.directionState] || DIRECTION_VECTORS[0];
+        const dir = getCorneringVector(enemy.directionState, enemy.maneuverStep);
         const moveSpeed = WAVE_SPEED_MODIFIERS[waveIndex]; // Unmodified native speed
 
         t.x += dir.x * moveSpeed;

@@ -109,6 +109,22 @@ At `$00030F0E`, the engine samples tile map `$00050460` at the enemy's current 8
 * **Diagonal Reflectors (`0xF8`–`0xFB`):**
 * Sets direction state `+$02` to `8`–`11` (8=Up-Right `0xF8`, 9=Down-Right `0xF9`, 10=Down-Left `0xFA`, 11=Up-Left `0xFB`).
 * Triggers a 24-frame blindfold cycle (`+$1A`) during direction transitions to prevent re-triggering waypoint checks until clear.
+* **Curve Transition Nodes (`0xFC`–`0xFF`):**
+  * Sets direction state `+$02` to `12`–`15` (12=FC, 13=FD, 14=FE, 15=FF).
+  * Bypasses standard linear vector tables by jumping to the dynamic cornering dispatcher at **`$000311FC`**.
+
+### Cornering & Arc Trajectory Table (`$00031242`)
+When an enemy enters direction states `8` through `15` (values $> 7$), the engine skips `DIRECTION_VECTORS` and indexes into a precompiled multi-frame curve sequence table starting at **`$00031242`**:
+* **State Subtraction:** The engine subtracts `8` from the direction state (`SUBQ.W #$08, D6`) to calculate the table index offset.
+* **Multi-Frame Stepping:** Uses a trajectory progress counter (`+$1A`) to step through sequential delta pairs (`d1, d2`) over a 48-byte cycle (`0x30`), allowing smooth arc navigation around complex corridor bends instead of linear snapping.
+
+```
+State Range | Tile Range | Behavior Description
+----------- | ---------- | ----------------------------------------------------
+08 – 11     | 0xF8 – 0xFB | Diagonal reflectors (Up-Right, Down-Right, etc.)
+12 – 15     | 0xFC – 0xFF | Smooth curve transition shafts & cornering waypoints
+```
+
 * **Way-Point Blindfold:** While step counter `+$1A` is non-zero, routine `$00030F0E` **bypasses tile checking entirely**. This prevents enemies from snapping or re-triggering adjacent waypoint nodes while completing turns.
 
 ### Flying Enemy Firing Mechanics (`$00030E00`–`$00030ECE`)
