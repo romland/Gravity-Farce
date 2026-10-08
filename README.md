@@ -9,8 +9,8 @@ So I decided to throw some hours at reverse engineering it and ... we have a (in
 
 ### Server and Cheating
 I deviated pretty strongly on a few parts. One was: I did not really fancy the split-screen. I went for 
-networked instead. The server is authorative, so it should be hard(er) to cheat (piss people off -- sigh, why, people, why, just enjoy!).
-But eh anti-cheating is a billion-dollar industry so, yeah... 
+networked instead. The server is authorative, so it should be hard(er) to cheat (why-people-why, let everyone enjoy it!).
+But, eh, anti-cheating is a billion-dollar industry so, yeah... 
 
 ### Records
 Second big deviation, records and scores.
@@ -21,6 +21,9 @@ it was nice to give someone a punch on the arm when they were being an ass (read
 This version of GF keeps track of all kinds of high-scores and records for both single and multiplayer globally. You don't have to snail-mail your mate your fastest time on the "8 race". You just race on the same server.  
 
 _But obviously, multi-player is the way to go! `:D`_
+
+### Try it
+... todo ...
 
 ### Levels and Data
 All levels (multi- and single player) and power-ups and similar structures are ported over from the
@@ -34,5 +37,7 @@ It's not really a port. I have tried to get the _feeling_ correct. It is written
 Hopefully you can enjoy some 1989 magic in a new suit. I had fun creating it. And yeah, "creating things" was always the fun part, the tools used were always rather secondary.
 
 ### The funkies
-I have tried to document (ahem, written by LLM) as much of the funny details
-as I could, but some were lost along the way.
+I (and my best friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
+
+### Run your own server
+... todo ...
