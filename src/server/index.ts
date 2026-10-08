@@ -5,6 +5,7 @@ import { getLevelData } from './levels';
 import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
+import type { PlayerStats } from './core/types';
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +22,7 @@ let isServerPaused = false;
 
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
 const playerRooms = new Map<string, number>();
+const playerSessionStats = new Map<string, PlayerStats>();
 
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
@@ -39,8 +41,14 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     for (const room of rooms.values()) {
         const e = room.ecs.getPlayerEntity(id);
         if (e !== undefined) {
+                const p = room.ecs.players.get(e)!;
             pLevel = room.levelIndex;
-            pType = room.ecs.players.get(e)!.type;
+                pType = p.type;
+                playerSessionStats.set(id, {
+                    score: p.score,
+                    fuel: p.fuel,
+                    doubleShotAmmo: p.doubleShotAmmo
+                });
             room.removePlayer(id);
             break;
         }
@@ -57,7 +65,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     
     socket.emit('initLevel', newRoom.level);
     socket.emit('levelIndex', newRoom.levelIndex);
-    newRoom.addPlayer(id, pType);
+        newRoom.addPlayer(id, pType, playerSessionStats.get(id));
 }
 
 function handleTransition(id: string) {
@@ -126,6 +134,7 @@ io.on('connection', (socket) => {
             room.removePlayer(socket.id);
         }
         playerRooms.delete(socket.id);
+        playerSessionStats.delete(socket.id);
     });
 });
 

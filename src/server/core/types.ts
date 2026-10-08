@@ -21,3 +21,9 @@ export interface LevelData {
     entities: LevelEntity[];
     rawMap?: number[][];
 }
+
+export interface PlayerStats {
+    score: number;
+    fuel: number;
+    doubleShotAmmo: number;
+}

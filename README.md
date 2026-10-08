@@ -19,6 +19,9 @@ stuff in the `doc` dir.
 ### Not really a port
 It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I think would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
 
+### Party like it's 1989
+Hopefully you can enjoy some 1989 magic in a new suit. I had fun creating it. And yeah, "creating things" was always the fun part, the tools used were always rather secondary.
+
 ### The funkies
 I have tried to document (ahem, written by LLM) as much of the funny details
 as I could, but some were lost along the way.

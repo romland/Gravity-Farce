@@ -9,6 +9,7 @@ import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
+import type { PlayerStats } from './core/types';
 
 export class Room {
     public ecs = new Registry();
@@ -74,8 +75,8 @@ export class Room {
         });
     }
 
-    addPlayer(id: string, type: 'classic' | 'modern') {
-        this.trySpawnPlayer(id, type);
+    addPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
+        this.trySpawnPlayer(id, type, stats);
     }
 
     removePlayer(id: string) {
@@ -83,7 +84,7 @@ export class Room {
         if (e !== undefined) this.ecs.destroy(e);
     }
 
-    trySpawnPlayer(id: string, type: 'classic' | 'modern') {
+    trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
         let chosenX: number | null = null;
         let chosenY: number | null = null;
 
@@ -115,16 +116,18 @@ export class Room {
         }
 
         if (chosenX !== null) {
-            let preservedScore = 0;
+            let spawnStats = stats ? { ...stats } : undefined;
             const existing = this.ecs.getPlayerEntity(id);
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
-                if (oldP) preservedScore = oldP.score;
+                if (oldP) {
+                    spawnStats = { score: oldP.score }; // Keep score on same-room respawn, drop fuel/ammo buffs
+                }
                 this.ecs.destroy(existing);
             }
             
-            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, preservedScore);
-            else spawnModernPlayer(this.ecs, id, chosenX, chosenY!, preservedScore);
+            if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
+            else spawnModernPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
 
             const playerEntity = this.ecs.getPlayerEntity(id);
             if (playerEntity !== undefined) {
@@ -141,7 +144,7 @@ export class Room {
             }
 
         } else {
-            setTimeout(() => this.trySpawnPlayer(id, type), 500);
+            setTimeout(() => this.trySpawnPlayer(id, type, stats), 500);
         }
     }
 
