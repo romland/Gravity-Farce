@@ -365,6 +365,10 @@
         if (!modal) return; // Failsafe in case HTML wasn't added
         let html = '';
         boards.forEach(b => {
+            if (b.isFootnote) {
+                html += `<div style="text-align:center; color:${b.color || '#fff'}; font-size:14px; margin-top:20px; margin-bottom:10px; font-weight:bold; letter-spacing:1px;">${b.text}</div>`;
+                return;
+            }
             html += `<div class="board-title">${b.title}</div>`;
             if (b.subtitle) html += `<div style="text-align:center; color:#bdc3c7; font-size:12px; margin-bottom:12px; letter-spacing:1px; font-weight:bold;">${b.subtitle}</div>`;
             html += `<table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;

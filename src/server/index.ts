@@ -155,6 +155,12 @@ function handleTransition(id: string) {
             if (rClear) boards.push({ title: `100% CLEARED (${mode})`, subtitle: `THIS RUN: ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
             if (rSharpshooter) boards.push({ title: `SHARPSHOOTER (${mode})`, subtitle: `THIS RUN: ${p.shotsFired} SHOTS | ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, p.uuid, rSharpshooter.isNewPb, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) });
             
+            if (enemiesLeft > 0) {
+                boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED (MISSED 100% CLEARED)`, color: '#e74c3c' });
+            } else {
+                boards.push({ isFootnote: true, text: `NO SURVIVORS (100% CLEARED!)`, color: '#2ecc71' });
+            }
+
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
 
             playerSessionStats.set(id, {
