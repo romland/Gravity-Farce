@@ -71,13 +71,31 @@ export function sysRacing(ecs: Registry, room: Room) {
                     });
                     
                     // Fetch top 5 for both categories and push a targeted UI event to the player
+                    const currentRaceStr = formatTimeMs(now - p.race.startTime);
+                    const currentLapStr = formatTimeMs(lapTime);
+
                     const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, x => formatTimeMs(x.value));
                     const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, x => formatTimeMs(x.value));
                     
-                    room.emitToPlayer(p.id, 'show_leaderboard', [
-                        { title: `TOP ${mode} RACE TIMES`, entries: ctxRaces },
-                        { title: `TOP ${mode} LAP TIMES`, entries: ctxLaps }
-                    ]);
+                    const boards = [];
+                    if (mode === 'MP') {
+                        const sessionRaces = [];
+                        for (const [_, otherP] of room.ecs.players.entries()) {
+                            if (otherP.race && otherP.race.state > 0) {
+                                let status = otherP.race.state === 2 ? formatTimeMs(otherP.race.finishTime! - otherP.race.startTime) : `LAP ${otherP.race.currentLap}`;
+                                let sortVal = otherP.race.state === 2 ? (otherP.race.finishTime! - otherP.race.startTime) : 99999999;
+                                sessionRaces.push({ alias: otherP.alias, value: status, isMe: otherP.id === p.id, sortVal });
+                            }
+                        }
+                        sessionRaces.sort((a,b) => a.sortVal - b.sortVal);
+                        const sessionEntries = sessionRaces.map((sr, idx) => ({ rankLabel: sr.sortVal === 99999999 ? '-' : `#${idx+1}`, alias: sr.alias, displayValue: sr.value, isMe: sr.isMe, isNewPb: false }));
+                        boards.push({ title: `CURRENT MATCH RESULTS`, entries: sessionEntries });
+                    }
+
+                    boards.push({ title: `TOP ${mode} RACE TIMES`, subtitle: `THIS RUN: ${currentRaceStr}`, entries: ctxRaces });
+                    boards.push({ title: `TOP ${mode} LAP TIMES`, subtitle: `THIS LAP: ${currentLapStr}`, entries: ctxLaps });
+                    
+                    room.emitToPlayer(p.id, 'show_leaderboard', boards);
 
                     } else {
                         p.race.currentLap++;

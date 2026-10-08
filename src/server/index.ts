@@ -107,7 +107,19 @@ function handleTransition(id: string) {
             const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
 
             let rClear = null;
-            const enemiesLeft = oldRoom.ecs.turrets.size + oldRoom.ecs.tanks.size + oldRoom.ecs.flyingEnemies.size;
+            
+            let enemiesLeft = 0;
+            const leftoverDetails = [];
+            
+            for (const t of oldRoom.ecs.turrets.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Turret(hp:${t.hp})`); }
+            for (const t of oldRoom.ecs.tanks.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Tank(hp:${t.hp})`); }
+            for (const f of oldRoom.ecs.flyingEnemies.values()) if (f.hp !== undefined && f.hp > 0) { enemiesLeft++; leftoverDetails.push(`Flying(hp:${f.hp})`); }
+            
+            if (enemiesLeft > 0) {
+                console.log(`[DEBUG] Level ${pLevel} 100% check failed. Enemies remaining: ${enemiesLeft}`);
+                console.log(`[DEBUG] Details:`, leftoverDetails.join(', '));
+            }
+
             if (enemiesLeft === 0) {
                 rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
             }
@@ -116,12 +128,28 @@ function handleTransition(id: string) {
             const ctxSneak = buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, p.uuid, rSneak.isNewPb, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0));
             const ctxEco = buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, p.uuid, rEco.isNewPb, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0));
 
-            const boards = [
-                { title: `FASTEST (${mode})`, entries: ctxFastest },
-                { title: `SNEAKIEST (${mode})`, entries: ctxSneak },
-                { title: `ECO-RUN (${mode})`, entries: ctxEco }
-            ];
-            if (rClear) boards.push({ title: `100% CLEARED (${mode})`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
+            const currentFastestStr = formatTimeMs(timeTaken) + ' | ' + String(p.score).padStart(6,'0');
+            const currentSneakStr = String(p.score).padStart(6,'0') + ' | ' + formatTimeMs(timeTaken);
+            const currentEcoStr = String(Math.floor(p.fuel)) + 'F | ' + formatTimeMs(timeTaken);
+
+            const boards = [];
+            
+            if (mode === 'MP') {
+                const sessionStats = [];
+                for (const [_, otherP] of oldRoom.ecs.players.entries()) {
+                    sessionStats.push({ 
+                        alias: otherP.alias, displayValue: `S:${otherP.score} | F:${Math.floor(otherP.fuel)}`, isMe: otherP.id === id, score: otherP.score
+                    });
+                }
+                sessionStats.sort((a,b) => b.score - a.score);
+                const sessionEntries = sessionStats.map((sr) => ({ rankLabel: `-`, alias: sr.alias, displayValue: sr.displayValue, isMe: sr.isMe, isNewPb: false }));
+                boards.push({ title: `CURRENT MATCH STATUS`, entries: sessionEntries });
+            }
+
+            boards.push({ title: `FASTEST (${mode})`, subtitle: `THIS RUN: ${currentFastestStr}`, entries: ctxFastest });
+            boards.push({ title: `SNEAKIEST (${mode})`, subtitle: `THIS RUN: ${currentSneakStr}`, entries: ctxSneak });
+            boards.push({ title: `ECO-RUN (${mode})`, subtitle: `THIS RUN: ${currentEcoStr}`, entries: ctxEco });
+            if (rClear) boards.push({ title: `100% CLEARED (${mode})`, subtitle: `THIS RUN: ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
             
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
 
