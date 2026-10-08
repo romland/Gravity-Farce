@@ -90,7 +90,7 @@ export function sysCargo(ecs: Registry, room: Room) {
             if (!cargo.active) continue;
             const ct = ecs.transforms.get(ce)!;
 
-            if (Math.hypot(pt.x - ct.x, pt.y - ct.y) < 34 && currentWeight + cargo.weight <= 3) {
+            if (p.isLanded && Math.hypot(pt.x - ct.x, pt.y - ct.y) < 48 && currentWeight + cargo.weight <= 3) {
                 cargo.active = false;
                 cargo.heldBy = p.id;
                 p.cargoStack.push(cargo.typeId);

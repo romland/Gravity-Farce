@@ -33,7 +33,7 @@ export function sysPowerups(ecs: Registry, room: Room) {
             if (!powerup.active) continue;
             const put = ecs.transforms.get(pue)!;
 
-            if (Math.hypot(pt.x - put.x, pt.y - put.y) < 34) {
+            if (p.isLanded && Math.hypot(pt.x - put.x, pt.y - put.y) < 48) {
                 powerup.active = false;
                 if (powerup.typeId === 0xD0) {
                     p.fuel = Math.min(99999, (p.fuel || 0) + powerup.charges);
