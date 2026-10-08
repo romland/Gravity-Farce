@@ -10,6 +10,14 @@ I deviated pretty strongly on one part: I did not really fancy the split-screen.
 networked instead. The server is authorative, so it should be hard(er) to cheat (piss people off -- sigh, why, people, why, just enjoy!).
 But eh anti-cheating is a billion-dollar industry so, yeah... 
 
+### Records and highscores
+The best part about Gravity Force to me was multi-player. I think almost everyone will agree with that sentiment.
+Bummer was you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
+it was nice to give someone a punch on the arm when they were being an ass (read: won). Anyway, I digress.  
+
+This version of GF keeps track of all kinds of high-scores and records globally. You can now do a 
+single player race and compete that way, should you want to. But obviously, multi-player is the way to go! `:D`
+
 ### Levels and Data
 All levels (multi- and single player) and (ideas of) power-ups and similar structures are
 ported over from the original game. For instance, all enemies and turrets should move pretty 
