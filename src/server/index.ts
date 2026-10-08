@@ -7,10 +7,21 @@ import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
 import { RecordManager } from './core/records';
+import { authDB } from './core/auth';
 
 const app = express();
+app.use(express.json()); // Required for JSON POST parsing
 const server = http.createServer(app);
 const io = new Server(server);
+
+app.post('/api/auth', (req, res) => {
+    const { alias, uuid } = req.body || {};
+    res.json(authDB.validateOrClaim(alias || '', uuid || ''));
+});
+
+app.get('/api/auth/random', (req, res) => {
+    res.json({ alias: authDB.generateRandom() });
+});
 
 app.use(express.static('./src/client'));
 
@@ -84,15 +95,26 @@ function handleTransition(id: string) {
 }
 
 io.on('connection', (socket) => {
-    console.log('Player connected:', socket.id);
     
     const auth = socket.handshake.auth || {};
+    let alias = auth.alias || 'UNK';
+    const uuid = auth.uuid || socket.id;
+
+    console.log(`Pilot "${alias}" connected:`, socket.id);
+
+    // Fail-safe: If they bypassed the API, force validate on the socket connection
+    const verify = authDB.validateOrClaim(alias, uuid);
+    if (!verify.success) {
+        alias = authDB.generateRandom(); // Assign a random alias if they tried to steal one
+        authDB.validateOrClaim(alias, uuid);
+    }
+
     const stats: PlayerStats = {
         score: 0,
         fuel: 76464,
         doubleShotAmmo: 0,
-        uuid: auth.uuid || socket.id,
-        alias: auth.alias || 'UNK'
+        uuid: uuid,
+        alias: alias
     };
     playerSessionStats.set(socket.id, stats);
 

@@ -94,6 +94,14 @@
     
     <div id="leaderboard-modal"><div id="leaderboard-content"></div><button class="btn-close" onclick="document.getElementById('leaderboard-modal').style.display='none'">DISMISS</button></div>
 
+    <div id="login-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 20, 25, 0.9); backdrop-filter: blur(10px); border: 2px solid #4facfe; border-radius: 12px; width: 300px; display: none; flex-direction: column; z-index: 200; box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 20px;">
+        <div class="board-title">PILOT REGISTRATION</div>
+        <input type="text" id="alias-input" maxlength="3" style="background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 24px; padding: 10px; margin-bottom: 10px; font-family: monospace; font-weight: bold; outline: none;" placeholder="AAA">
+        <div id="login-error" style="color: #e74c3c; text-align: center; margin-bottom: 10px; font-size: 12px; height: 14px; font-weight: bold;"></div>
+        <button id="btn-login-submit" class="btn-close" style="margin-bottom: 10px;">CONNECT</button>
+        <button id="btn-login-random" class="btn-close" style="background: #2c3e50; color: #fff;">RANDOM ALIAS</button>
+    </div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -119,12 +127,8 @@
             localStorage.setItem('gf_uuid', myUuid);
         }
         let myAlias = localStorage.getItem('gf_alias');
-        if (!myAlias) {
-            myAlias = (prompt("Enter your 3-letter Arcade Alias:", "AAA") || "AAA").substring(0, 3).toUpperCase();
-            localStorage.setItem('gf_alias', myAlias);
-        }
 
-        const socket = io({ autoConnect: false, auth: { uuid: myUuid, alias: myAlias } });
+        const socket = io({ autoConnect: false });
         let myId = null;
         let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [], cargos: [], powerups: [] };
         let renderState = { players: {} }; 
@@ -890,6 +894,47 @@
             ctx.restore();
         }
 
+        const loginModal = document.getElementById('login-modal');
+        const aliasInput = document.getElementById('alias-input');
+        const loginError = document.getElementById('login-error');
+        
+        async function attemptLogin(alias) {
+            aliasInput.value = alias;
+            try {
+                const res = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alias, uuid: myUuid })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    localStorage.setItem('gf_alias', alias);
+                    myAlias = alias;
+                    loginModal.style.display = 'none';
+                    document.getElementById('loading-screen').style.display = 'none';
+                    
+                    // Launch the Socket!
+                    socket.auth = { uuid: myUuid, alias: myAlias };
+                    socket.connect();
+                    requestAnimationFrame(gameLoop);
+                } else {
+                    loginError.innerText = data.message;
+                    document.getElementById('loading-screen').style.display = 'none';
+                    loginModal.style.display = 'flex';
+                }
+            } catch (e) {
+                loginError.innerText = "NETWORK ERROR";
+                document.getElementById('loading-screen').style.display = 'none';
+                loginModal.style.display = 'flex';
+            }
+        }
+
+        document.getElementById('btn-login-submit').onclick = () => attemptLogin(aliasInput.value);
+        document.getElementById('btn-login-random').onclick = async () => {
+            try { const res = await fetch('/api/auth/random'); const data = await res.json(); aliasInput.value = data.alias; loginError.innerText = ''; } catch (e) {}
+        };
+        aliasInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') attemptLogin(aliasInput.value); });
+
         async function bootstrapGame() {
             const loaderImg = document.getElementById('loader-img');
             if (loaderImg.complete) loaderImg.style.display = 'block';
@@ -900,9 +945,13 @@
                     // '0xE4': 'assets/enemies/e4-enemy.webp',
                     '0xE5': 'assets/enemies/e5-enemy-384x256.webp'
                 });
-                document.getElementById('loading-screen').style.display = 'none';
-                socket.connect();
-                requestAnimationFrame(gameLoop);
+                
+                if (myAlias) {
+                    await attemptLogin(myAlias);
+                } else {
+                    document.getElementById('loading-screen').style.display = 'none';
+                    loginModal.style.display = 'flex';
+                }
             } catch (err) {
                 document.getElementById('loading-text').innerText = 'ASSET MOUNT FAILURE';
                 console.error('Asset load error:', err);
