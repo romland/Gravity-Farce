@@ -70,12 +70,13 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
             const p = room.ecs.players.get(e)!;
             pType = p.type;
             stats = {
-                    score: p.score,
-                    doubleShotAmmo: p.doubleShotAmmo,
-                    uuid: p.uuid,
+                score: p.score,
+                doubleShotAmmo: p.doubleShotAmmo,
+                uuid: p.uuid,
                 alias: p.alias,
-                    shipType: p.type,
-                    shotsFired: p.shotsFired
+                shipType: p.type,
+                shotsFired: p.shotsFired,
+                fuel: p.fuel
             };
             playerSessionStats.set(id, stats);
             room.removePlayer(id);
@@ -169,10 +170,10 @@ function handleTransition(id: string) {
                         { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
                     ];
 
-                boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', entries: runSummaryEntries });
-                
+                boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', description: '', entries: runSummaryEntries });
+
                 if (enemiesLeft > 0) {
-                    boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c' });
+                    boards.push({ title: '', description: '', isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c', entries: [] } as any);
                 }
                 oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
             } else {
@@ -189,7 +190,8 @@ function handleTransition(id: string) {
                 uuid: p.uuid,
                 alias: p.alias,
                 shipType: p.type,
-                shotsFired: p.shotsFired
+                shotsFired: p.shotsFired,
+                fuel: p.fuel
             });
             oldRoom.removePlayer(id);
         }
