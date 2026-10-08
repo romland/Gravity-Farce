@@ -9,14 +9,30 @@ import type { PlayerStats } from './core/types';
 import { recordDB, formatTimeMs, buildLeaderboardContext } from './core/records';
 import { authDB } from './core/auth';
 
+export const SERVER_CONFIG = {
+    debugMode: process.env.NODE_ENV !== 'production',
+    lethalRacingEnemies: false, // Configurable toggle for race course hazards
+    raceBumpModifier: 0.6, // Modifier for the bump force
+    port: parseInt(process.env.PORT || '10000', 10),
+    tickRate: 60, // Server updates per second
+    useClassicPhysics: true, // Amiga purist mode vs modern
+    allowNewRegistrations: true, // If false, only known players can connect
+    requireManualApproval: false, // If true, new players must be set to 'approved: true' in JSON
+    maxPlayers: 50 // Global connection cap
+};
+
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.post('/api/auth', (req, res) => {
+    if (playerSessionStats.size >= SERVER_CONFIG.maxPlayers) {
+        return res.json({ success: false, message: `SERVER AT CAPACITY (${SERVER_CONFIG.maxPlayers}/${SERVER_CONFIG.maxPlayers})` });
+    }    
     const { alias, uuid } = req.body || {};
-    res.json(authDB.validateOrClaim(alias || '', uuid || ''));
+    res.json(authDB.validateOrClaim(alias || '', uuid || '', SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval));
+   
 });
 
 app.get('/api/auth/random', (req, res) => {
@@ -24,12 +40,6 @@ app.get('/api/auth/random', (req, res) => {
 });
 
 app.use(express.static('./src/client'));
-
-export const SERVER_CONFIG = {
-    debugMode: process.env.NODE_ENV !== 'production',
-    lethalRacingEnemies: false, // Configurable toggle for race course hazards
-    raceBumpModifier: 0.6 // Modifier for the bump force
-};
 
 const rooms = new Map<number, Room>();
 
@@ -186,8 +196,15 @@ function handleTransition(id: string) {
     }
 }
 
+// Anti-DDoS Connection Gate: Reject connections early before allocating resources
+io.use((socket, next) => {
+    if (playerSessionStats.size >= SERVER_CONFIG.maxPlayers) {
+        return next(new Error('FULL'));
+    }
+    next();
+});
+
 io.on('connection', (socket) => {
-    
     const auth = socket.handshake.auth || {};
     let alias = auth.alias || 'UNK';
     const uuid = auth.uuid || socket.id;
@@ -195,13 +212,18 @@ io.on('connection', (socket) => {
     console.log(`Pilot "${alias}" connected:`, socket.id);
 
     // Fail-safe: If they bypassed the API, force validate on the socket connection
-    const verify = authDB.validateOrClaim(alias, uuid);
+    const verify = authDB.validateOrClaim(alias, uuid, SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval);
     if (!verify.success) {
-        alias = authDB.generateRandom(); // Assign a random alias if they tried to steal one
-        authDB.validateOrClaim(alias, uuid);
+        if (SERVER_CONFIG.allowNewRegistrations && !SERVER_CONFIG.requireManualApproval) {
+            alias = authDB.generateRandom(); // Assign a random alias if they tried to steal one
+            authDB.validateOrClaim(alias, uuid, true, false);
+        } else {
+            socket.disconnect(); // Kick unauthorized bypass attempts
+            return;
+        }
     }
 
-    const useClassicPhysics = true;
+    const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
     const stats: PlayerStats = {
         score: 0,
         fuel: 76464,
@@ -320,6 +342,6 @@ setInterval(() => {
     }
 
     profiler.end();
-}, 1000 / 60);
+}, 1000 / SERVER_CONFIG.tickRate);
 
 server.listen(10000, () => console.log('TS Server running on http://localhost:10000'));
