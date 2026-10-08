@@ -40,7 +40,7 @@ export class RecordManager {
     private dbPath: string;
     private db: Record<string, Leaderboard> = {};
 
-    constructor(filename: string = 'server_records.json') {
+    constructor(filename: string = 'data/server_records.json') {
         this.dbPath = path.resolve(process.cwd(), filename);
         this.load();
     }
@@ -178,6 +178,10 @@ export class RecordManager {
     }
 
     private save() {
+        const dir = path.dirname(this.dbPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         fs.writeFileSync(this.dbPath, JSON.stringify(this.db, null, 2));
     }
 }

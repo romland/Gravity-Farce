@@ -8,7 +8,7 @@ export class AuthManager {
     private dbPath: string;
     private aliases: Record<string, { uuid: string, approved: boolean }> = {}; // Mapping of ALIAS -> Object
 
-    constructor(filename: string = 'server_aliases.json') {
+    constructor(filename: string = 'data/server_aliases.json') {
         this.dbPath = path.resolve(process.cwd(), filename);
         this.load();
     }
@@ -86,6 +86,10 @@ export class AuthManager {
     }
 
     private save() {
+        const dir = path.dirname(this.dbPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         fs.writeFileSync(this.dbPath, JSON.stringify(this.aliases, null, 2));
     }
 }

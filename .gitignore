@@ -9,8 +9,9 @@ org
 .vscode
 TODO.txt
 c.diff
-server_records.json
-server_aliases.json
+data/server_records.json
+data/server_aliases.json
+data/server_config.json
 dist
 release
 gf-prod-release.tar.gz

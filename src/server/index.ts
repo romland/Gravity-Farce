@@ -8,18 +8,7 @@ import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
 import { recordDB, formatTimeMs, buildLeaderboardContext } from './core/records';
 import { authDB } from './core/auth';
-
-export const SERVER_CONFIG = {
-    debugMode: process.env.NODE_ENV !== 'production',
-    lethalRacingEnemies: false, // Configurable toggle for race course hazards
-    raceBumpModifier: 0.6, // Modifier for the bump force
-    port: parseInt(process.env.PORT || '10000', 10),
-    tickRate: 60, // Server updates per second
-    useClassicPhysics: true, // Amiga purist mode vs modern
-    allowNewRegistrations: true, // If false, only known players can connect
-    requireManualApproval: false, // If true, new players must be set to 'approved: true' in JSON
-    maxPlayers: 50 // Global connection cap
-};
+import { SERVER_CONFIG } from './core/config';
 
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
@@ -346,4 +335,4 @@ setInterval(() => {
     profiler.end();
 }, 1000 / SERVER_CONFIG.tickRate);
 
-server.listen(10000, () => console.log('TS Server running on http://localhost:10000'));
+server.listen(SERVER_CONFIG.port, () => console.log(`TS Server running on http://localhost:${SERVER_CONFIG.port}`));
