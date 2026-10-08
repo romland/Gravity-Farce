@@ -123,7 +123,7 @@ export class Room {
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
                 if (oldP) {
-                    spawnStats = { score: oldP.score, race: oldP.race, uuid: oldP.uuid, alias: oldP.alias, joinedAt: oldP.joinedAt }; // Keep score, race, identity, and level timer
+                        spawnStats = { score: oldP.score, race: oldP.race, uuid: oldP.uuid, alias: oldP.alias, joinedAt: oldP.joinedAt, shotsFired: oldP.shotsFired }; // Keep score, race, identity, level timer, and shots
                 }
                 this.ecs.destroy(existing);
             }

@@ -34,7 +34,11 @@ When a player completes a single-player sector, three distinct records are pushe
    * `secondaryValue`: Time (Lowest time wins if scores tie)
 3. **Cleared (100% Kills):** `sort: 'asc'`
    * Only logged if `enemiesRemaining === 0`. Evaluates purely by Time (`value`).
-4. **Eco-Run:** `sort: 'desc_asc'`
+4. **Sharpshooter (100% Kills):** `sort: 'asc_asc'`
+   * Only logged if `enemiesRemaining === 0`.
+   * `value`: Fewest bullets fired (Lowest wins).
+   * `secondaryValue`: Time (Lowest time wins tiebreakers).
+5. **Eco-Run:** `sort: 'desc_asc'`
    * `value`: Fuel remaining (Highest fuel wins).
    * `secondaryValue`: Time (Lowest time wins tiebreakers).
 

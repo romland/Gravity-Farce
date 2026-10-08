@@ -53,6 +53,7 @@ export interface Player {
     unloadTimer: number;
     doubleShotAmmo: number;
     fuel: number;
+    shotsFired: number;
     advancing?: boolean;
     race?: PlayerRaceState;
 }

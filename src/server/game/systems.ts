@@ -37,6 +37,7 @@ export function sysWeapons(ecs: Registry) {
                  spawnBullet(ecs, noseX + perpX, noseY + perpY, bulletVx, bulletVy, true, p.id);
                  spawnBullet(ecs, noseX - perpX, noseY - perpY, bulletVx, bulletVy, true, p.id);
                  p.doubleShotAmmo--;
+                 p.shotsFired += 2;
              } else {
                  spawnBullet(
                      ecs, 
@@ -47,6 +48,7 @@ export function sysWeapons(ecs: Registry) {
                      true, 
                      p.id
                  );
+                 p.shotsFired++;
              }
             
             // Auto-fire is deliberately slow. Fast firing requires manual pressing.

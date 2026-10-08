@@ -32,4 +32,5 @@ export interface PlayerStats {
     alias?: string;
     joinedAt?: number;
     shipType?: 'classic' | 'modern';
+    shotsFired?: number;
 }

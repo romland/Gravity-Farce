@@ -49,7 +49,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     if (!socket) return;
     
     const pLevel = playerRooms.get(id) ?? 0;
-    let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK' };
+        let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0 };
     let pType: 'classic'|'modern' = stats.shipType || 'modern';
     
     for (const room of rooms.values()) {
@@ -62,7 +62,8 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
                     doubleShotAmmo: p.doubleShotAmmo,
                     uuid: p.uuid,
                 alias: p.alias,
-                shipType: p.type
+                    shipType: p.type,
+                    shotsFired: p.shotsFired
             };
             playerSessionStats.set(id, stats);
             room.removePlayer(id);
@@ -107,6 +108,7 @@ function handleTransition(id: string) {
             const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
 
             let rClear = null;
+            let rSharpshooter = null;
             
             let enemiesLeft = 0;
             const leftoverDetails = [];
@@ -122,6 +124,7 @@ function handleTransition(id: string) {
 
             if (enemiesLeft === 0) {
                 rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
+                rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
             }
 
             const ctxFastest = buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, p.uuid, rFast.isNewPb, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0'));
@@ -150,6 +153,7 @@ function handleTransition(id: string) {
             boards.push({ title: `SNEAKIEST (${mode})`, subtitle: `THIS RUN: ${currentSneakStr}`, entries: ctxSneak });
             boards.push({ title: `ECO-RUN (${mode})`, subtitle: `THIS RUN: ${currentEcoStr}`, entries: ctxEco });
             if (rClear) boards.push({ title: `100% CLEARED (${mode})`, subtitle: `THIS RUN: ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
+            if (rSharpshooter) boards.push({ title: `SHARPSHOOTER (${mode})`, subtitle: `THIS RUN: ${p.shotsFired} SHOTS | ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, p.uuid, rSharpshooter.isNewPb, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) });
             
             oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
 
@@ -158,7 +162,8 @@ function handleTransition(id: string) {
                 doubleShotAmmo: p.doubleShotAmmo,
                 uuid: p.uuid,
                 alias: p.alias,
-                shipType: p.type
+                shipType: p.type,
+                shotsFired: p.shotsFired
             });
             oldRoom.removePlayer(id);
         }
