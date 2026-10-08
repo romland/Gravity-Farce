@@ -46,7 +46,6 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
                 pType = p.type;
                 playerSessionStats.set(id, {
                     score: p.score,
-                    fuel: p.fuel,
                     doubleShotAmmo: p.doubleShotAmmo
                 });
             room.removePlayer(id);
