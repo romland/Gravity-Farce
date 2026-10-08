@@ -1,6 +1,6 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { killPlayer } from './combat';
+import { killPlayer, bumpPlayer } from './combat';
 
 // Authentic Amiga Homing Missile System (Reverse-engineered from $00031570 / $00036188)
 export interface HomingLauncherSpec {
@@ -71,7 +71,11 @@ export function sysHomingMissiles(ecs: Registry, room: Room) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(missile.x - pt.x, missile.y - pt.y) < 16) {
-                killPlayer(ecs, pe);
+                if (room.category === 'race' && !room.isLethalRacing) {
+                    bumpPlayer(ecs, room, pe, missile.x, missile.y, 5.0);
+                } else {
+                    killPlayer(ecs, pe);
+                }
                 missile.active = false;
                 ecs.destroy(e);
                 ecs.events.push({ type: 'turret_explosion', x: missile.x, y: missile.y });

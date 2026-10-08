@@ -33,6 +33,23 @@ export function spawnTurret(ecs: Registry, x: number, y: number, turretType: num
     return e;
 }
 
+export function bumpPlayer(ecs: Registry, room: Room, pe: Entity, sourceX: number, sourceY: number, force: number = 5.0) {
+    const t = ecs.transforms.get(pe);
+    const v = ecs.velocities.get(pe);
+    if (!t || !v) return;
+
+    const dx = t.x - sourceX;
+    const dy = t.y - sourceY;
+    const dist = Math.hypot(dx, dy) || 1;
+    
+    const finalForce = force * room.raceBumpModifier;
+    v.vx += (dx / dist) * finalForce;
+    v.vy += (dy / dist) * finalForce;
+
+    ecs.events.push({ type: 'poof', x: t.x, y: t.y });
+    ecs.events.push({ type: 'sound', soundId: 10, x: t.x, y: t.y }); // Bonk sound
+}
+
 function destroyTurretTile(room: Room, tileX: number, tileY: number) {
     if (room.level && room.level.rawMap && room.level.rawMap[tileY] && room.level.rawMap[tileY][tileX] !== undefined) {
         room.level.rawMap[tileY][tileX] = 0x00;
@@ -49,11 +66,15 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
             if (!turret.active) continue;
             const tt = ecs.transforms.get(te)!;
             if (Math.hypot(pt.x - tt.x, pt.y - tt.y) < 18) {
-                killPlayer(ecs, e);
-                turret.hp = 0;
-                turret.active = false;
-                ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
-                destroyTurretTile(room, turret.tileX, turret.tileY);
+                if (room.category === 'race' && !room.isLethalRacing) {
+                    bumpPlayer(ecs, room, e, tt.x, tt.y, 7.0); // Heavy repulsion from solid turret
+                } else {
+                    killPlayer(ecs, e);
+                    turret.hp = 0;
+                    turret.active = false;
+                    ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
+                    destroyTurretTile(room, turret.tileX, turret.tileY);
+                }
             }
         }
     }
@@ -129,7 +150,11 @@ export function sysBullets(ecs: Registry, room: Room) {
             if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {
                 if (b.ownerId !== p.id || b.life < 390) {
                     hit = true;
-                    killPlayer(ecs, pe);
+                    if (room.category === 'race' && !room.isLethalRacing) {
+                        bumpPlayer(ecs, room, pe, t.x, t.y, 4.0); // Lighter bullet bonk
+                    } else {
+                        killPlayer(ecs, pe);
+                    }
                 }
             }
         }

@@ -54,6 +54,8 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x2C: { id: 0x2C, description: "Tree", known: true },
     0x2D: { id: 0x2D, description: "Tree", known: true },
     0x2E: { id: 0x2E, description: "Tree", known: true },
+    0x2F: { id: 0x2F, description: "Tree", known: true },
+    0x30: { id: 0x30, description: "Tree", known: true },
     0x31: { id: 0x31, description: "Tree part", known: true },
     0x32: { id: 0x32, description: "Enemy: Tank path node 0", entity: { type: 'path_node', props: { index: 0 } }, known: true },
     0x33: { id: 0x33, description: "Enemy: Tank path node 1", entity: { type: 'path_node', props: { index: 1 } }, known: true },
@@ -107,8 +109,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x6D: { id: 0x6D, description: "Decorative base", known: true },
     0x6E: { id: 0x6E, description: "Decorative base", known: true },
 
-    // 0x70 left-wall magnets / gravity well
-    // 0xCE magnet trigger zone
+    0x6F: { id: 0x6F, description: "Gravity Well Graphic Left Side (pulls right)", known: true },
+    0x70: { id: 0x70, description: "Gravity Well Graphic Right Side (pulls left)", known: true },
+
+    // assuming up and down wells here then
 
     0x73: { id: 0x73, description: "bottom thin rock?", known: true },
     0x74: { id: 0x74, description: "vertical left thin rock", known: true },
@@ -121,8 +125,11 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x7C: { id: 0x7C, description: "Extra base window?", known: true },
     0x7D: { id: 0x7D, description: "Blinking pole", known: true },
     0x7E: { id: 0x7E, description: 'Blinking pole', known: true },
-    0x82: { id: 0x82, description: 'blinking pole bottom (smaller than the other?)', known: true },
-    0x83: { id: 0x83, description: 'blinking pole top (smaller than the other?)', known: true },
+    0x7F: { id: 0x7F, description: "Blinking pole (empty right side)", known: true },
+    0x80: { id: 0x80, description: 'Blinking pole (empty right side)', known: true },
+    0x81: { id: 0x81, description: 'Blinking pole (empty left side)', known: true },
+    0x82: { id: 0x82, description: 'Blinking pole bottom (smaller than the other?)', known: true },
+    0x83: { id: 0x83, description: 'Blinking pole top (smaller than the other?)', known: true },
     0x86: { id: 0x86, description: 'Teal decorative boxes/barrels', known: true },
     0x87: { id: 0x87, description: 'Teal decorative boxes/barrels', known: true },
     0x88: { id: 0x88, description: 'Teal decorative boxes/barrels', known: true },
@@ -130,15 +137,6 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x8A: { id: 0x8A, description: 'Teal decorative boxes/barrels', known: true },
     0x8B: { id: 0x8B, description: 'Teal decorative boxes/barrels', known: true },
     0x8F: { id: 0x8F, description: 'Teal decorative boxes/barrels', known: true },
-
-    // // 0x00: { id: 0x00, description: '', known: true },
-    // 0xaf: { id: 0xaf, description: 'turret pointing up, shooting three bullets in cone', entity: { type: 'turret', }, known: true },
-    // 0xb0: { id: 0xb0, description: 'turret pointing up, shooting four bullets in cone', entity: { type: 'turret', }, known: true },
-    // 0xb2: { id: 0xb2, description: 'turret pointing up shooting straight up', entity: { type: 'turret', }, known: true },
-    // // b5 (lvl 49) some turret
-    // 0xb7: { id: 0xb7, description: 'turret pointing east shooting straight east', entity: { type: 'turret', }, known: true },
-    // 0xba: { id: 0xba, description: 'turret pointing up shooting 5 directions (half circle) sideways/upwards (9 or 10 hits needed) -- seen on e.g. lvl 49', entity: { type: 'turret', }, known: true },
-    // Show turret tile codes in client for now -- some are not right
     0xae: { id: 0xae, description: 'turret 4-way cone variant (type 4)', entity: { type: 'turret', props: { turretType: 0xAE } }, known: false },
     0xaf: { id: 0xaf, description: 'turret pointing up, 3-way cone (type 1)', entity: { type: 'turret', props: { turretType: 0xAF } }, known: false },
     0xb0: { id: 0xb0, description: 'turret pointing up, 4-way cone (type 3)', entity: { type: 'turret', props: { turretType: 0xB0 } }, known: false },
@@ -154,15 +152,6 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xba: { id: 0xba, description: 'turret pointing up, 5-way half-circle fan (type 13)', entity: { type: 'turret', props: { turretType: 0xBA } }, known: false },
     0xbb: { id: 0xbb, description: 'turret pointing up, heavy 3-way cone (type 14)', entity: { type: 'turret', props: { turretType: 0xBB } }, known: false },
     0xbc: { id: 0xbc, description: 'turret pointing up, heavy 3-way cone variant (type 15)', entity: { type: 'turret', props: { turretType: 0xBC } }, known: false },
-
-    // 0xBD: { id: 0xBD, description: 'Solid Lethal Walls', solid: true, known: true },
-    // // 0x00: { id: 0x00, description: '', known: true },
-    // 0xBE: { id: 0xBE, description: 'trigger area for when (af?) turrets start shooting?', known: true },
-    // 0xBF: { id: 0xBF, description: 'trigger area for when (b0?) turrets start shooting?', known: true },
-    // 0xC1: { id: 0xC1, description: 'trigger area for when (b2?) turrets start shooting?', known: true },
-    // // c4 (lvl49) some turret trigger area
-    // 0xC6: { id: 0xC6, description: 'trigger area for when (b7?) turrets start shooting ... maybe?', known: true },
-    // 0xC9: { id: 0xC9, description: 'trigger area for when (ba?) turrets start shooting ... maybe?', known: true },
     0xBD: { id: 0xBD, description: "Trigger zone for turret 0xAE (3-way cone variant)", known: true },
     0xBE: { id: 0xBE, description: "Trigger zone for turret 0xAF (3-way cone up)", known: true },
     0xBF: { id: 0xBF, description: "Trigger zone for turret 0xB0 (4-way cone up)", known: true },
@@ -179,10 +168,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xCA: { id: 0xCA, description: "Trigger zone for turret 0xBB (heavy 3-way cone)", known: true },
     0xCB: { id: 0xCB, description: "Trigger zone for turret 0xBC (heavy 3-way cone variant)", known: true },
 
-    0xCC: { id: 0xCC, description: 'Gravity Well (Pulls RIGHT)', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
-    0xCD: { id: 0xCD, description: 'Gravity Well (Pulls DOWN)', entity: { type: 'trigger', props: { id: 0xCD } }, known: true },
-    0xCE: { id: 0xCE, description: 'Gravity Well (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
-    0xCF: { id: 0xCF, description: 'Gravity Well (Pulls UP)', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
+    0xCC: { id: 0xCC, description: 'Gravity Well Zone (Pulls RIGHT)', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
+    0xCD: { id: 0xCD, description: 'Gravity Well Zone (Pulls DOWN)', entity: { type: 'trigger', props: { id: 0xCD } }, known: true },
+    0xCE: { id: 0xCE, description: 'Gravity Well Zone (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
+    0xCF: { id: 0xCF, description: 'Gravity Well Zone (Pulls UP)', entity: { type: 'trigger', props: { id: 0xCF } }, known: true },
     0xD0: { id: 0xD0, description: 'Powerup: Fuel Pod (+50,000 Fuel)', entity: { type: 'powerup', props: { typeId: 0xD0 } }, known: true },
     0xD1: { id: 0xD1, description: 'Pickup package (Small)', entity: { type: 'cargo', props: { typeId: 0xD1 } }, known: true },
     0xD2: { id: 0xD2, description: 'Pickup package (Large)', entity: { type: 'cargo', props: { typeId: 0xD2 } }, known: true },

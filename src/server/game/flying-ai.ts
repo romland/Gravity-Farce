@@ -1,6 +1,6 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { killPlayer, spawnBullet } from './combat';
+import { killPlayer, spawnBullet, bumpPlayer } from './combat';
 
 const TILE_SIZE = 32;
 
@@ -182,7 +182,11 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe);
             if (pt && Math.hypot(pt.x - t.x, pt.y - t.y) < 18) {
-                killPlayer(ecs, pe);
+                if (room.category === 'race' && !room.isLethalRacing) {
+                    bumpPlayer(ecs, room, pe, t.x, t.y, 6.0);
+                } else {
+                    killPlayer(ecs, pe);
+                }
             }
         }
     }

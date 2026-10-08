@@ -1,6 +1,6 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { killPlayer } from './combat';
+import { killPlayer, bumpPlayer } from './combat';
 import { spawnBullet } from './combat';
 
 const TANK_SPEED = 1.0; // Pixels per frame
@@ -57,7 +57,7 @@ export function sysTanks(ecs: Registry, room: Room) {
         }
 
         // Authoritative Anti-Cheat: Server decides if a tank runs over a player
-        checkTankPlayerCollisions(ecs, t.x, t.y);
+        checkTankPlayerCollisions(ecs, room, t.x, t.y);
         
         // TODO: REVERSE ENGINEER AUTHENTIC TANK SHOOTING RNG FROM 68K ASSEMBLY.
         // Placeholder implementation until we find the real trigger mechanism.
@@ -98,12 +98,16 @@ function isPathNode(map: number[][], x: number, y: number): boolean {
     return tile !== undefined && tile >= 0x32 && tile <= 0x3A;
 }
 
-function checkTankPlayerCollisions(ecs: Registry, tx: number, ty: number) {
+function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: number) {
     for (const [pe, p] of ecs.players.entries()) {
         if (p.isDead) continue;
         const pt = ecs.transforms.get(pe);
         if (pt && Math.hypot(pt.x - tx, pt.y - ty) < 16) {
-            killPlayer(ecs, pe);
+            if (room.category === 'race' && !room.isLethalRacing) {
+                bumpPlayer(ecs, room, pe, tx, ty, 6.0);
+            } else {
+                killPlayer(ecs, pe);
+            }
         }
     }
 }

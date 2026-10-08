@@ -31,7 +31,13 @@ original game. For instance, all enemies and turrets should move pretty much exa
 in the original game. There is documentation on some of the funky stuff in the `doc` dir.
 
 ### Not really a port
-It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I think would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. I had fun creating it. And yeah, _creating things_ was always the fun part, the tools used were always rather secondary.
+It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I think would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
+
+**Some _deliberate_ and _blatant_ tweaks**  
+
+- Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies`.
+
+I had fun creating it. And yeah, _creating things_ was always the fun part, the tools used were always rather secondary.
 
 ### Amiga
 Oh how I miss thee. I have not used any emulator or used a real Amiga for decades.
@@ -41,7 +47,7 @@ SO familiar. Decades! Even small annoyances like memory R/W breakpoints that nev
 hit felt like a good friend. Almost comforting.
 
 ### The funkies
-I (and my best friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
+I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
 
 ### Run your own server
 ... todo ...

@@ -26,7 +26,9 @@ app.get('/api/auth/random', (req, res) => {
 app.use(express.static('./src/client'));
 
 export const SERVER_CONFIG = {
-    debugMode: process.env.NODE_ENV !== 'production'
+    debugMode: process.env.NODE_ENV !== 'production',
+    lethalRacingEnemies: false, // Configurable toggle for race course hazards
+    raceBumpModifier: 0.6 // Modifier for the bump force
 };
 
 const rooms = new Map<number, Room>();
@@ -39,7 +41,7 @@ const playerSessionStats = new Map<string, PlayerStats>();
 
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
-        rooms.set(index, new Room(index, getLevelData(index), io, handleTransition));
+        rooms.set(index, new Room(index, getLevelData(index), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier));
     }
     return rooms.get(index)!;
 }

@@ -14,9 +14,9 @@ export function getLevelCategory(index: number): LevelCategory {
         return 'mission';
     }
     
+    // Actually only two pure single player races.
+    // But! Multiplayer races can easily be single player too.
     if (SINGLEPLAYER_RACES.includes(index) || MULTIPLAYER_RACES.includes(index)) {
-        // Actually only two pure single player races.
-        // But! Multiplayer races can easily be single player too.
         return 'race';
     }
 
