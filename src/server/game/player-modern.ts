@@ -118,7 +118,7 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
             t.angle = -Math.PI / 2; // Snap perfectly upright
             v.angularVelocity = 0;
 
-            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0) {
+            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0 && room.category === 'mission') {
                 if (!p.advancing) {
                     p.advancing = true;
                     advancing = true; 

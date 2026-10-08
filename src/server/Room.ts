@@ -11,6 +11,8 @@ import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
 import { sysRacing } from './game/racing';
 import type { PlayerStats } from './core/types';
+import { getLevelCategory, type LevelCategory } from './levels';
+import { TILE_DICTIONARY } from './core/tiles';
 
 export class Room {
     public ecs = new Registry();
@@ -19,12 +21,15 @@ export class Room {
     private debugEnemyCounter = 0;
     public globalWaveTimer = 0;
     public activeClientIds = new Set<string>();
+    public category: LevelCategory;
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
+        this.category = getLevelCategory(levelIndex);
         this.spawnEntities();
+        this.printLevelStats();
     }
 
     tick(isPaused: boolean = false) {
@@ -110,6 +115,7 @@ export class Room {
             candidateSpots = [{ x: 100, y: 100 }]; // Failsafe
         }
 
+        let freeSpots = [];
         for (let pt of candidateSpots) {
             let clear = true;
             for (const [e, p] of this.ecs.players.entries()) {
@@ -120,12 +126,17 @@ export class Room {
                     }
                 }
             }
-            
-            if (clear) { 
-                chosenX = pt.x; 
-                chosenY = pt.y; 
-                break; 
-            }
+            if (clear) freeSpots.push(pt);
+        }
+
+        if (freeSpots.length > 0) {
+            chosenX = freeSpots[0].x;
+            chosenY = freeSpots[0].y;
+        } else if (candidateSpots.length > 1) {
+            // If all spots are blocked on a multi-spawn map, force a spawn instead of queuing
+            const spot = candidateSpots[Math.floor(Math.random() * candidateSpots.length)];
+            chosenX = spot.x;
+            chosenY = spot.y;
         }
 
         if (chosenX !== null) {
@@ -195,4 +206,54 @@ export class Room {
         this.spawnEntities();
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
     }    
+
+    private printLevelStats() {
+        if (!this.level.rawMap) return;
+
+        const counts: Record<number, number> = {};
+        for (let y = 0; y < this.level.rawMap.length; y++) {
+            for (let x = 0; x < this.level.rawMap[y].length; x++) {
+                const tile = this.level.rawMap[y][x];
+                counts[tile] = (counts[tile] || 0) + 1;
+            }
+        }
+
+        const formatCounts = (tiles: number[]) => {
+            const found = tiles.filter(t => counts[t]);
+            if (found.length === 0) return '0';
+            const total = found.reduce((sum, t) => sum + counts[t], 0);
+            const details = found.map(t => `0x${t.toString(16).toUpperCase().padStart(2, '0')}: ${counts[t]}`).join(', ');
+            return `${total} (${details})`;
+        };
+
+        const spawns: number[] = [];
+        const checkpoints: number[] = [];
+        const cargos: number[] = [];
+        const turrets: number[] = [];
+        const flying: number[] = [];
+        const tanks: number[] = [];
+        const powerups: number[] = [];
+
+        for (const [idStr, def] of Object.entries(TILE_DICTIONARY)) {
+            const id = parseInt(idStr, 10);
+            const type = def.entity?.type;
+            if (type === 'spawn') spawns.push(id);
+            else if (def.description.toLowerCase().includes('checkpoint')) checkpoints.push(id);
+            else if (type === 'cargo') cargos.push(id);
+            else if (type === 'turret') turrets.push(id);
+            else if (type === 'flying_enemy') flying.push(id);
+            else if (type === 'path_node' && def.entity?.props?.index === 0) tanks.push(id);
+            else if (type === 'powerup') powerups.push(id);
+        }
+
+        console.log(`\n=== LEVEL ${this.levelIndex} DIAGNOSTICS (Current Category: ${this.category}) ===`);
+        console.log(`- Spawns:         ${formatCounts(spawns)}`);
+        console.log(`- Checkpoints:    ${formatCounts(checkpoints)}`);
+        console.log(`- Cargos:         ${formatCounts(cargos)}`);
+        console.log(`- Turrets:        ${formatCounts(turrets)}`);
+        console.log(`- Flying Enemies: ${formatCounts(flying)}`);
+        console.log(`- Tanks (Nodes):  ${formatCounts(tanks)}`);
+        console.log(`- Powerups:       ${formatCounts(powerups)}`);
+        console.log(`========================================================\n`);
+    }
 }

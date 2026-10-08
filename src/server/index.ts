@@ -103,69 +103,73 @@ function handleTransition(id: string) {
             const mode = oldRoom.ecs.players.size > 1 ? 'MP' : 'SP';
             const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 });
             
-            const rFast = recordDB.submitRecord('sp_fastest', pLevel, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
-            const rSneak = recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
-            const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
+            if (oldRoom.category === 'mission') {
+                const rFast = recordDB.submitRecord('sp_fastest', pLevel, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
+                const rSneak = recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
+                const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
 
-            let rClear = null;
-            let rSharpshooter = null;
-            
-            let enemiesLeft = 0;
-            const leftoverDetails = [];
-            
-            for (const t of oldRoom.ecs.turrets.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Turret(hp:${t.hp})`); }
-            for (const t of oldRoom.ecs.tanks.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Tank(hp:${t.hp})`); }
-            for (const f of oldRoom.ecs.flyingEnemies.values()) if (f.hp !== undefined && f.hp > 0) { enemiesLeft++; leftoverDetails.push(`Flying(hp:${f.hp})`); }
-            
-            if (enemiesLeft > 0) {
-                console.log(`[DEBUG] Level ${pLevel} 100% check failed. Enemies remaining: ${enemiesLeft}`);
-                console.log(`[DEBUG] Details:`, leftoverDetails.join(', '));
-            }
+                let rClear = null;
+                let rSharpshooter = null;
+                
+                let enemiesLeft = 0;
+                const leftoverDetails = [];
+                
+                for (const t of oldRoom.ecs.turrets.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Turret(hp:${t.hp})`); }
+                for (const t of oldRoom.ecs.tanks.values()) if (t.hp !== undefined && t.hp > 0) { enemiesLeft++; leftoverDetails.push(`Tank(hp:${t.hp})`); }
+                for (const f of oldRoom.ecs.flyingEnemies.values()) if (f.hp !== undefined && f.hp > 0) { enemiesLeft++; leftoverDetails.push(`Flying(hp:${f.hp})`); }
+                
+                if (enemiesLeft > 0) {
+                    console.log(`[DEBUG] Level ${pLevel} 100% check failed. Enemies remaining: ${enemiesLeft}`);
+                    console.log(`[DEBUG] Details:`, leftoverDetails.join(', '));
+                }
 
-            if (enemiesLeft === 0) {
-                rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
-                rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
-            }
+                if (enemiesLeft === 0) {
+                    rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
+                    rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
+                }
 
-            const boards = getLeaderboardBoards(pLevel, mode, physicsHash, p.uuid, {
-                fast: rFast.isNewPb,
-                sneak: rSneak.isNewPb,
-                eco: rEco.isNewPb,
-                clear: rClear?.isNewPb ?? false,
-                sharpshooter: rSharpshooter?.isNewPb ?? false
-            }, {
-                fast: rFast.timestamp,
-                sneak: rSneak.timestamp,
-                eco: rEco.timestamp,
-                clear: rClear?.timestamp,
-                sharpshooter: rSharpshooter?.timestamp
-            });
+                const boards = getLeaderboardBoards(pLevel, mode, physicsHash, p.uuid, {
+                    fast: rFast.isNewPb,
+                    sneak: rSneak.isNewPb,
+                    eco: rEco.isNewPb,
+                    clear: rClear?.isNewPb ?? false,
+                    sharpshooter: rSharpshooter?.isNewPb ?? false
+                }, {
+                    fast: rFast.timestamp,
+                    sneak: rSneak.timestamp,
+                    eco: rEco.timestamp,
+                    clear: rClear?.timestamp,
+                    sharpshooter: rSharpshooter?.timestamp
+                });
 
-			const runSummaryEntries = mode === 'MP' ?
-				Array.from(oldRoom.ecs.players.entries()).map(([_, op]) => ({
-					rankLabel: op.id === id ? 'YOU' : 'PILOT',
-					alias: op.alias,
-					displayValue: `SCR:${op.score} | FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
-					isMe: op.id === id,
-					isNewPb: false
-				})) : [
-					{ rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
-					{ rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
-					{ rankLabel: 'FUEL', alias: 'FUEL LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
-					{ rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
-					{ rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
-				];
+                const runSummaryEntries = mode === 'MP' ?
+                    Array.from(oldRoom.ecs.players.entries()).map(([_, op]) => ({
+                        rankLabel: op.id === id ? 'YOU' : 'PILOT',
+                        alias: op.alias,
+                        displayValue: `SCR:${op.score} | FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
+                        isMe: op.id === id,
+                        isNewPb: false
+                    })) : [
+                        { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
+                        { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
+                        { rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
+                        { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
+                        { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
+                    ];
 
-            boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', entries: runSummaryEntries });
-            
-            if (enemiesLeft > 0) {
-                // (MISSED 100% CLEARED)
-                boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c' });
+                boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', entries: runSummaryEntries });
+                
+                if (enemiesLeft > 0) {
+                    boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c' });
+                }
+                oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
             } else {
-                // boards.push({ isFootnote: true, text: `NO SURVIVORS (100% CLEARED!)`, color: '#2ecc71' });
+                const summary = [
+                    { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
+                    { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false }
+                ];
+                oldRoom.emitToPlayer(p.id, 'show_leaderboard', [{ title: 'MATCH SUMMARY', entries: summary }], false);
             }
-
-            oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
 
             playerSessionStats.set(id, {
                 score: p.score,

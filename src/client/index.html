@@ -567,6 +567,15 @@
                 ctx.fill();
             }
             ctx.restore();
+
+                if (!isMe && p.alias) {
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+                    ctx.font = 'bold 10px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(p.alias, Math.round(p.x), Math.round(p.y) + 26);
+                    ctx.restore();
+                }
         }
 
         function drawTurret(t) {
@@ -800,6 +809,7 @@
                     r.fuel = s.fuel;
                     r.cargoStack = s.cargoStack;
                     r.race = s.race;
+                        r.alias = s.alias;
                 }
             }
 

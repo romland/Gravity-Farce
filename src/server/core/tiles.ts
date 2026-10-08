@@ -202,7 +202,7 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xE0: { id: 0xE0, description: 'Race objective 7 (invisible checkpoint line)', known: true },
     0xE1: { id: 0xE1, description: 'Race objective 8 (invisible checkpoint line)', known: true },
     0xE2: { id: 0xE2, description: 'Multi-player P1 race start', entity: { type: 'spawn', props: { player: 1 } }, known: true },
-    0xE3: { id: 0xE3, description: 'Multi-player P2 race start', known: true },
+    0xE3: { id: 0xE3, description: 'Multi-player P2 race start', entity: { type: 'spawn', props: { player: 2 } }, known: true },
     0xE4: { id: 0xE4, description: 'Flying Enemy: 8 HP, 2.0x speed, Shoots', entity: { type: 'flying_enemy', props: { enemyType: 0xE4 } }, known: false },
     0xE5: { id: 0xE5, description: 'Flying Enemy: Indestructible, 1.0x speed', entity: { type: 'flying_enemy', props: { enemyType: 0xE5 } }, known: false },
     0xE6: { id: 0xE6, description: 'Flying Enemy: 6 HP, 2.0x speed', entity: { type: 'flying_enemy', props: { enemyType: 0xE6 } }, known: false },

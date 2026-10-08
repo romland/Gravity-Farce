@@ -128,7 +128,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
 
         const crashed = checkEnvironmentCollisions(sl, t.x, t.y, room.level, canLand, (landY, isEndPad) => {
             land(landY);
-            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0) {
+            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0 && room.category === 'mission') {
                 if (!p.advancing) {
                     p.advancing = true;
                     advancing = true; 

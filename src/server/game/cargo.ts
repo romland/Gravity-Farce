@@ -117,7 +117,7 @@ export function sysCargo(ecs: Registry, room: Room) {
     }
     const totalCargoRemaining = totalMapCargo + totalPlayerCargo;
 
-    if (totalCargoRemaining === 0 && room.initialCargoCount > 0) {
+    if (totalCargoRemaining === 0 && room.initialCargoCount > 0 && room.category === 'mission') {
         for (const [pe, p] of ecs.players.entries()) {
             if (!p.advancing) {
                 p.advancing = true;
