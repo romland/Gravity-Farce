@@ -102,7 +102,7 @@ function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: nu
     for (const [pe, p] of ecs.players.entries()) {
         if (p.isDead) continue;
         const pt = ecs.transforms.get(pe);
-        if (pt && Math.hypot(pt.x - tx, pt.y - ty) < 16) {
+        if (pt && Math.abs(pt.x - tx) <= 30 && Math.abs(pt.y - ty) <= 26) {
             if (room.category === 'race' && !room.isLethalRacing) {
                 bumpPlayer(ecs, room, pe, tx, ty, 6.0);
             } else {

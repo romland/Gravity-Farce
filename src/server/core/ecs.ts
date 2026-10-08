@@ -21,6 +21,8 @@ export interface GameEvent {
     soundId?: number;
     text?: string;
     color?: string;
+    vx?: number;
+    vy?: number;
 }
 
 export interface PlayerRaceState {
@@ -68,6 +70,8 @@ export interface Turret {
     triggerId?: number;
     tileX: number;
     tileY: number;
+    width: number;
+    height: number;
 }
 
 export interface Tank {

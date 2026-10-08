@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
-    "start": "tsx src/server/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node dist/server/index.js",
+    "build": "tsc",
+    "package": "rm -rf dist release && tsc && mkdir -p release && cp -r dist src/client package.json package-lock.json release/ && cd release && npm prune --production && tar -czf ../gf-prod-release.tar.gz . && cd .. && rm -rf release"
   },
   "type": "module",
   "author": "",

@@ -28,7 +28,9 @@ export function spawnTurret(ecs: Registry, x: number, y: number, turretType: num
         orientUp,
         triggerId: resolvedTriggerId,
         tileX,
-        tileY
+        tileY,
+        width: spec.width,
+        height: spec.height
     });
     return e;
 }
@@ -65,7 +67,7 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
         for (const [te, turret] of ecs.turrets.entries()) {
             if (!turret.active) continue;
             const tt = ecs.transforms.get(te)!;
-            if (Math.hypot(pt.x - tt.x, pt.y - tt.y) < 18) {
+            if (Math.abs(pt.x - tt.x) <= (turret.width / 2 + 14) && Math.abs(pt.y - tt.y) <= (turret.height / 2 + 14)) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, e, tt.x, tt.y, 7.0); // Heavy repulsion from solid turret
                 } else {
@@ -192,7 +194,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                         tank.hp--;
                         if (tank.hp <= 0) {
                             tank.active = false;
-                            ecs.events.push({ type: 'poof', x: tt.x, y: tt.y });
+                            ecs.events.push({ type: 'large_explosion', x: tt.x, y: tt.y });
                             
                             const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                             if (shooterEntity !== undefined) {
@@ -208,9 +210,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                     for (const [fe, flying] of ecs.flyingEnemies.entries()) {
                         if (!flying.active) continue;
                         const ft = ecs.transforms.get(fe)!;
-                        const dx = t.x - ft.x;
-                        const dy = t.y - ft.y;
-                        if (dx >= 0 && dx <= flying.width && dy >= 0 && dy <= flying.height) {
+                        if (Math.abs(t.x - ft.x) <= flying.width / 2 && Math.abs(t.y - ft.y) <= flying.height / 2) {
                             hit = true;
                             
                             // Ensure indestructible (-1 HP) enemies are not deleted by underflow
@@ -218,7 +218,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                                 flying.hp--;
                                 if (flying.hp <= 0) {
                                     flying.active = false;
-                                    ecs.events.push({ type: 'poof', x: ft.x, y: ft.y });
+                                    ecs.events.push({ type: 'large_explosion', x: ft.x, y: ft.y });
                                     const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                                     if (shooterEntity !== undefined) {
                                         const shooter = ecs.players.get(shooterEntity);

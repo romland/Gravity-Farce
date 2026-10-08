@@ -9,7 +9,6 @@ const DEBUG_TARGET_IDS: number[] | null = [];//[];//[ 6, 8 ];
 
 export interface FlyingEnemySpecs {
     hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in org 68k
-    speedScalar: number;
     scoreValue: number;
     canShoot: boolean;  // Word 4 Bit 1 (0x02) Weapon Flag
     width: number;
@@ -18,18 +17,18 @@ export interface FlyingEnemySpecs {
 
 // Memory-verified template structs mapped directly from RAM $00031570 (Tile E3 is Index 0)
 const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
-    0xE4: { hp: 8,  speedScalar: 1.0, scoreValue: 100, canShoot: true,  width: 96, height: 64 },
-    0xE5: { hp: -1, speedScalar: 1.0, scoreValue: 200, canShoot: false, width: 96, height: 64 }, 
-    0xE6: { hp: 6,  speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
-    0xE7: { hp: 3,  speedScalar: 1.0, scoreValue: 150, canShoot: true,  width: 96, height: 64 },
-    0xE8: { hp: 5,  speedScalar: 1.0, scoreValue: 250, canShoot: false, width: 96, height: 64 },
-    0xE9: { hp: 12, speedScalar: 1.0, scoreValue: 90,  canShoot: false, width: 96, height: 64 },
-    0xEA: { hp: 12, speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
-    0xEB: { hp: -1, speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 }, 
-    0xEC: { hp: 6,  speedScalar: 1.0, scoreValue: 75,  canShoot: false, width: 96, height: 64 },
-    0xED: { hp: 6,  speedScalar: 1.0, scoreValue: 200, canShoot: false, width: 96, height: 64 },
-    0xEE: { hp: 9,  speedScalar: 1.0, scoreValue: 100, canShoot: false, width: 96, height: 64 },
-    0xEF: { hp: 25, speedScalar: 1.0, scoreValue: 80,  canShoot: false, width: 96, height: 64 }
+    0xE4: { hp: 8,  scoreValue: 100, canShoot: true,  width: 96, height: 64 },
+    0xE5: { hp: -1, scoreValue: 200, canShoot: false, width: 96, height: 64 }, 
+    0xE6: { hp: 6,  scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xE7: { hp: 3,  scoreValue: 150, canShoot: true,  width: 96, height: 64 },
+    0xE8: { hp: 5,  scoreValue: 250, canShoot: false, width: 96, height: 64 },
+    0xE9: { hp: 12, scoreValue: 90,  canShoot: false, width: 96, height: 64 },
+    0xEA: { hp: 12, scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xEB: { hp: -1, scoreValue: 100, canShoot: false, width: 96, height: 64 }, 
+    0xEC: { hp: 6,  scoreValue: 75,  canShoot: false, width: 96, height: 64 },
+    0xED: { hp: 6,  scoreValue: 200, canShoot: false, width: 96, height: 64 },
+    0xEE: { hp: 9,  scoreValue: 100, canShoot: false, width: 96, height: 64 },
+    0xEF: { hp: 25, scoreValue: 80,  canShoot: false, width: 96, height: 64 }
 };
 
 const DIRECTION_VECTORS: Record<number, {x: number, y: number}> = {
@@ -77,7 +76,6 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         debugId,
         enemyType: type,
         scoreValue: specs.scoreValue,
-        speedScalar: specs.speedScalar,
         canShoot: specs.canShoot,
         width: specs.width,
         height: specs.height,
@@ -181,7 +179,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe);
-            if (pt && Math.hypot(pt.x - t.x, pt.y - t.y) < 18) {
+            if (pt && Math.abs(pt.x - t.x) <= (enemy.width / 2 + 14) && Math.abs(pt.y - t.y) <= (enemy.height / 2 + 14)) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, pe, t.x, t.y, 6.0);
                 } else {

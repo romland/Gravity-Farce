@@ -113,5 +113,5 @@ export function getTriggerIdForTurretTile(turretTileId: number): number {
 
 export function getTurretSpecByTile(tileId: number): TurretSpec {
     const raw = TURRET_SPECS_BY_TILE[tileId] || TURRET_SPECS_BY_TILE[0xAF];
-    return { width: 14, height: 14, ...raw };
+    return { width: 28, height: 28, ...raw };
 }

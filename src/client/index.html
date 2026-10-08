@@ -360,6 +360,8 @@
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffaa00', 40, 50);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
+                    } else if (ev.type === 'large_explosion') {
+                        spawnLargeExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0);
                     } else if (ev.type === 'sound') {
                         playTurretSound(ev.soundId);
                     } else if (ev.type === 'floating_text') {
@@ -375,10 +377,8 @@
                     renderState.players[id] = { ...s };
                 } else if (!r.isDead && s.isDead) {
                     // Trigger explosion the moment the server says a ship died
-                    spawnParticles(s.x, s.y, s.vx, s.vy, '#f80', 60, 80);
-                    spawnParticles(s.x, s.y, s.vx, s.vy, '#f00', 40, 60);
-                    spawnParticles(s.x, s.y, s.vx, s.vy, '#fff', 30, 40);
-                    
+                    spawnLargeExplosion(s.x, s.y, s.vx, s.vy);
+
                     // Force reset local inputs so we don't hold thrust/fire while dead
                     if (id === myId) {
                         inputs.up = inputs.left = inputs.right = inputs.shoot = false;
@@ -499,6 +499,12 @@
             }
         }
 
+        function spawnLargeExplosion(x, y, vx, vy) {
+            spawnParticles(x, y, vx, vy, '#f80', 60, 80);
+            spawnParticles(x, y, vx, vy, '#f00', 40, 60);
+            spawnParticles(x, y, vx, vy, '#fff', 30, 40);
+        }
+
         function updateAndDrawParticles(ctx) {
             ctx.globalCompositeOperation = 'lighter';
             for (let i = particles.length - 1; i >= 0; i--) {
@@ -567,6 +573,14 @@
                 ctx.fill();
             }
             ctx.restore();
+            if (debugMode) {
+                ctx.save();
+                ctx.translate(Math.round(p.x), Math.round(p.y));
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-14, -14, 28, 28);
+                ctx.restore();
+            }
 
                 if (!isMe && p.alias) {
                     ctx.save();
@@ -580,6 +594,8 @@
 
         function drawTurret(t) {
             if (!t.active) return;
+            const w = t.width || 28;
+            const h = t.height || 28;
             ctx.save(); 
             ctx.translate(Math.round(t.x), Math.round(t.y));
             
@@ -628,6 +644,14 @@
             }
             
             ctx.restore();
+            if (debugMode) {
+                ctx.save();
+                ctx.translate(Math.round(t.x), Math.round(t.y));
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-w / 2, -h / 2, w, h);
+                ctx.restore();
+            }
         }
 
         function drawTank(t) {
@@ -647,6 +671,14 @@
                 ctx.font = '10px monospace';
                 ctx.fillText(`ID:${t.debugId} (TANK)`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
             }
+            if (debugMode) {
+                ctx.save();
+                ctx.translate(Math.round(t.x), Math.round(t.y));
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-w / 2, -h / 2, w, h);
+                ctx.restore();
+            }
         }
 
         function drawFlyingEnemy(t) {
@@ -663,7 +695,9 @@
             } else {
                 ctx.fillStyle = '#ff8800'; 
                 ctx.beginPath();
-                ctx.moveTo(w, h / 2); ctx.lineTo(0, h); ctx.lineTo(0, 0);
+                ctx.moveTo(w / 2, 0); 
+                ctx.lineTo(-w / 2, h / 2); 
+                ctx.lineTo(-w / 2, -h / 2);
                 ctx.closePath();
                 ctx.fill();
             }
@@ -673,6 +707,14 @@
                 ctx.fillStyle = '#0f0';
                 ctx.font = '10px monospace';
                 ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
+            }
+            if (debugMode) {
+                ctx.save();
+                ctx.translate(Math.round(t.x), Math.round(t.y));
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-w / 2, -h / 2, w, h);
+                ctx.restore();
             }
         }
 
