@@ -7,7 +7,7 @@ So I decided to throw some hours at it and here we have a (in spirit) port that 
 
 ### Server and Cheating
 I deviated pretty strongly on one part: I did not really fancy the split-screen. I went for 
-networked instead. The server is authorative, so it should be hard(er) to for clients to cheat.
+networked instead. The server is authorative, so it should be hard(er) to cheat (piss people off -- sigh, why, people, why, just enjoy!).
 But eh anti-cheating is a billion-dollar industry so, yeah... 
 
 ### Levels and Data
