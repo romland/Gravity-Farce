@@ -69,6 +69,16 @@ export function sysRacing(ecs: Registry, room: Room) {
                         value: now - p.race.startTime,
                         metadata: { ship: p.type, laps: p.race.totalLaps }
                     });
+                    
+                    // Fetch top 5 for both categories and push a targeted UI event to the player
+                    const topLaps = recordDB.getRecords('fastest_lap', room.levelIndex, mode, physicsHash).slice(0, 5);
+                    const topRaces = recordDB.getRecords('race_time', room.levelIndex, mode, physicsHash).slice(0, 5);
+                    
+                    room.emitToPlayer(p.id, 'show_leaderboard', [
+                        { title: `TOP ${mode} RACE TIMES`, entries: topRaces },
+                        { title: `TOP ${mode} LAP TIMES`, entries: topLaps }
+                    ]);
+
                     } else {
                         p.race.currentLap++;
                         p.race.nextCheckpoint = 1;

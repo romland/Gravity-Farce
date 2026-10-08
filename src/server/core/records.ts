@@ -77,9 +77,21 @@ export class RecordManager {
         }
 
         const board = this.db[key];
-        const newEntry: RecordEntry = { ...entry, timestamp: Date.now() };
         
-        board.entries.push(newEntry);
+        // Enforce 1 Entry Per Player (Personal Best)
+        const existingIdx = board.entries.findIndex(e => e.playerId === entry.playerId);
+        if (existingIdx !== -1) {
+            const existing = board.entries[existingIdx];
+            const isBetter = board.sort === 'asc' ? entry.value < existing.value : entry.value > existing.value;
+            
+            if (isBetter) {
+                board.entries[existingIdx] = { ...existing, ...entry, timestamp: Date.now() };
+            } else {
+                return false; // Did not beat their own PB
+            }
+        } else {
+            board.entries.push({ ...entry, timestamp: Date.now() });
+        }
 
         // Sort dynamically based on the metric's requirement
         board.entries.sort((a, b) => {
@@ -92,7 +104,7 @@ export class RecordManager {
         }
 
         // If the entry is still in the array after slicing, it made the leaderboard!
-        const madeLeaderboard = board.entries.some(e => e === newEntry);
+        const madeLeaderboard = board.entries.some(e => e.playerId === entry.playerId);
         
         if (madeLeaderboard) {
             this.save();

@@ -158,6 +158,10 @@ export class Room {
         this.io.to(`level_${this.levelIndex}`).emit('tile_update', { x, y, tile });
     }
 
+    emitToPlayer(id: string, event: string, payload: any) {
+        this.io.to(id).emit(event, payload);
+    }
+
     resetLevel() {
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
