@@ -27,7 +27,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
          score,
          cargoStack: [],
          unloadTimer: 0,
-         doubleShotAmmo: 0
+        doubleShotAmmo: 0,
+        fuel: 76464
     });
     return e;
 }
@@ -64,7 +65,8 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         v.angularVelocity *= 0.93; 
         t.angle += v.angularVelocity;
 
-        if (p.inputs.up) {
+        if (p.inputs.up && p.fuel > 0) {
+             p.fuel = Math.max(0, p.fuel - 15);
              v.vx += Math.cos(t.angle) * weightThrust;
              v.vy += Math.sin(t.angle) * weightThrust;
         }
@@ -100,7 +102,7 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         
         const sl = getShipPolygon(t.x, t.y, t.angle, 16, 16);
         const diff = normalizeAngle(t.angle);
-        const canLand = () => v.vy >= 0 && speed < 2.5 && Math.abs(diff) < 0.25;
+        const canLand = () => v.vy >= 0 && speed < 2.5 && Math.abs(diff) < 0.15;
 
         const crashed = checkEnvironmentCollisions(sl, t.x, t.y, room.level, canLand, (landY, isEndPad) => {
             p.isLanded = true;
@@ -110,9 +112,13 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
             t.angle = -Math.PI / 2; // Snap perfectly upright
             v.angularVelocity = 0;
 
-            if (isEndPad && !p.inputs.up) {
-                advancing = true; 
-                room.transitionPlayer(p.id); 
+            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0) {
+                if (!p.advancing) {
+                    p.advancing = true;
+                    advancing = true; 
+                    ecs.events.push({ type: 'floating_text', text: 'SECTOR SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
+                    setTimeout(() => room.transitionPlayer(p.id), 3000);
+                }
             }
         });
 

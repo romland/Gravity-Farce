@@ -18,6 +18,9 @@ export interface GameEvent {
     type: string;
     x: number;
     y: number;
+    soundId?: number;
+    text?: string;
+    color?: string;
 }
 
 export interface Player {
@@ -36,6 +39,8 @@ export interface Player {
     cargoStack: number[];
     unloadTimer: number;
     doubleShotAmmo: number;
+    fuel: number;
+    advancing?: boolean;
 }
 
 export interface Turret {
@@ -101,6 +106,9 @@ export interface Cargo {
     scoreValue: number;
     width: number;
     height: number;
+    tileX: number;
+    tileY: number;
+    heldBy?: string;
 }
 
 export interface Powerup {

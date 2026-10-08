@@ -13,6 +13,7 @@ import { spawnPowerup, sysPowerups } from './game/powerups';
 export class Room {
     public ecs = new Registry();
     private initialRawMap?: number[][];
+    public initialCargoCount = 0;
     private debugEnemyCounter = 0;
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
@@ -48,6 +49,7 @@ export class Room {
 
     private spawnEntities() {
         this.debugEnemyCounter = 0;
+        this.initialCargoCount = this.level.entities.filter(e => e.type === 'cargo').length;
 
         this.level.entities.forEach(ent => {
             if (ent.type === 'turret') {

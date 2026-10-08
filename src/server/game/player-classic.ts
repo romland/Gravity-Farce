@@ -9,7 +9,7 @@ const THRUST_IMPULSE = 0.070;
 const DRAG = 0.997;
 const MAGNET_FORCE = THRUST_IMPULSE * 0.5; // Scaled to 50% of engine power
 const MAX_SPEED = 7.5; 
-const MAX_SAFE_LANDING_VY = 1.4;
+const MAX_SAFE_LANDING_VY = 2.0;
 
 export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: number, score: number = 0): Entity {
     const e = ecs.create();
@@ -30,7 +30,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
          score,
          cargoStack: [],
          unloadTimer: 0,
-         doubleShotAmmo: 0
+        doubleShotAmmo: 0,
+        fuel: 76464
     });
     return e;
 }
@@ -70,7 +71,8 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         p.angleStep = Math.floor(p.angleAcc / 2000) % 36;
         t.angle = (p.angleStep * (Math.PI * 2)) / 36;
 
-        if (p.inputs.up) {
+        if (p.inputs.up && p.fuel > 0) {
+             p.fuel = Math.max(0, p.fuel - 15);
              v.vx += Math.cos(t.angle) * weightThrust;
              v.vy += Math.sin(t.angle) * weightThrust;
         }
@@ -105,7 +107,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         let advancing = false;
         const sl = getShipPolygon(t.x, t.y, t.angle, 14, 14);
 
-        const isAngleUpright = Math.abs(p.angleStep - 27) <= 2;
+        const isAngleUpright = Math.abs(p.angleStep - 27) <= 1; // 52 to 56 Amiga angle gate
         const canLand = () => v.vy >= 0 && v.vy <= MAX_SAFE_LANDING_VY && isAngleUpright;
 
         const land = (targetY: number) => { 
@@ -120,9 +122,13 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
 
         const crashed = checkEnvironmentCollisions(sl, t.x, t.y, room.level, canLand, (landY, isEndPad) => {
             land(landY);
-            if (isEndPad && !p.inputs.up) {
-                advancing = true; 
-                room.transitionPlayer(p.id); 
+            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0) {
+                if (!p.advancing) {
+                    p.advancing = true;
+                    advancing = true; 
+                    ecs.events.push({ type: 'floating_text', text: 'SECTOR SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
+                    setTimeout(() => room.transitionPlayer(p.id), 3000);
+                }
             }
         });
 

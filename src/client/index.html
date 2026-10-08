@@ -96,6 +96,8 @@
         let level = null;
         let camera = { x: 0, y: 0 };
         let particles = [];
+        let floatingTexts = [];
+        let lastHudHTML = "";
 
         const inputs = { up: false, left: false, right: false, shoot: false };
         
@@ -188,7 +190,6 @@
         
         socket.on('initLevel', (data) => { 
             level = data;
-            hud.innerText = level.name;
             renderState.players = {}; // Clear old players on level swap
         });
         
@@ -249,6 +250,8 @@
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
                     } else if (ev.type === 'sound') {
                         playTurretSound(ev.soundId);
+                    } else if (ev.type === 'floating_text') {
+                        floatingTexts.push({ text: ev.text, x: ev.x, y: ev.y, color: ev.color || '#fff', life: 60, maxLife: 60 });
                     }
                 }
             }
@@ -355,7 +358,7 @@
             
             ctx.shadowBlur = 0;
             
-            if (p.inputs && p.inputs.up) {
+        if (p.inputs && p.inputs.up && p.fuel > 0) {
                 ctx.fillStyle = '#4facfe';
                 ctx.beginPath();
                 ctx.moveTo(-8, 0); 
@@ -595,6 +598,8 @@
                     r.isDead = s.isDead; 
                     r.inputs = s.inputs;
                     r.score = s.score;
+                    r.fuel = s.fuel;
+                    r.cargoStack = s.cargoStack;
                 }
             }
 
@@ -607,7 +612,11 @@
             } else {
                 let myPlayer = renderState.players[myId];
                 if (myPlayer) {
-                hud.innerText = `${level.name} | SCORE: ${myPlayer.score.toString().padStart(6, '0')}`;
+                let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myPlayer.fuel)}</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myPlayer.cargoStack.length > 0 ? myPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span></div>`;
+                if (newHudHTML !== lastHudHTML) {
+                    hud.innerHTML = newHudHTML;
+                    lastHudHTML = newHudHTML;
+                }
                     let targetX = myPlayer.x - VIEW_W / 2;
                     let targetY = myPlayer.y - VIEW_H / 2;
                     
@@ -729,6 +738,25 @@
                 }
             }
             updateAndDrawParticles(ctx);
+
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            let ft = floatingTexts[i];
+            ft.y -= 0.6;
+            ft.life--;
+            if (ft.life <= 0) {
+                floatingTexts.splice(i, 1);
+                continue;
+            }
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
+            ctx.fillStyle = ft.color;
+            ctx.font = 'bold 12px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.fillText(ft.text, Math.round(ft.x), Math.round(ft.y));
+            ctx.restore();
+        }
 
             ctx.restore();
         }

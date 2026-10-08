@@ -63,6 +63,9 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
     const VIEW_H = 900;
     const CULL_MARGIN = 400; 
     
+    const totalMapCargo = Array.from(ecs.cargos.values()).filter(c => c.active).length;
+    const totalCargoRemaining = totalMapCargo + Array.from(ecs.players.values()).reduce((sum, p) => sum + p.cargoStack.length, 0);
+    
     for (const [e, p] of ecs.players.entries()) {
         const t = ecs.transforms.get(e)!;
         const state = { 
@@ -73,7 +76,8 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             flying: [] as any,
             cargos: [] as any,
             powerups: [] as any,
-            events: [] as any
+            events: [] as any,
+            cargosRemaining: totalCargoRemaining
         };
         
         for (const [oe, op] of ecs.players.entries()) {
@@ -81,7 +85,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             const ov = ecs.velocities.get(oe)!;
             
             if (Math.abs(ot.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ot.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: op.cargoStack };
+                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: op.cargoStack, fuel: op.fuel };
             }
         }
         for (const [te, turret] of ecs.turrets.entries()) {
@@ -108,6 +112,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             }
         }
         for (const [ce, cargo] of ecs.cargos.entries()) {
+            if (!cargo.active) continue;
             const ct = ecs.transforms.get(ce)!;
             if (Math.abs(ct.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ct.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
                 state.cargos.push({ x: ct.x, y: ct.y, typeId: cargo.typeId, weight: cargo.weight });

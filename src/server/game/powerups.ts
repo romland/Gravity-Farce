@@ -33,14 +33,17 @@ export function sysPowerups(ecs: Registry, room: Room) {
             if (!powerup.active) continue;
             const put = ecs.transforms.get(pue)!;
 
-            if (Math.hypot(pt.x - put.x, pt.y - put.y) < 24) {
+            if (Math.hypot(pt.x - put.x, pt.y - put.y) < 34) {
                 powerup.active = false;
                 if (powerup.typeId === 0xD0) {
                     p.fuel = Math.min(99999, (p.fuel || 0) + powerup.charges);
+                    ecs.events.push({ type: 'floating_text', text: 'FUEL +50000', color: '#e67e22', x: put.x, y: put.y - 30 });
                 } else if (powerup.typeId === 0xD6) {
                     p.doubleShotAmmo = (p.doubleShotAmmo || 0) + powerup.charges;
+                    ecs.events.push({ type: 'floating_text', text: 'DOUBLE SHOT', color: '#2ecc71', x: put.x, y: put.y - 30 });
                 } else {
                     p.doubleShotAmmo = (p.doubleShotAmmo || 0) + powerup.charges;
+                    ecs.events.push({ type: 'floating_text', text: 'POWERUP', color: '#9b59b6', x: put.x, y: put.y - 30 });
                 }
 
                 ecs.events.push({ type: 'sound', soundId: 11, x: put.x, y: put.y });
