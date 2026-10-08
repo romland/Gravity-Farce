@@ -9,6 +9,7 @@ import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
+import { sysRacing } from './game/racing';
 import type { PlayerStats } from './core/types';
 
 export class Room {
@@ -38,8 +39,9 @@ export class Room {
             sysTurrets(this.ecs, this);
             sysTanks(this.ecs, this);
             sysFlyingEnemies(this.ecs, this);
-             sysCargo(this.ecs, this);
-             sysPowerups(this.ecs, this);
+            sysCargo(this.ecs, this);
+            sysPowerups(this.ecs, this);
+            sysRacing(this.ecs, this);
             sysBullets(this.ecs, this);
         }
 
@@ -121,7 +123,7 @@ export class Room {
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
                 if (oldP) {
-                    spawnStats = { score: oldP.score }; // Keep score on same-room respawn, drop fuel/ammo buffs
+                    spawnStats = { score: oldP.score, race: oldP.race }; // Keep score and race state on same-room respawn
                 }
                 this.ecs.destroy(existing);
             }

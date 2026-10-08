@@ -85,7 +85,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             const ov = ecs.velocities.get(oe)!;
             
             if (Math.abs(ot.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ot.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: op.cargoStack, fuel: op.fuel };
+                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: op.cargoStack, fuel: op.fuel, race: op.race };
             }
         }
         for (const [te, turret] of ecs.turrets.entries()) {

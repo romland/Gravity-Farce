@@ -32,7 +32,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         cargoStack: [],
         unloadTimer: 0,
         doubleShotAmmo: stats?.doubleShotAmmo ?? 0,
-        fuel: stats?.fuel ?? 76464
+        fuel: stats?.fuel ?? 76464,
+        race: stats?.race
     });
     return e;
 }

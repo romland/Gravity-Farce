@@ -98,6 +98,7 @@
         let particles = [];
         let floatingTexts = [];
         let lastHudHTML = "";
+        let raceLights = [];
 
         const inputs = { up: false, left: false, right: false, shoot: false };
         
@@ -191,6 +192,16 @@
         socket.on('initLevel', (data) => { 
             level = data;
             renderState.players = {}; // Clear old players on level swap
+            
+            raceLights = [];
+            if (level.rawMap) {
+                for(let y=0; y<level.rawMap.length; y++) {
+                    for(let x=0; x<level.rawMap[y].length; x++) {
+                        let t = level.rawMap[y][x];
+                        if (t >= 0x3B && t <= 0x42) raceLights.push({ x: x*32, y: y*32, id: t });
+                    }
+                }
+            }
         });
         
         socket.on('tile_update', (data) => {
@@ -600,8 +611,11 @@
                     r.score = s.score;
                     r.fuel = s.fuel;
                     r.cargoStack = s.cargoStack;
+                    r.race = s.race;
                 }
             }
+
+            let myServerPlayer = serverState.players[myId];
 
             if (freecam) {
                 const camSpeed = 15;
@@ -611,12 +625,23 @@
                 if (camKeys.right) camera.x += camSpeed;
             } else {
                 let myPlayer = renderState.players[myId];
-                if (myPlayer) {
-                let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myPlayer.fuel)}</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myPlayer.cargoStack.length > 0 ? myPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span></div>`;
-                if (newHudHTML !== lastHudHTML) {
-                    hud.innerHTML = newHudHTML;
-                    lastHudHTML = newHudHTML;
-                }
+                if (myPlayer && myServerPlayer) {
+                    // let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myPlayer.fuel)}</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myPlayer.cargoStack.length > 0 ? myPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span></div>`;
+                    let raceUI = '';
+                    if (myServerPlayer.race && myServerPlayer.race.state > 0) {
+                        let r = myServerPlayer.race;
+                        let diff = (r.state === 2 && r.finishTime) ? r.finishTime - r.startTime : Date.now() - r.startTime;
+                        let m = Math.floor(diff / 60000).toString().padStart(2, '0');
+                        let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+                        let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
+                        let color = r.state === 2 ? '#2ecc71' : '#fff';
+                        raceUI = ` &nbsp;|&nbsp; LAP: <span style="color:#4facfe">${r.currentLap}/${r.totalLaps}</span> &nbsp;|&nbsp; TIME: <span style="color:${color}">${m}:${s}.${ms}</span>`;
+                    }
+                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>${raceUI}</div>`;
+                    if (newHudHTML !== lastHudHTML) {
+                        hud.innerHTML = newHudHTML;
+                        lastHudHTML = newHudHTML;
+                    }
                     let targetX = myPlayer.x - VIEW_W / 2;
                     let targetY = myPlayer.y - VIEW_H / 2;
                     
@@ -739,24 +764,69 @@
             }
             updateAndDrawParticles(ctx);
 
-        for (let i = floatingTexts.length - 1; i >= 0; i--) {
-            let ft = floatingTexts[i];
-            ft.y -= 0.6;
-            ft.life--;
-            if (ft.life <= 0) {
-                floatingTexts.splice(i, 1);
-                continue;
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ft.y -= 0.6;
+                ft.life--;
+                if (ft.life <= 0) {
+                    floatingTexts.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.fillText(ft.text, Math.round(ft.x), Math.round(ft.y));
+                ctx.restore();
             }
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
-            ctx.fillStyle = ft.color;
-            ctx.font = 'bold 12px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.shadowBlur = 4;
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.fillText(ft.text, Math.round(ft.x), Math.round(ft.y));
-            ctx.restore();
-        }
+
+            // Render Personal Checkpoint Pulsing Light
+        if (myServerPlayer && raceLights.length > 0) {
+            let rState = myServerPlayer.race ? myServerPlayer.race.state : 0;
+            let rNext = myServerPlayer.race ? myServerPlayer.race.nextCheckpoint : 1;
+            if (rState < 2) {
+                let targetLight = 0x3A + rNext;
+                let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
+                ctx.save();
+                ctx.fillStyle = `rgba(46, 204, 113, ${pulse * 0.8})`;
+                ctx.shadowColor = '#2ecc71';
+                ctx.shadowBlur = 15;
+                for (let l of raceLights) {
+                    if (l.id === targetLight) ctx.fillRect(l.x, l.y, 32, 32);
+                }
+                ctx.restore();
+            }
+            }
+
+            // Render Multiplayer Leaderboard Overlay
+            let racers = Object.entries(serverState.players).filter(([id, p]) => p.race && p.race.state === 2).map(([id, p]) => ({ id, race: p.race })).sort((a,b) => (a.race.finishTime - a.race.startTime) - (b.race.finishTime - b.race.startTime));
+            if (racers.length > 0) {
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0); 
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                ctx.fillRect(VIEW_W/2 - 150, 60, 300, 50 + racers.length * 30);
+                ctx.fillStyle = '#f1c40f';
+                ctx.font = 'bold 18px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText("RACE RESULTS", VIEW_W/2, 90);
+                ctx.font = 'bold 14px monospace';
+                racers.forEach((r, idx) => {
+                    let diff = r.race.finishTime - r.race.startTime;
+                    let m = Math.floor(diff / 60000).toString().padStart(2, '0');
+                    let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+                    let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
+                    let label = r.id === myId ? "YOU" : "PLAYER " + r.id.substring(0,4);
+                    ctx.fillStyle = r.id === myId ? '#2ecc71' : '#fff';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`${idx+1}. ${label}`, VIEW_W/2 - 120, 125 + idx * 30);
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`${m}:${s}.${ms}`, VIEW_W/2 + 120, 125 + idx * 30);
+                });
+                ctx.restore();
+            }
 
             ctx.restore();
         }

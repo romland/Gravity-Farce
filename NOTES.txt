@@ -62,6 +62,7 @@ In Ported Version, in client console:
 - level 50 is the race course
 - Enemy bullets has random momentum/speed -- they can be really slow sometimes and linger REALLY long
 - level 36 has an E4 (top left of level)
+- compare racing times with original (L50) in port: 00:48.17
 - I think CTF could be very fun in GF
 
 - Register	Amiga Hex	24-bit Hex

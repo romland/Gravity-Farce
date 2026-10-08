@@ -1,5 +1,6 @@
 export interface Point { x: number; y: number; }
 export interface Pad { x: number; y: number; w: number; }
+import type { PlayerRaceState } from './ecs';
 
 export interface Inputs {
     up: boolean; left: boolean;
@@ -26,4 +27,5 @@ export interface PlayerStats {
     score: number;
     fuel: number;
     doubleShotAmmo: number;
+    race?: PlayerRaceState;
 }

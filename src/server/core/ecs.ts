@@ -23,6 +23,16 @@ export interface GameEvent {
     color?: string;
 }
 
+export interface PlayerRaceState {
+    state: number; // 0 = Waiting, 1 = Racing, 2 = Finished
+    nextCheckpoint: number; // 1-8
+    currentLap: number;
+    totalLaps: number;
+    startTime: number;
+    finishTime?: number;
+    lapTimes: number[];
+}
+
 export interface Player {
     id: string;
     type: 'classic' | 'modern';
@@ -41,6 +51,7 @@ export interface Player {
     doubleShotAmmo: number;
     fuel: number;
     advancing?: boolean;
+    race?: PlayerRaceState;
 }
 
 export interface Turret {

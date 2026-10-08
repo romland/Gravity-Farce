@@ -29,7 +29,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         cargoStack: [],
         unloadTimer: 0,
         doubleShotAmmo: stats?.doubleShotAmmo ?? 0,
-        fuel: stats?.fuel ?? 76464
+        fuel: stats?.fuel ?? 76464,
+        race: stats?.race
     });
     return e;
 }
