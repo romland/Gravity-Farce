@@ -34,6 +34,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         doubleShotAmmo: stats?.doubleShotAmmo ?? 0,
         fuel: stats?.fuel ?? 76464,
          shotsFired: stats?.shotsFired ?? 0,
+        spawnX: x,
+        spawnY: y,
         race: stats?.race
     });
     return e;

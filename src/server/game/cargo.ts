@@ -48,18 +48,13 @@ export function sysCargo(ecs: Registry, room: Room) {
             const tileId = room.level.rawMap[tileY]?.[tileX];
             const isHomePad = tileId === 0x15 || tileId === 0x1B || tileId === 0x28 || tileId === 0x29;
 
-            let isAtStartBase = false;
-            for (const ent of room.level.entities) {
-                if (ent.type === 'spawn') {
-                    if (Math.hypot(pt.x - ent.x, pt.y - ent.y) < 150) {
-                        isAtStartBase = true;
-                        break;
-                    }
-                }
-            }
+            // Only allow unloading at YOUR specific spawn base, ignoring other players' spawns
+            const isAtStartBase = Math.hypot(pt.x - p.spawnX, pt.y - p.spawnY) < 150;
 
             if (isHomePad && isAtStartBase) {
-                if (p.unloadTimer > 0) {
+                if (p.unloadTimer < 0) {
+                    // Locked because we just picked it up!
+                } else if (p.unloadTimer > 0) {
                     p.unloadTimer--;
                 } else {
                     const crateId = p.cargoStack.pop()!;
@@ -94,6 +89,7 @@ export function sysCargo(ecs: Registry, room: Room) {
                 cargo.active = false;
                 cargo.heldBy = p.id;
                 p.cargoStack.push(cargo.typeId);
+                p.unloadTimer = -1; // Lock unloading until the player takes off
                 ecs.events.push({ type: 'sound', soundId: 9, x: pt.x, y: pt.y });
                 ecs.events.push({ type: 'poof', x: ct.x, y: ct.y });
                 ecs.events.push({ type: 'floating_text', text: 'CARGO ACQUIRED', color: '#f39c12', x: pt.x, y: pt.y - 30 });

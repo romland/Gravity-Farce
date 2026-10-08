@@ -37,6 +37,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         doubleShotAmmo: stats?.doubleShotAmmo ?? 0,
         fuel: stats?.fuel ?? 76464,
          shotsFired: stats?.shotsFired ?? 0,
+        spawnX: x,
+        spawnY: y,
         race: stats?.race
     });
     return e;

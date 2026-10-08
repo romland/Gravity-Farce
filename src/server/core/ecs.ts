@@ -56,6 +56,8 @@ export interface Player {
     doubleShotAmmo: number;
     fuel: number;
     shotsFired: number;
+    spawnX: number;
+    spawnY: number;
     advancing?: boolean;
     race?: PlayerRaceState;
 }
