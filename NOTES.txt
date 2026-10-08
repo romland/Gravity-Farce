@@ -64,6 +64,7 @@ In Ported Version, in client console:
 - level 36 has an E4 (top left of level)
 - compare racing times with original (L50) in port: 00:48.17 / 00:49.17 / 00:48.44
 - I think CTF could be very fun in GF
+- Maybe multiplayer on singleplayer levels (co-op) -- no friendly fire? Maybe allow 2-4 players or whatever -- separate highscore lists?
 
 - Register	Amiga Hex	24-bit Hex
 COLOR00	0000	#000000	Black (Background / Transparent)

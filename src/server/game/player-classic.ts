@@ -132,7 +132,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
                 if (!p.advancing) {
                     p.advancing = true;
                     advancing = true; 
-                    ecs.events.push({ type: 'floating_text', text: 'SECTOR SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
+                    ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
                     setTimeout(() => room.transitionPlayer(p.id), 3000);
                 }
             }

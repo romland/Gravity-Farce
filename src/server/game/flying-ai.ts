@@ -5,7 +5,7 @@ import { killPlayer, spawnBullet } from './combat';
 const TILE_SIZE = 32;
 
 // Set to an array of enemy debugIds to isolate logs, or null to log all waypoint hits
-const DEBUG_TARGET_IDS: number[] | null = null;//[];//[ 6, 8 ];
+const DEBUG_TARGET_IDS: number[] | null = [];//[];//[ 6, 8 ];
 
 export interface FlyingEnemySpecs {
     hp: number;         // -1 (0xFFFF) = Indestructible sentinel value in org 68k
@@ -66,8 +66,6 @@ function getCorneringVector(state: number, step: number): { x: number, y: number
 
 const WAVE_SPEED_MODIFIERS = [1.25, 1.35, 1.50, 1.65, 1.75, 1.65, 1.50, 1.35];
 
-let globalWaveTimer = 0;
-
 export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number): Entity {
     const specs = FLYING_ENEMY_TEMPLATES[type] || FLYING_ENEMY_TEMPLATES[0xE4];
 
@@ -105,8 +103,8 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
 export function sysFlyingEnemies(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
 
-    const waveIndex = Math.floor(globalWaveTimer / 8) % 8;
-    globalWaveTimer = (globalWaveTimer + 1) % 64;
+    const waveIndex = Math.floor(room.globalWaveTimer / 8) % 8;
+    room.globalWaveTimer = (room.globalWaveTimer + 1) % 64;
 
     for (const [e, enemy] of ecs.flyingEnemies.entries()) {
         if (!enemy.active) continue;

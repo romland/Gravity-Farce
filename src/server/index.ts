@@ -49,14 +49,14 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     if (!socket) return;
     
     const pLevel = playerRooms.get(id) ?? 0;
-        let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0 };
-    let pType: 'classic'|'modern' = stats.shipType || 'modern';
-    
+    let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0, shipType: 'classic' };
+	let pType: 'classic'|'modern' = stats.shipType || 'classic';
+
     for (const room of rooms.values()) {
         const e = room.ecs.getPlayerEntity(id);
         if (e !== undefined) {
-                const p = room.ecs.players.get(e)!;
-                pType = p.type;
+            const p = room.ecs.players.get(e)!;
+            pType = p.type;
             stats = {
                     score: p.score,
                     doubleShotAmmo: p.doubleShotAmmo,
@@ -74,7 +74,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     socket.leave(`level_${pLevel}`);
     
     const newRoom = getOrCreateRoom(targetLevel);
-    if (forceReset) {
+    if (forceReset && newRoom.ecs.players.size === 0) {
         newRoom.resetLevel();
     }
     socket.join(`level_${targetLevel}`);
@@ -127,12 +127,20 @@ function handleTransition(id: string) {
                 rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
             }
 
-            const ctxFastest = buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, p.uuid, rFast.isNewPb, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0'));
-            const ctxSneak = buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, p.uuid, rSneak.isNewPb, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0));
-            const ctxEco = buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, p.uuid, rEco.isNewPb, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0));
+            const boards = getLeaderboardBoards(pLevel, mode, physicsHash, p.uuid, {
+                fast: rFast.isNewPb,
+                sneak: rSneak.isNewPb,
+                eco: rEco.isNewPb,
+                clear: rClear?.isNewPb ?? false,
+                sharpshooter: rSharpshooter?.isNewPb ?? false
+            }, {
+                fast: rFast.timestamp,
+                sneak: rSneak.timestamp,
+                eco: rEco.timestamp,
+                clear: rClear?.timestamp,
+                sharpshooter: rSharpshooter?.timestamp
+            });
 
-            const boards = [];
-            
 			const runSummaryEntries = mode === 'MP' ?
 				Array.from(oldRoom.ecs.players.entries()).map(([_, op]) => ({
 					rankLabel: op.id === id ? 'YOU' : 'PILOT',
@@ -143,45 +151,12 @@ function handleTransition(id: string) {
 				})) : [
 					{ rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
 					{ rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
-					{ rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
+					{ rankLabel: 'FUEL', alias: 'FUEL LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
 					{ rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
 					{ rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
 				];
 
-			boards.push({ title: mode === 'MP' ? 'MATCH RUN SUMMARY' : 'RUN STATS SUMMARY', entries: runSummaryEntries });
-			boards.push({ title: `BLITZ RUN`, entries: ctxFastest });
-			boards.push({ title: `COMBAT ELITE`, entries: ctxSneak });
-			boards.push({ title: `HYDRO-CRUISE`, entries: ctxEco });
-			if (rClear) {
-                boards.push({ 
-                    title: `100% CLEARED`,
-                    entries: buildLeaderboardContext(
-                        'sp_cleared',
-                        pLevel,
-                        mode,
-                        physicsHash,
-                        p.uuid,
-                        rClear.isNewPb,
-                        x => formatTimeMs(x.value)
-                    )
-                });
-            }
-
-			if (rSharpshooter) {
-                boards.push({
-                    title: `SHARPSHOOTER`,
-                    entries:
-                    buildLeaderboardContext(
-                        'sp_sharpshooter',
-                        pLevel,
-                        mode,
-                        physicsHash,
-                        p.uuid,
-                        rSharpshooter.isNewPb,
-                        x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)
-                    )
-                });
-            }
+            boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', entries: runSummaryEntries });
             
             if (enemiesLeft > 0) {
                 // (MISSED 100% CLEARED)
@@ -190,7 +165,7 @@ function handleTransition(id: string) {
                 // boards.push({ isFootnote: true, text: `NO SURVIVORS (100% CLEARED!)`, color: '#2ecc71' });
             }
 
-            oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards);
+            oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
 
             playerSessionStats.set(id, {
                 score: p.score,
@@ -220,16 +195,17 @@ io.on('connection', (socket) => {
         authDB.validateOrClaim(alias, uuid);
     }
 
+    const useClassicPhysics = true;
     const stats: PlayerStats = {
         score: 0,
         fuel: 76464,
         doubleShotAmmo: 0,
         uuid: uuid,
-        alias: alias
+		alias: alias,
+		shipType: useClassicPhysics ? 'classic' : 'modern'
     };
     playerSessionStats.set(socket.id, stats);
 
-    const useClassicPhysics = true;
     const room = getOrCreateRoom(0);
     
     socket.join('level_0');
@@ -238,7 +214,7 @@ io.on('connection', (socket) => {
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     socket.emit('levelIndex', room.levelIndex);
-    room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern', stats);
+	room.addPlayer(socket.id, stats.shipType || 'classic', stats);
 
     socket.on('debug_action', (action, payload) => {
         if (!SERVER_CONFIG.debugMode) return;
@@ -246,7 +222,7 @@ io.on('connection', (socket) => {
             isServerPaused = !isServerPaused;
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
-            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, true);
+            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, false);
         }
     });
 
@@ -283,6 +259,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('request_leaderboard', () => {
+        const pLevel = playerRooms.get(socket.id) ?? 0;
+        const stats = playerSessionStats.get(socket.id);
+        const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
+        const mode = 'SP';
+        const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 });
+        
+        const boards = getLeaderboardBoards(pLevel, mode, physicsHash, uuid);
+            socket.emit('show_leaderboard', boards, true);
+    });
+
     socket.on('disconnect', () => {
         for (const room of rooms.values()) {
             room.removePlayer(socket.id);
@@ -291,6 +278,25 @@ io.on('connection', (socket) => {
         playerSessionStats.delete(socket.id);
     });
 });
+
+function getLeaderboardBoards(
+    pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string,
+    isNewPbMap?: Record<string, boolean>, timestampsMap?: Record<string, number>
+) {
+    const ctxFastest = buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, uuid, isNewPbMap?.fast ?? false, timestampsMap?.fast, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0'));
+    const ctxSneak = buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, uuid, isNewPbMap?.sneak ?? false, timestampsMap?.sneak, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0));
+    const ctxEco = buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, uuid, isNewPbMap?.eco ?? false, timestampsMap?.eco, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0));
+    const ctxClear = buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, uuid, isNewPbMap?.clear ?? false, timestampsMap?.clear, x => formatTimeMs(x.value));
+    const ctxSharpshooter = buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, uuid, isNewPbMap?.sharpshooter ?? false, timestampsMap?.sharpshooter, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0));
+
+    return [
+        { title: 'Blitzer', description: 'FASTEST CAVERN COMPLETION TIME', entries: ctxFastest },
+        { title: 'Sneaker', description: 'LOWEST SCORE / PACIFIST GHOST RUN', entries: ctxSneak },
+        { title: 'Eco-runner', description: 'MOST FUEL CONSERVED', entries: ctxEco },
+        { title: 'Completionist', description: '100% ENEMY WIPE TIME', entries: ctxClear },
+        { title: 'Sharpshooter', description: 'LEAST SHOTS FIRED (100% WIPE)', entries: ctxSharpshooter }
+    ];
+}
 
 const profiler = new ServerProfiler(10000);
 

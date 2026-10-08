@@ -17,6 +17,8 @@ export class Room {
     private initialRawMap?: number[][];
     public initialCargoCount = 0;
     private debugEnemyCounter = 0;
+    public globalWaveTimer = 0;
+    public activeClientIds = new Set<string>();
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void) {
         if (level.rawMap) {
@@ -78,6 +80,7 @@ export class Room {
     }
 
     addPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
+        this.activeClientIds.add(id);
         if (this.ecs.players.size === 0) {
             this.resetLevel();
         }        
@@ -85,6 +88,7 @@ export class Room {
     }
 
     removePlayer(id: string) {
+        this.activeClientIds.delete(id);
         const e = this.ecs.getPlayerEntity(id);
         if (e !== undefined) this.ecs.destroy(e);
         if (this.ecs.players.size === 0) {
@@ -93,6 +97,7 @@ export class Room {
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
+        if (!this.activeClientIds.has(id)) return;
         let chosenX: number | null = null;
         let chosenY: number | null = null;
 

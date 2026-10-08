@@ -30,6 +30,6 @@ export function getLevelData(index: number): LevelData {
     }
     
     const levelJson = orgLevelsData[safeIndex];
-    const generator = new LegacyTileGenerator(`SECTOR ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
+    const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
     return generator.generate(safeIndex);
 }

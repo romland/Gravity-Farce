@@ -123,7 +123,7 @@ export function sysCargo(ecs: Registry, room: Room) {
                 p.advancing = true;
                 const pt = ecs.transforms.get(pe);
                 if (pt) {
-                    ecs.events.push({ type: 'floating_text', text: 'SECTOR SECURED', color: '#4facfe', x: pt.x, y: pt.y - 60 });
+                    ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: pt.x, y: pt.y - 60 });
                 }
                 setTimeout(() => room.transitionPlayer(p.id), 3000);
             }

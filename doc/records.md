@@ -25,7 +25,7 @@ To support complex criteria (like ranking players by time, but breaking ties by 
 *   `'asc_asc'`: Lowest primary wins. Ties broken by Lowest secondary.
 
 ### Example Single-Player Map Leaderboards:
-When a player completes a single-player sector, three distinct records are pushed:
+When a player completes a single-player cavern, three distinct records are pushed:
 1. **Fastest:** `sort: 'asc_desc'`
    * `value`: Time (Lowest wins)
    * `secondaryValue`: Score (Highest wins if times are exact)
