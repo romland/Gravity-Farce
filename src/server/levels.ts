@@ -5,8 +5,8 @@ import path from 'path';
 
 export type LevelCategory = 'mission' | 'race' | 'dogfight';
 
-const SINGLEPLAYER_RACES = [ 50, 57 ];
-const MULTIPLAYER_RACES = [ 54, 55, 56, 58, 59, 60, 61, 62, 63 ];
+const SINGLEPLAYER_RACES = [ 50, 51, 53, 57 ];
+const MULTIPLAYER_RACES = [ 52, 54, 55, 56, 58, 59, 60, 61, 62, 63 ];
 const MULTIPLAYER_DOGFIGHTS = [ 64, 65 ];
 
 export function getLevelCategory(index: number): LevelCategory {
@@ -14,8 +14,7 @@ export function getLevelCategory(index: number): LevelCategory {
         return 'mission';
     }
     
-    // Actually only two pure single player races.
-    // But! Multiplayer races can easily be single player too.
+    // Multiplayer races can easily be single player too (not that we distinguish between it in here).
     if (SINGLEPLAYER_RACES.includes(index) || MULTIPLAYER_RACES.includes(index)) {
         return 'race';
     }

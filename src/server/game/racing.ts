@@ -70,8 +70,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                         metadata: { ship: p.type, laps: p.race.totalLaps }
                     });
                     
-                    const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, x => formatTimeMs(x.value));
-                    const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, x => formatTimeMs(x.value));
+                    const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value));
+                    const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value));
                     
                     const boards = [];
                     if (mode === 'MP') {

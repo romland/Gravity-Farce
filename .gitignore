@@ -1,3 +1,4 @@
+.env
 prompt.txt
 cat-files.sh
 apply-llm.sh
@@ -12,3 +13,4 @@ server_records.json
 server_aliases.json
 dist
 release
+gf-prod-release.tar.gz

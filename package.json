@@ -1,16 +1,17 @@
 {
-  "name": "gravityforce",
-  "version": "1.0.0",
+  "name": "gravityfarce",
+  "version": "0.0.1",
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
     "start": "node dist/server/index.js",
     "build": "tsc",
-    "package": "rm -rf dist release && tsc && mkdir -p release && cp -r dist src/client package.json package-lock.json release/ && cd release && npm prune --production && tar -czf ../gf-prod-release.tar.gz . && cd .. && rm -rf release"
+    "package": "bash scripts/package.sh",
+    "copy": "npm run package && eval $(grep '^[^#]' .env | sed 's/^/export /') && scp gf-prod-release.tar.gz $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/"
   },
   "type": "module",
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "description": "",
   "dependencies": {
     "express": "^5.2.1",
@@ -19,6 +20,8 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.4",
+    "esbuild": "^0.28.2",
+    "html-minifier-terser": "^7.2.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
