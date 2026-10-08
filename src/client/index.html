@@ -89,7 +89,19 @@
         window.addEventListener('resize', resize); resize();
 
         const assetManager = new AssetManager();
-        const socket = io({ autoConnect: false });
+
+        let myUuid = localStorage.getItem('gf_uuid');
+        if (!myUuid) {
+            myUuid = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+            localStorage.setItem('gf_uuid', myUuid);
+        }
+        let myAlias = localStorage.getItem('gf_alias');
+        if (!myAlias) {
+            myAlias = (prompt("Enter your 3-letter Arcade Alias:", "AAA") || "AAA").substring(0, 3).toUpperCase();
+            localStorage.setItem('gf_alias', myAlias);
+        }
+
+        const socket = io({ autoConnect: false, auth: { uuid: myUuid, alias: myAlias } });
         let myId = null;
         let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [], cargos: [], powerups: [] };
         let renderState = { players: {} }; 
@@ -818,7 +830,7 @@
                     let m = Math.floor(diff / 60000).toString().padStart(2, '0');
                     let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
                     let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
-                    let label = r.id === myId ? "YOU" : "PLAYER " + r.id.substring(0,4);
+                let label = r.id === myId ? "YOU" : (serverState.players[r.id]?.alias || r.id.substring(0,4));
                     ctx.fillStyle = r.id === myId ? '#2ecc71' : '#fff';
                     ctx.textAlign = 'left';
                     ctx.fillText(`${idx+1}. ${label}`, VIEW_W/2 - 120, 125 + idx * 30);

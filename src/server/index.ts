@@ -6,6 +6,7 @@ import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
+import { RecordManager } from './core/records';
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +19,8 @@ export const SERVER_CONFIG = {
 };
 
 const rooms = new Map<number, Room>();
+
+export const recordDB = new RecordManager();
 let isServerPaused = false;
 
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
@@ -46,7 +49,9 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
                 pType = p.type;
                 playerSessionStats.set(id, {
                     score: p.score,
-                    doubleShotAmmo: p.doubleShotAmmo
+                    doubleShotAmmo: p.doubleShotAmmo,
+                    uuid: p.uuid,
+                    alias: p.alias
                 });
             room.removePlayer(id);
             break;
@@ -81,6 +86,16 @@ function handleTransition(id: string) {
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
     
+    const auth = socket.handshake.auth || {};
+    const stats: PlayerStats = {
+        score: 0,
+        fuel: 76464,
+        doubleShotAmmo: 0,
+        uuid: auth.uuid || socket.id,
+        alias: auth.alias || 'UNK'
+    };
+    playerSessionStats.set(socket.id, stats);
+
     const useClassicPhysics = true;
     const room = getOrCreateRoom(0);
     
@@ -90,7 +105,7 @@ io.on('connection', (socket) => {
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     socket.emit('levelIndex', room.levelIndex);
-    room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern');
+    room.addPlayer(socket.id, useClassicPhysics ? 'classic' : 'modern', stats);
 
     socket.on('debug_action', (action, payload) => {
         if (!SERVER_CONFIG.debugMode) return;

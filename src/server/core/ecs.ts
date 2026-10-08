@@ -35,6 +35,8 @@ export interface PlayerRaceState {
 
 export interface Player {
     id: string;
+    uuid: string;
+    alias: string;
     type: 'classic' | 'modern';
     isDead: boolean;
     inputs: Inputs;

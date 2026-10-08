@@ -1,5 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
+import { recordDB } from '../core/records';
 
 export function sysRacing(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
@@ -42,12 +43,32 @@ export function sysRacing(ecs: Registry, room: Room) {
                     const lapTime = now - p.race.startTime - p.race.lapTimes.reduce((a, b) => a + b, 0);
                     p.race.lapTimes.push(lapTime);
                     
+                // Multiplayer = More than 1 player in the room
+                const mode = ecs.players.size > 1 ? 'MP' : 'SP';
+                // Fake physics hash until we add adjustable physics menus
+                const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 }); 
+
+                // Save Fastest Individual Lap
+                recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
+                    playerId: p.uuid,
+                    alias: p.alias,
+                    value: lapTime,
+                    metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps }
+                });
+
                     if (p.race.currentLap >= p.race.totalLaps) {
                         p.race.state = 2;
                         p.race.finishTime = now;
                         ecs.events.push({ type: 'sound', soundId: 11, x: pt.x, y: pt.y });
                         ecs.events.push({ type: 'floating_text', text: 'FINISHED!', color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                         p.score += 5000;
+                    
+                    recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
+                        playerId: p.uuid,
+                        alias: p.alias,
+                        value: now - p.race.startTime,
+                        metadata: { ship: p.type, laps: p.race.totalLaps }
+                    });
                     } else {
                         p.race.currentLap++;
                         p.race.nextCheckpoint = 1;

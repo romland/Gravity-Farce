@@ -19,6 +19,8 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
     ecs.players.set(e, {
         id,
         type: 'classic',
+        uuid: stats?.uuid ?? id,
+        alias: stats?.alias ?? 'UNK',
         isDead: false,
         inputs: { up: false, left: false, right: false, shoot: false },
         shootLatch: false,

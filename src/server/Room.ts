@@ -123,7 +123,7 @@ export class Room {
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
                 if (oldP) {
-                    spawnStats = { score: oldP.score, race: oldP.race }; // Keep score and race state on same-room respawn
+                    spawnStats = { score: oldP.score, race: oldP.race, uuid: oldP.uuid, alias: oldP.alias }; // Keep score, race state, and identity on same-room respawn
                 }
                 this.ecs.destroy(existing);
             }

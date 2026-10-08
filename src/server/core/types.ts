@@ -28,4 +28,6 @@ export interface PlayerStats {
     fuel: number;
     doubleShotAmmo: number;
     race?: PlayerRaceState;
+    uuid?: string;
+    alias?: string;
 }

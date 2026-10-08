@@ -16,6 +16,8 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
     ecs.players.set(e, {
         id,
         type: 'modern',
+        uuid: stats?.uuid ?? id,
+        alias: stats?.alias ?? 'UNK',
         isDead: false,
         inputs: { up: false, left: false, right: false, shoot: false },
         shootLatch: false,
