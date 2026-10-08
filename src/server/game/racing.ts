@@ -70,10 +70,6 @@ export function sysRacing(ecs: Registry, room: Room) {
                         metadata: { ship: p.type, laps: p.race.totalLaps }
                     });
                     
-                    // Fetch top 5 for both categories and push a targeted UI event to the player
-                    const currentRaceStr = formatTimeMs(now - p.race.startTime);
-                    const currentLapStr = formatTimeMs(lapTime);
-
                     const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, x => formatTimeMs(x.value));
                     const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, x => formatTimeMs(x.value));
                     
@@ -92,9 +88,24 @@ export function sysRacing(ecs: Registry, room: Room) {
                         boards.push({ title: `CURRENT MATCH RESULTS`, entries: sessionEntries });
                     }
 
-                    boards.push({ title: `TOP ${mode} RACE TIMES`, subtitle: `THIS RUN: ${currentRaceStr}`, entries: ctxRaces });
-                    boards.push({ title: `TOP ${mode} LAP TIMES`, subtitle: `THIS LAP: ${currentLapStr}`, entries: ctxLaps });
-                    
+                    const raceDuration = now - p.race.startTime;
+                    const raceSummaryEntries = mode === 'MP' ?
+                        Array.from(room.ecs.players.entries()).map(([_, op]) => ({
+                            rankLabel: op.race && op.race.state === 2 ? formatTimeMs(op.race.finishTime! - op.race.startTime) : 'RACING',
+                            alias: op.alias,
+                            displayValue: `FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
+                            isMe: op.id === p.id,
+                            isNewPb: false
+                        })) : [
+                            { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
+                            { rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
+                            { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false }
+                        ];
+
+                    boards.push({ title: 'RACE RUN SUMMARY', entries: raceSummaryEntries });
+                    boards.push({ title: `TOP ${mode} RACE TIMES`, entries: ctxRaces });
+                    boards.push({ title: `TOP ${mode} LAP TIMES`, entries: ctxLaps });
+
                     room.emitToPlayer(p.id, 'show_leaderboard', boards);
 
                     } else {

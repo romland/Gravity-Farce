@@ -52,14 +52,29 @@
         
         #leaderboard-modal {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(15, 20, 25, 0.9); backdrop-filter: blur(10px);
-            border: 2px solid #4facfe; border-radius: 12px;
-            width: 400px; max-height: 80vh; overflow-y: auto;
+            background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(79, 172, 254, 0.3); border-radius: 16px;
+            width: 90vw; max-width: 920px; max-height: 85vh; overflow-y: auto;
             display: none; flex-direction: column; z-index: 100;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.85); padding: 24px;
+        }
+        #run-summary-container { margin-bottom: 16px; }
+        #leaderboard-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+            #leaderboard-content { grid-template-columns: 1fr; }
+            #leaderboard-modal { width: 95vw; padding: 16px; max-height: 90vh; }
+        }
+        .board-card {
+            background: rgba(25, 30, 40, 0.45); border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
         }
         .board-title { color: #f1c40f; text-align: center; margin-bottom: 12px; font-weight: bold; letter-spacing: 1px; }
-        .board-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-family: monospace; }
+        .board-table { width: 100%; border-collapse: collapse; font-family: monospace; }
         .board-table th { border-bottom: 1px solid rgba(255,255,255,0.2); padding: 8px 4px; text-align: left; color: #888; }
         .board-table td { padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .board-table tr:nth-child(1) td { color: #f1c40f; font-weight: bold; }
@@ -98,7 +113,9 @@
         </div>
     </div>
     
-    <div id="leaderboard-modal"><div id="leaderboard-content"></div>
+    <div id="leaderboard-modal">
+        <div id="run-summary-container"></div>
+        <div id="leaderboard-content"></div>
         <div style="display: flex; gap: 10px; margin-top: auto;">
             <button class="btn-close" style="flex: 1; margin-top: 0; background: #2c3e50; color: #fff;" onclick="document.getElementById('leaderboard-modal').style.display='none'">SPECTATE</button>
             <button class="btn-close" style="flex: 1; margin-top: 0;" onclick="requestNextLevel()">NEXT LEVEL</button>
@@ -363,23 +380,35 @@
     socket.on('show_leaderboard', (boards) => {
         let modal = document.getElementById('leaderboard-modal');
         if (!modal) return; // Failsafe in case HTML wasn't added
-        let html = '';
+        let summaryHtml = '';
+        let gridsHtml = '';
         boards.forEach(b => {
             if (b.isFootnote) {
-                html += `<div style="text-align:center; color:${b.color || '#fff'}; font-size:14px; margin-top:20px; margin-bottom:10px; font-weight:bold; letter-spacing:1px;">${b.text}</div>`;
+                gridsHtml += `<div style="text-align:center; color:${b.color || '#fff'}; font-size:14px; margin-top:10px; margin-bottom:10px; font-weight:bold; letter-spacing:1px; grid-column: 1 / -1;">${b.text}</div>`;
                 return;
             }
-            html += `<div class="board-title">${b.title}</div>`;
-            if (b.subtitle) html += `<div style="text-align:center; color:#bdc3c7; font-size:12px; margin-bottom:12px; letter-spacing:1px; font-weight:bold;">${b.subtitle}</div>`;
-            html += `<table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
-            b.entries.forEach((e, idx) => {
-                let isMe = e.isMe ? 'style="color:#2ecc71"' : (e.rankLabel === '...' ? 'style="color:#555"' : '');
-                let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
-                html += `<tr ${isMe}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
-            });
-            html += `</table>`;
+            if (b.title && b.title.includes('SUMMARY')) {
+                summaryHtml += `<div class="board-card"><div class="board-title">${b.title}</div>`;
+                summaryHtml += `<div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 12px; font-family: monospace; padding: 6px 0;">`;
+                b.entries.forEach(e => {
+                    summaryHtml += `<div style="display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); min-width: 90px;"><span style="font-size: 10px; color: #888; letter-spacing: 1px; margin-bottom: 2px;">${e.alias}</span><span style="font-size: 14px; font-weight: bold; color: ${e.isMe ? '#2ecc71' : '#fff'};">${e.displayValue}</span></div>`;
+                });
+                summaryHtml += `</div></div>`;
+            } else {
+                gridsHtml += `<div class="board-card">`;
+                gridsHtml += `<div class="board-title">${b.title}</div>`;
+                if (b.subtitle) gridsHtml += `<div style="text-align:center; color:#bdc3c7; font-size:12px; margin-bottom:12px; letter-spacing:1px; font-weight:bold;">${b.subtitle}</div>`;
+                gridsHtml += `<table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
+                b.entries.forEach((e, idx) => {
+                    let isMe = e.isMe ? 'style="color:#2ecc71"' : (e.rankLabel === '...' ? 'style="color:#555"' : '');
+                    let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
+                    gridsHtml += `<tr ${isMe}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
+                });
+                gridsHtml += `</table></div>`;
+            }
         });
-        document.getElementById('leaderboard-content').innerHTML = html;
+        document.getElementById('run-summary-container').innerHTML = summaryHtml;
+        document.getElementById('leaderboard-content').innerHTML = gridsHtml;
         modal.style.display = 'flex';
     });
 

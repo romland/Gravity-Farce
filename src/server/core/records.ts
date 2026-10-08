@@ -168,7 +168,7 @@ export function formatTimeMs(diff: number): string {
  */
 export function buildLeaderboardContext(
     metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string,
-    playerId: string, isNewPb: boolean, formatFn: (e: RecordEntry) => string, topN: number = 5
+    playerId: string, isNewPb: boolean, formatFn: (e: RecordEntry) => string, topN: number = 10
 ) {
     const records = recordDB.getRecords(metric, level, mode, physicsHash);
     const pIdx = records.findIndex(e => e.playerId === playerId);
@@ -196,5 +196,16 @@ export function buildLeaderboardContext(
          results.push({ rankLabel: '...', alias: 'DID NOT QUALIFY', displayValue: '', isMe: true });
     }
     
+    while (results.length < topN) {
+        const idx = results.length;
+        results.push({
+            rankLabel: `#${idx + 1}`,
+            alias: '---',
+            displayValue: '--------',
+            isMe: false,
+            isNewPb: false
+        });
+    }
+
     return results;
 }

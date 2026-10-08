@@ -131,29 +131,29 @@ function handleTransition(id: string) {
             const ctxSneak = buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, p.uuid, rSneak.isNewPb, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0));
             const ctxEco = buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, p.uuid, rEco.isNewPb, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0));
 
-            const currentFastestStr = formatTimeMs(timeTaken) + ' | ' + String(p.score).padStart(6,'0');
-            const currentSneakStr = String(p.score).padStart(6,'0') + ' | ' + formatTimeMs(timeTaken);
-            const currentEcoStr = String(Math.floor(p.fuel)) + 'F | ' + formatTimeMs(timeTaken);
-
             const boards = [];
             
-            if (mode === 'MP') {
-                const sessionStats = [];
-                for (const [_, otherP] of oldRoom.ecs.players.entries()) {
-                    sessionStats.push({ 
-                        alias: otherP.alias, displayValue: `S:${otherP.score} | F:${Math.floor(otherP.fuel)}`, isMe: otherP.id === id, score: otherP.score
-                    });
-                }
-                sessionStats.sort((a,b) => b.score - a.score);
-                const sessionEntries = sessionStats.map((sr) => ({ rankLabel: `-`, alias: sr.alias, displayValue: sr.displayValue, isMe: sr.isMe, isNewPb: false }));
-                boards.push({ title: `CURRENT MATCH STATUS`, entries: sessionEntries });
-            }
+			const runSummaryEntries = mode === 'MP' ?
+				Array.from(oldRoom.ecs.players.entries()).map(([_, op]) => ({
+					rankLabel: op.id === id ? 'YOU' : 'PILOT',
+					alias: op.alias,
+					displayValue: `SCR:${op.score} | FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
+					isMe: op.id === id,
+					isNewPb: false
+				})) : [
+					{ rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
+					{ rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
+					{ rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
+					{ rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
+					{ rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100% CLEARED' : `${enemiesLeft} SURVIVED`, isMe: true, isNewPb: false }
+				];
 
-            boards.push({ title: `FASTEST (${mode})`, subtitle: `THIS RUN: ${currentFastestStr}`, entries: ctxFastest });
-            boards.push({ title: `SNEAKIEST (${mode})`, subtitle: `THIS RUN: ${currentSneakStr}`, entries: ctxSneak });
-            boards.push({ title: `ECO-RUN (${mode})`, subtitle: `THIS RUN: ${currentEcoStr}`, entries: ctxEco });
-            if (rClear) boards.push({ title: `100% CLEARED (${mode})`, subtitle: `THIS RUN: ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
-            if (rSharpshooter) boards.push({ title: `SHARPSHOOTER (${mode})`, subtitle: `THIS RUN: ${p.shotsFired} SHOTS | ${formatTimeMs(timeTaken)}`, entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, p.uuid, rSharpshooter.isNewPb, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) });
+			boards.push({ title: mode === 'MP' ? 'MATCH RUN SUMMARY' : 'RUN STATS SUMMARY', entries: runSummaryEntries });
+			boards.push({ title: `FASTEST (${mode})`, entries: ctxFastest });
+			boards.push({ title: `SNEAKIEST (${mode})`, entries: ctxSneak });
+			boards.push({ title: `ECO-RUN (${mode})`, entries: ctxEco });
+			if (rClear) boards.push({ title: `100% CLEARED (${mode})`, entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, p.uuid, rClear.isNewPb, x => formatTimeMs(x.value)) });
+			if (rSharpshooter) boards.push({ title: `SHARPSHOOTER (${mode})`, entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, p.uuid, rSharpshooter.isNewPb, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) });
             
             if (enemiesLeft > 0) {
                 boards.push({ isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED (MISSED 100% CLEARED)`, color: '#e74c3c' });
