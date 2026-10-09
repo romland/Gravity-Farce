@@ -40,11 +40,14 @@ It's not really a port. I have tried to get the _feeling_ correct. It is written
 I had fun creating it. And yeah, _creating things_ was always the fun part, the tools used were always rather secondary.
 
 ### Amiga
-Oh how I miss thee. I have not used any emulator or used a real Amiga for decades.
-What really surprised me was that while digging around in the original game
-I realized how much of the 68k instruction set and the Amiga hardware was still 
-SO familiar. Decades! Even small annoyances like memory R/W breakpoints that never 
-hit felt like a good friend. Almost comforting.
+Oh how I miss thee. I have not used any emulator or used a real Amiga in decades,
+and what really surprised me was that while digging around in the disassembled 68k code
+I realized how much of the Amiga hardware and 68k was still SO familiar. Decades!
+Even small annoyances like memory R/W breakpoints that never hit felt like a good friend. 
+Track loaders and DMA getting screwed up by breakpoints. Ah. Almost comforting.  
+
+...and after a few days I found out that WinUAE had `HH`.
+
 
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
