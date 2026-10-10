@@ -60,12 +60,12 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
             pType = p.type;
             stats = {
                 score: p.score,
-                doubleShotAmmo: p.doubleShotAmmo,
+                    doubleShotAmmo: 0,
                 uuid: p.uuid,
                 alias: p.alias,
                 shipType: p.type,
-                shotsFired: p.shotsFired,
-                fuel: p.fuel
+                shotsFired: 0,
+                    fuel: 76464
             };
             playerSessionStats.set(id, stats);
             room.removePlayer(id);
@@ -110,6 +110,10 @@ function handleTransition(id: string) {
                 const rSneak = recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
                 const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
 
+                if (rFast.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_fastest', timeTaken, rFast.isNewPb);
+                if (rSneak.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_sneakiest', p.score, rSneak.isNewPb);
+                if (rEco.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_eco', Math.floor(p.fuel), rEco.isNewPb);
+
                 let rClear = null;
                 let rSharpshooter = null;
                 
@@ -128,6 +132,9 @@ function handleTransition(id: string) {
                 if (enemiesLeft === 0) {
                     rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
                     rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
+                    if (rClear.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_cleared', timeTaken, rClear.isNewPb);
+                    if (rSharpshooter.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_sharpshooter', p.shotsFired, rSharpshooter.isNewPb);
+                    oldRoom.tracker.isCompleted = true;
                 }
 
                 const boards = getLeaderboardBoards(pLevel, mode, physicsHash, p.uuid, {
@@ -175,14 +182,18 @@ function handleTransition(id: string) {
 
             playerSessionStats.set(id, {
                 score: p.score,
-                doubleShotAmmo: p.doubleShotAmmo,
+                doubleShotAmmo: 0,
                 uuid: p.uuid,
                 alias: p.alias,
                 shipType: p.type,
-                shotsFired: p.shotsFired,
-                fuel: p.fuel
+                shotsFired: 0,
+                fuel: 76464
             });
             oldRoom.removePlayer(id);
+            if (oldRoom.activeClientIds.size === 0) {
+                oldRoom.tracker.finishAndSave();
+                rooms.delete(oldRoom.levelIndex);
+            }
         }
     }
 }
@@ -291,7 +302,13 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         for (const room of rooms.values()) {
-            room.removePlayer(socket.id);
+            if (room.ecs.getPlayerEntity(socket.id) !== undefined) {
+                room.removePlayer(socket.id);
+                if (room.activeClientIds.size === 0) {
+                    room.tracker.finishAndSave();
+                    rooms.delete(room.levelIndex);
+                }
+            }
         }
         playerRooms.delete(socket.id);
         playerSessionStats.delete(socket.id);

@@ -1,0 +1,1 @@
+For a moment it looked like there were intentions to let player destroy terrain, but it was never wrapped up/delivered. But eh, I am walking back on that thought after further inspection.

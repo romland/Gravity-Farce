@@ -30,7 +30,8 @@ export function spawnTurret(ecs: Registry, x: number, y: number, turretType: num
         tileX,
         tileY,
         width: spec.width,
-        height: spec.height
+        height: spec.height,
+        damageHistory: {}
     });
     return e;
 }
@@ -71,7 +72,7 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, e, tt.x, tt.y, 7.0); // Heavy repulsion from solid turret
                 } else {
-                    killPlayer(ecs, e);
+                    killPlayer(ecs, e, room);
                     turret.hp = 0;
                     turret.active = false;
                     ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
@@ -82,7 +83,7 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
     }
 }
 
-export function killPlayer(ecs: Registry, e: Entity) {
+export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     const p = ecs.players.get(e);
     if (!p || p.isDead) return;
     p.isDead = true;
@@ -94,6 +95,11 @@ export function killPlayer(ecs: Registry, e: Entity) {
         v.angularVelocity = 0; 
     }
     
+    if (room) {
+        const t = ecs.transforms.get(e);
+        room.tracker.logEvent(p.id, { type: 'death', x: t?.x || 0, y: t?.y || 0 });
+    }
+
     p.inputs = { up: false, left: false, right: false, shoot: false };
     p.shootLatch = false; 
     p.prevShoot = false;
@@ -110,10 +116,20 @@ export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radiu
         const ot = ecs.transforms.get(oe)!;
         if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { 
             crashed = true; 
-            killPlayer(ecs, oe); 
+            killPlayer(ecs, oe); // Note: Could pass room here eventually, but PvP usually won't proc in most SP scenarios
         }
     }
     return crashed;
+}
+
+function getContributors(ecs: Registry, damageHistory: Record<string, number>): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const [id, hits] of Object.entries(damageHistory)) {
+        const pe = ecs.getPlayerEntity(id);
+        const alias = pe !== undefined ? ecs.players.get(pe)!.alias : id.substring(0, 3);
+        result[alias] = (result[alias] || 0) + hits;
+    }
+    return result;
 }
 
 export function sysBullets(ecs: Registry, room: Room) {
@@ -155,7 +171,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                     if (room.category === 'race' && !room.isLethalRacing) {
                         bumpPlayer(ecs, room, pe, t.x, t.y, 4.0); // Lighter bullet bonk
                     } else {
-                        killPlayer(ecs, pe);
+                        killPlayer(ecs, pe, room);
                     }
                 }
             }
@@ -168,9 +184,11 @@ export function sysBullets(ecs: Registry, room: Room) {
                 const spec = getTurretSpecByTile(turret.turretType);
                 if (Math.abs(t.x - tt.x) <= spec.width / 2 && Math.abs(t.y - tt.y) <= spec.height / 2) {
                     hit = true;
+                    turret.damageHistory[b.ownerId] = (turret.damageHistory[b.ownerId] || 0) + 1;
                     turret.hp--;
                     if (turret.hp <= 0) {
                         turret.active = false;
+                        room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'turret', enemyTypeId: turret.turretType, contributors: getContributors(ecs, turret.damageHistory) });
                         ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
                         destroyTurretTile(room, turret.tileX, turret.tileY);
 
@@ -191,9 +209,11 @@ export function sysBullets(ecs: Registry, room: Room) {
                     // Amiga Tank Hitbox: 16x12 (X: ±8, Y: ±6)
                     if (Math.abs(t.x - tt.x) <= tank.width / 2 && Math.abs(t.y - tt.y) <= tank.height / 2) {
                         hit = true;
+                        tank.damageHistory[b.ownerId] = (tank.damageHistory[b.ownerId] || 0) + 1;
                         tank.hp--;
                         if (tank.hp <= 0) {
                             tank.active = false;
+                            room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'tank', enemyTypeId: 0, contributors: getContributors(ecs, tank.damageHistory) });
                             ecs.events.push({ type: 'large_explosion', x: tt.x, y: tt.y });
                             
                             const shooterEntity = ecs.getPlayerEntity(b.ownerId);
@@ -215,9 +235,11 @@ export function sysBullets(ecs: Registry, room: Room) {
                             
                             // Ensure indestructible (-1 HP) enemies are not deleted by underflow
                             if (flying.hp !== -1) {
+                            flying.damageHistory[b.ownerId] = (flying.damageHistory[b.ownerId] || 0) + 1;
                                 flying.hp--;
                                 if (flying.hp <= 0) {
                                     flying.active = false;
+                                room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'flying', enemyTypeId: flying.enemyType, contributors: getContributors(ecs, flying.damageHistory) });
                                     ecs.events.push({ type: 'large_explosion', x: ft.x, y: ft.y });
                                     const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                                     if (shooterEntity !== undefined) {

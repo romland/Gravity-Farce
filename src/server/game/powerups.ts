@@ -38,12 +38,15 @@ export function sysPowerups(ecs: Registry, room: Room) {
                 if (powerup.typeId === 0xD0) {
                     p.fuel = Math.min(99999, (p.fuel || 0) + powerup.charges);
                     ecs.events.push({ type: 'floating_text', text: 'FUEL +50000', color: '#e67e22', x: put.x, y: put.y - 30 });
+                    room.tracker.logEvent(p.id, { type: 'fuel_taken', amount: powerup.charges, x: put.x, y: put.y });
                 } else if (powerup.typeId === 0xD6) {
                     p.doubleShotAmmo = (p.doubleShotAmmo || 0) + powerup.charges;
                     ecs.events.push({ type: 'floating_text', text: 'DOUBLE SHOT', color: '#2ecc71', x: put.x, y: put.y - 30 });
+                    room.tracker.logEvent(p.id, { type: 'powerup_taken', typeId: powerup.typeId, x: put.x, y: put.y });
                 } else {
                     p.doubleShotAmmo = (p.doubleShotAmmo || 0) + powerup.charges;
                     ecs.events.push({ type: 'floating_text', text: 'POWERUP', color: '#9b59b6', x: put.x, y: put.y - 30 });
+                    room.tracker.logEvent(p.id, { type: 'powerup_taken', typeId: powerup.typeId, x: put.x, y: put.y });
                 }
 
                 ecs.events.push({ type: 'sound', soundId: 11, x: put.x, y: put.y });

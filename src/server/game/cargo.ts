@@ -63,6 +63,7 @@ export function sysCargo(ecs: Registry, room: Room) {
                     p.unloadTimer = 30; // Frame cooldown between unloading crates
                     ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
                     ecs.events.push({ type: 'floating_text', text: `CARGO SECURED (+${points})`, color: '#2ecc71', x: pt.x, y: pt.y - 30 });
+                    room.tracker.logEvent(p.id, { type: 'cargo_delivered', typeId: crateId });
 
                     // Fully destroy the entity now that it is secured
                     for (const [ce, cargo] of ecs.cargos.entries()) {
@@ -117,6 +118,7 @@ export function sysCargo(ecs: Registry, room: Room) {
         for (const [pe, p] of ecs.players.entries()) {
             if (!p.advancing) {
                 p.advancing = true;
+                room.tracker.isCompleted = true;
                 const pt = ecs.transforms.get(pe);
                 if (pt) {
                     ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: pt.x, y: pt.y - 60 });

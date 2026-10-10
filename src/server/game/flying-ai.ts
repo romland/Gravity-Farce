@@ -84,7 +84,8 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         startX: x,
         startY: y,
         fireTimer: 120 + Math.floor(Math.random() * 60),
-        burstRemaining: 0
+        burstRemaining: 0,
+        damageHistory: {}
     });
 
     // Note: This may log twice in rapid succession on initial connect due to the

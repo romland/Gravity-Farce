@@ -19,7 +19,8 @@ export function spawnTank(ecs: Registry, x: number, y: number, debugId: number):
         dirY: 0,
         scoreValue: 50,
         width: 32,
-        height: 24
+        height: 24,
+        damageHistory: {}
     });
     return e;
 }

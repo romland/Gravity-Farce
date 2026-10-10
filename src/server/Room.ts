@@ -13,6 +13,7 @@ import { sysRacing } from './game/racing';
 import type { PlayerStats } from './core/types';
 import { getLevelCategory, type LevelCategory } from './levels';
 import { TILE_DICTIONARY } from './core/tiles';
+import { GameTracker } from './core/tracker';
 
 export class Room {
     public ecs = new Registry();
@@ -22,12 +23,14 @@ export class Room {
     public globalWaveTimer = 0;
     public activeClientIds = new Set<string>();
     public category: LevelCategory;
+    public tracker: GameTracker;
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void, public isLethalRacing: boolean = false, public raceBumpModifier: number = 0.4) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
         this.category = getLevelCategory(levelIndex);
+        this.tracker = new GameTracker(levelIndex, this.category, 'SP');
         this.spawnEntities();
         this.printLevelStats();
     }
@@ -89,16 +92,22 @@ export class Room {
         if (this.ecs.players.size === 0) {
             this.resetLevel();
         }        
+        if (this.activeClientIds.size > 1) {
+            this.tracker['entry'].mode = 'MP';
+        }
         this.trySpawnPlayer(id, type, stats);
+        this.tracker.initPlayer(id, stats?.uuid || id, stats?.alias || 'UNK');
     }
 
     removePlayer(id: string) {
         this.activeClientIds.delete(id);
         const e = this.ecs.getPlayerEntity(id);
-        if (e !== undefined) this.ecs.destroy(e);
-        if (this.ecs.players.size === 0) {
-            this.resetLevel();
+        if (e !== undefined) {
+            const p = this.ecs.players.get(e)!;
+            this.tracker.updatePlayerShots(id, p.shotsFired);
+            this.ecs.destroy(e);
         }
+        // Note: Room deletion when empty is now handled by the parent index.ts
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
@@ -185,6 +194,8 @@ export class Room {
     }
 
     resetLevel() {
+        this.tracker.finishAndSave();
+        this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP');
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }

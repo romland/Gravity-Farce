@@ -55,6 +55,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                     value: lapTime,
                     metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps }
                 });
+                if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
 
                     if (p.race.currentLap >= p.race.totalLaps) {
                         p.race.state = 2;
@@ -62,6 +63,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                         ecs.events.push({ type: 'sound', soundId: 11, x: pt.x, y: pt.y });
                         ecs.events.push({ type: 'floating_text', text: 'FINISHED!', color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                         p.score += 5000;
+                        room.tracker.isCompleted = true;
                     
                     const rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
                         playerId: p.uuid,
@@ -69,6 +71,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                         value: now - p.race.startTime,
                         metadata: { ship: p.type, laps: p.race.totalLaps }
                     });
+                    if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
                     
                     const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value));
                     const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value));

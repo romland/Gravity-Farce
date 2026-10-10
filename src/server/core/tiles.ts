@@ -112,7 +112,8 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x6F: { id: 0x6F, description: "Gravity Well Graphic Left Side (pulls right)", known: true },
     0x70: { id: 0x70, description: "Gravity Well Graphic Right Side (pulls left)", known: true },
 
-    // assuming up and down wells here then
+    0x71: { id: 0x71, description: "Gravity Well Graphic Bottom Side (pulls down)", known: true },  // assumed, have not seen them yet
+    0x72: { id: 0x72, description: "Gravity Well Graphic Top Side (pulls up)", known: true },
 
     0x73: { id: 0x73, description: "bottom thin rock?", known: true },
     0x74: { id: 0x74, description: "vertical left thin rock", known: true },

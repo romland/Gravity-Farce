@@ -74,6 +74,7 @@ export interface Turret {
     tileY: number;
     width: number;
     height: number;
+    damageHistory: Record<string, number>;
 }
 
 export interface Tank {
@@ -86,6 +87,7 @@ export interface Tank {
     scoreValue: number;
     width: number;
     height: number;
+    damageHistory: Record<string, number>;
 }
 
 export interface FlyingEnemy {
@@ -103,6 +105,7 @@ export interface FlyingEnemy {
     burstRemaining: number;
     startX: number;
     startY: number;
+    damageHistory: Record<string, number>;
 }
 
 export interface HomingMissile {

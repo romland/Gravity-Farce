@@ -22,6 +22,9 @@ This version of GF keeps track of all kinds of high-scores and records for both 
 
 _But obviously, multi-player is the way to go! `:D`_
 
+### Gameplay Tips
+If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
+
 ### Party like it's 1989: Play It
 ... todo ...
 
@@ -46,8 +49,9 @@ I realized how much of the Amiga hardware and 68k was still SO familiar. Decades
 Even small annoyances like memory R/W breakpoints that never hit felt like a good friend. 
 Track loaders and DMA getting screwed up by breakpoints. Ah. Almost comforting.  
 
-...and after a few days I found out that WinUAE had `HH`.
-
+...and after a few days I found out that WinUAE had `HH`.  
+...and after that I learned I could dump all code with radare instead of sitting in the debugger.
+...and ...  
 
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
