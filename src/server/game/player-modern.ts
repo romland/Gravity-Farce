@@ -30,7 +30,7 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         spawnY: y,
         race: stats?.race
     });
-    ecs.fuelTanks.set(e, { current: 76464, max: 99999 });
+    ecs.fuelTanks.set(e, { current: 76464, max: 99999, consumed: 0 });
     ecs.cargoBays.set(e, { stack: [], unloadTimer: 0, maxWeight: 3 });
     ecs.weaponMounts.set(e, { cooldown: 0, baseCooldown: 40, activeModeId: 0xD5, charges: 0, shotsFired: 0, shootLatch: false, prevShoot: false });
     return e;
@@ -71,7 +71,9 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         t.angle += v.angularVelocity;
 
         if (p.inputs.up && f && f.current > 0) {
-             f.current = Math.max(0, f.current - 15);
+             const drain = Math.min(15, f.current);
+             f.current -= drain;
+             f.consumed += drain;
              v.vx += Math.cos(t.angle) * weightThrust;
              v.vy += Math.sin(t.angle) * weightThrust;
         }

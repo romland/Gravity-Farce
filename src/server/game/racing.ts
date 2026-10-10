@@ -99,13 +99,13 @@ export function sysRacing(ecs: Registry, room: Room) {
                             return {
                                 rankLabel: op.race && op.race.state === 2 ? formatTimeMs(op.race.finishTime! - op.race.startTime) : 'RACING',
                                 alias: op.alias,
-                                displayValue: `FUL:${Math.floor(room.ecs.fuelTanks.get(oe)?.current || 0)} | SHT:${room.ecs.weaponMounts.get(oe)?.shotsFired || 0}`,
+                                displayValue: `FUL:${Math.floor(oF?.consumed || 0)} | SHT:${oW?.shotsFired || 0}`,
                                 isMe: op.id === p.id,
                                 isNewPb: false
                             };
                         }) : [
                             { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
-                            { rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(ecs.fuelTanks.get(pe)?.current || 0)}F`, isMe: true, isNewPb: false },
+                            { rankLabel: 'FUEL', alias: 'USED', displayValue: `${Math.floor(room.ecs.fuelTanks.get(pe)?.consumed || 0)}F`, isMe: true, isNewPb: false },
                             { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
                         ];
 

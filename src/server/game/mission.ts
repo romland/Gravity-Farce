@@ -61,11 +61,11 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     
     const rFast = recordDB.submitRecord('sp_fastest', room.levelIndex, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
     const rSneak = recordDB.submitRecord('sp_sneakiest', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
-    const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.current || 0), secondaryValue: timeTaken });
+    const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.consumed || 0), secondaryValue: timeTaken });
 
     if (rFast.rank !== -1) room.tracker.logHighscore(playerId, 'sp_fastest', timeTaken, rFast.isNewPb);
     if (rSneak.rank !== -1) room.tracker.logHighscore(playerId, 'sp_sneakiest', p.score, rSneak.isNewPb);
-    if (rEco.rank !== -1) room.tracker.logHighscore(playerId, 'sp_eco', Math.floor(f?.current || 0), rEco.isNewPb);
+    if (rEco.rank !== -1) room.tracker.logHighscore(playerId, 'sp_eco', Math.floor(f?.consumed || 0), rEco.isNewPb);
 
     let rClear = null;
     let rSharpshooter = null;
@@ -88,17 +88,17 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     const boards = buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias, 
         { fast: rFast.isNewPb, sneak: rSneak.isNewPb, eco: rEco.isNewPb, clear: rClear?.isNewPb ?? false, sharpshooter: rSharpshooter?.isNewPb ?? false }, 
         { fast: rFast.timestamp, sneak: rSneak.timestamp, eco: rEco.timestamp, clear: rClear?.timestamp, sharpshooter: rSharpshooter?.timestamp },
-        { fast: { v: timeTaken, s: p.score }, sneak: { v: p.score, s: timeTaken }, eco: { v: Math.floor(f?.current || 0), s: timeTaken }, clear: { v: timeTaken }, sharpshooter: { v: w?.shotsFired || 0, s: timeTaken } }
+        { fast: { v: timeTaken, s: p.score }, sneak: { v: p.score, s: timeTaken }, eco: { v: Math.floor(f?.consumed || 0), s: timeTaken }, clear: { v: timeTaken }, sharpshooter: { v: w?.shotsFired || 0, s: timeTaken } }
     );
 
     const runSummaryEntries = mode === 'MP' ?
         Array.from(room.ecs.players.entries()).map(([oe, op]) => ({
             rankLabel: op.id === playerId ? 'YOU' : 'PILOT', alias: op.alias, isMe: op.id === playerId, isNewPb: false,
-            displayValue: `SCR:${op.score} | FUL:${Math.floor(room.ecs.fuelTanks.get(oe)?.current || 0)} | SHT:${room.ecs.weaponMounts.get(oe)?.shotsFired || 0}`
+            displayValue: `SCR:${op.score} | FUL:${Math.floor(room.ecs.fuelTanks.get(oe)?.consumed || 0)} | SHT:${room.ecs.weaponMounts.get(oe)?.shotsFired || 0}`
         })) : [
             { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
             { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
-            { rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(f?.current || 0)}F`, isMe: true, isNewPb: false },
+            { rankLabel: 'FUEL', alias: 'CONSUMED', displayValue: `${Math.floor(f?.consumed || 0)}F`, isMe: true, isNewPb: false },
             { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
             { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
         ];

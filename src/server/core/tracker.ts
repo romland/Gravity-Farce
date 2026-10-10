@@ -30,6 +30,7 @@ export interface LogEntry {
         powerupsTaken: number;
         fuelTaken: number;
         cargoDelivered: number;
+        fuelConsumed: number;
         shotsFired: number;
     }>;
 }
@@ -61,7 +62,7 @@ export class GameTracker {
 
     public initPlayer(playerId: string, uuid: string, alias: string) {
         if (!this.entry.playerStats[playerId]) {
-            this.entry.playerStats[playerId] = { uuid, alias, deaths: 0, powerupsTaken: 0, fuelTaken: 0, cargoDelivered: 0, shotsFired: 0 };
+            this.entry.playerStats[playerId] = { uuid, alias, deaths: 0, powerupsTaken: 0, fuelTaken: 0, cargoDelivered: 0, fuelConsumed: 0, shotsFired: 0 };
         }
     }
 
@@ -82,6 +83,12 @@ export class GameTracker {
         if (!this.isActive || !this.entry.playerStats[playerId]) return;
         const { uuid, alias } = this.entry.playerStats[playerId];
         this.entry.highscores.push({ playerId, uuid, alias, metric, value, isNewPb });
+    }
+
+    public updatePlayerFuelConsumed(playerId: string, consumed: number) {
+        if (this.entry.playerStats[playerId]) {
+            this.entry.playerStats[playerId].fuelConsumed = Math.max(this.entry.playerStats[playerId].fuelConsumed, consumed);
+        }
     }
 
     public updatePlayerShots(playerId: string, shotsFired: number) {

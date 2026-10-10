@@ -86,6 +86,8 @@ export class RecordManager {
         }
 
         const board = this.db[key];
+        // Overwrite cached sort order so metric definition changes auto-heal
+        board.sort = sort;
         let isNewPb = false;
 
         const playerEntries = board.entries.filter(e => e.playerId === entry.playerId);

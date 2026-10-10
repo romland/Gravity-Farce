@@ -107,8 +107,10 @@ export class Room {
         this.activeClientIds.delete(id);
         const e = this.ecs.getPlayerEntity(id);
         if (e !== undefined) {
-            const p = this.ecs.players.get(e)!;
-            this.tracker.updatePlayerShots(id, p.shotsFired);
+            const w = this.ecs.weaponMounts.get(e);
+            if (w) this.tracker.updatePlayerShots(id, w.shotsFired);
+            const f = this.ecs.fuelTanks.get(e);
+            if (f) this.tracker.updatePlayerFuelConsumed(id, f.consumed);
             this.ecs.destroy(e);
         }
         // Note: Room deletion when empty is now handled by the parent index.ts
@@ -262,14 +264,13 @@ export class Room {
         }
 
         console.log(`\n=== LEVEL ${this.levelIndex} DIAGNOSTICS (Current Category: ${this.category}) ===`);
-        console.log(`- Spawns:         ${formatCounts(spawns)}`);
-        console.log(`- Checkpoints:    ${formatCounts(checkpoints)}`);
-        console.log(`- Cargos:         ${formatCounts(cargos)}`);
-        console.log(`- Turrets:        ${formatCounts(turrets)}`);
-        console.log(`- Flying Enemies: ${formatCounts(flying)}`);
-        console.log(`- Tanks (Nodes):  ${formatCounts(tanks)}`);
-        console.log(`- Powerups:       ${formatCounts(powerups)}`);
-        console.log(`- Physics hash:   ${getActivePhysicsHash()}`);
-        console.log(`========================================================\n`);
+        console.log(`   - Spawns:         ${formatCounts(spawns)}`);
+        console.log(`   - Checkpoints:    ${formatCounts(checkpoints)}`);
+        console.log(`   - Cargos:         ${formatCounts(cargos)}`);
+        console.log(`   - Turrets:        ${formatCounts(turrets)}`);
+        console.log(`   - Flying Enemies: ${formatCounts(flying)}`);
+        console.log(`   - Tanks (Nodes):  ${formatCounts(tanks)}`);
+        console.log(`   - Powerups:       ${formatCounts(powerups)}`);
+        console.log(`   - Physics hash:   ${getActivePhysicsHash()}`);
     }
 }

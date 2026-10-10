@@ -57,6 +57,7 @@ export interface Player {
 export interface FuelTank {
     current: number;
     max: number;
+    consumed: number;
 }
 
 export interface CargoBay {
