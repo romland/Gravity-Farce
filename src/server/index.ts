@@ -230,8 +230,6 @@ io.on('connection', (socket) => {
     const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
     const stats: PlayerStats = {
         score: 0,
-        fuel: 76464,
-        doubleShotAmmo: 0,
         uuid: uuid,
 		alias: alias,
 		shipType: useClassicPhysics ? 'classic' : 'modern'
