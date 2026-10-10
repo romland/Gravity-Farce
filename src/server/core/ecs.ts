@@ -121,6 +121,9 @@ export interface FlyingEnemy {
     startX: number;
     startY: number;
     damageHistory: Record<string, number>;
+    lastDx?: number;
+    lastDy?: number;
+    outOfBoundsLogged?: boolean;
 }
 
 export interface HomingMissile {

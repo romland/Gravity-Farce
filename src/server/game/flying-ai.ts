@@ -111,6 +111,11 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         if (!enemy.active) continue;
         const t = ecs.transforms.get(e)!;
 
+        if (!enemy.outOfBoundsLogged && (t.x < 0 || t.x > room.level.width || t.y < 0 || t.y > room.level.height)) {
+            enemy.outOfBoundsLogged = true;
+            console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy LEFT MAP! ID: ${enemy.debugId} | Type: 0x${enemy.enemyType.toString(16).toUpperCase()} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)}`);
+        }
+
         // 1. Firing Loop (Bit 1 / 0x02 Capability Check)
         if (enemy.canShoot && --enemy.fireTimer <= 0) {
             const angle = Math.random() * Math.PI * 2;
@@ -174,6 +179,14 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         // 3. Movement Integration
         const dir = getCorneringVector(enemy.directionState, enemy.maneuverStep);
         const moveSpeed = WAVE_SPEED_MODIFIERS[waveIndex]; // Unmodified native speed
+
+        if (enemy.lastDx !== undefined && enemy.lastDy !== undefined) {
+            if (Math.abs(enemy.lastDx - dir.x) > 0.001 || Math.abs(enemy.lastDy - dir.y) > 0.001) {
+                console.log(`[${new Date().toISOString()}] [DEBUG] FlyingEnemy Direction Changed! ID: ${enemy.debugId} | Old: ${enemy.lastDx.toFixed(3)},${enemy.lastDy.toFixed(3)} -> New: ${dir.x.toFixed(3)},${dir.y.toFixed(3)} | Pos: ${t.x.toFixed(1)},${t.y.toFixed(1)} | State: ${enemy.directionState} | Step: ${enemy.maneuverStep}`);
+            }
+        }
+        enemy.lastDx = dir.x;
+        enemy.lastDy = dir.y;
 
         t.x += dir.x * moveSpeed;
         t.y += dir.y * moveSpeed;
