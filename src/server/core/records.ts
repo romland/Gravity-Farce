@@ -216,8 +216,9 @@ export function buildLeaderboardContext(
     metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string,
     playerId: string, isNewPb: boolean, 
     arg7: number | undefined | ((e: RecordEntry) => string), 
-    arg8?: ((e: RecordEntry) => string) | number, 
-    arg9: number = 10
+    arg8?: ((e: RecordEntry) => string) | number,
+    arg9: number = 10,
+    currentRun?: { value: number, secondaryValue?: number, alias: string }
 ) {
     let newEntryTimestamp: number | undefined = undefined;
     let formatFn: (e: RecordEntry) => string = x => String(x.value);
@@ -232,38 +233,63 @@ export function buildLeaderboardContext(
     }
 
     const records = recordDB.getRecords(metric, level, mode, physicsHash);
-    const pIdx = newEntryTimestamp !== undefined
-        ? records.findIndex(e => e.playerId === playerId && e.timestamp === newEntryTimestamp)
-        : records.findIndex(e => e.playerId === playerId);
+    let recordsCopy = [...records];
+
+    let pIdx = newEntryTimestamp !== undefined
+        ? recordsCopy.findIndex(e => e.playerId === playerId && e.timestamp === newEntryTimestamp)
+        : recordsCopy.findIndex(e => e.playerId === playerId);
         
+    // If the run didn't qualify for the DB (e.g., worse than 3rd PB), inject it temporarily 
+    // into the rendering array so the player can implicitly see where they would have ranked
+    if (pIdx === -1 && currentRun && newEntryTimestamp !== undefined) {
+        const tempEntry: RecordEntry = {
+            playerId, alias: currentRun.alias, value: currentRun.value, secondaryValue: currentRun.secondaryValue, timestamp: newEntryTimestamp
+        };
+        recordsCopy.push(tempEntry);
+        
+        const key = recordDB['getCompositeKey'](metric, level, mode, physicsHash);
+        const sort = recordDB['db'][key]?.sort || 'asc';
+        
+        recordsCopy.sort((a, b) => {
+            if (a.value !== b.value) {
+                return sort.startsWith('asc') ? a.value - b.value : b.value - a.value;
+            }
+            const secA = a.secondaryValue ?? 0;
+            const secB = b.secondaryValue ?? 0;
+            if (sort.endsWith('_asc')) return secA - secB;
+            if (sort.endsWith('_desc')) return secB - secA;
+            return a.timestamp - b.timestamp;
+        });
+        pIdx = recordsCopy.findIndex(e => e.playerId === playerId && e.timestamp === newEntryTimestamp);
+    }
+
     const results = [];
     
-    for (let i = 0; i < Math.min(topN, records.length); i++) {
-        const rec = records[i];
+    for (let i = 0; i < Math.min(topN, recordsCopy.length); i++) {
+        const rec = recordsCopy[i];
         const isMe = rec.playerId === playerId;
         const isThisNewPb = isMe && isNewPb && rec.timestamp === newEntryTimestamp;
+        const isCurrentRun = isMe && rec.timestamp === newEntryTimestamp;
         results.push({
             rankLabel: `#${i+1}`, alias: rec.alias, displayValue: formatFn(rec),
-            isMe, isNewPb: isThisNewPb
+            isMe, isNewPb: isThisNewPb, isCurrentRun
         });
     }
     
     if (pIdx >= topN) {
         if (pIdx > topN) {
-            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false });
+            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false, isCurrentRun: false });
         }
         if (pIdx - 1 >= topN) {
-            const rec = records[pIdx-1];
-            results.push({ rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false });
+            const rec = recordsCopy[pIdx-1];
+            results.push({ rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false });
         }
-        const recMe = records[pIdx];
-        results.push({ rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp) });
-        if (pIdx + 1 < records.length) {
-            const recNext = records[pIdx+1];
-            results.push({ rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false });
+        const recMe = recordsCopy[pIdx];
+        results.push({ rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true });
+        if (pIdx + 1 < recordsCopy.length) {
+            const recNext = recordsCopy[pIdx+1];
+            results.push({ rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false });
         }
-    } else if (pIdx === -1 && records.length > 0) {
-         results.push({ rankLabel: '...', alias: 'DID NOT QUALIFY', displayValue: '', isMe: true, isNewPb: false });
     }
 
     while (results.length < topN) {
@@ -272,8 +298,7 @@ export function buildLeaderboardContext(
             rankLabel: `#${idx + 1}`,
             alias: '---',
             displayValue: '--------',
-            isMe: false,
-            isNewPb: false
+            isMe: false, isNewPb: false, isCurrentRun: false
         });
     }
 

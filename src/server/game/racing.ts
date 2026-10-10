@@ -71,9 +71,10 @@ export function sysRacing(ecs: Registry, room: Room) {
                         metadata: { ship: p.type, laps: p.race.totalLaps }
                     });
                     if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
+                    room.tracker.isCompleted = true;
                     
-                    const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value));
-                    const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value));
+                    const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value), 10, { value: now - p.race.startTime, alias: p.alias });
+                    const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value), 10, { value: lapTime, alias: p.alias });
                     
                     const boards = [];
                     if (mode === 'MP') {

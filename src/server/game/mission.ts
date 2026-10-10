@@ -70,10 +70,13 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     let rClear = null;
     let rSharpshooter = null;
     let enemiesLeft = 0;
+    let totalEnemies = room.ecs.turrets.size + room.ecs.tanks.size + room.ecs.flyingEnemies.size;
     
     for (const t of room.ecs.turrets.values()) if (t.hp !== undefined && t.hp > 0) enemiesLeft++;
     for (const t of room.ecs.tanks.values()) if (t.hp !== undefined && t.hp > 0) enemiesLeft++;
     for (const fly of room.ecs.flyingEnemies.values()) if (fly.hp !== undefined && fly.hp > 0) enemiesLeft++;
+
+    const completionPct = totalEnemies === 0 ? 100 : Math.round(((totalEnemies - enemiesLeft) / totalEnemies) * 100);
 
     if (enemiesLeft === 0) {
         rClear = recordDB.submitRecord('sp_cleared', room.levelIndex, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
@@ -82,9 +85,10 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         if (rSharpshooter.rank !== -1) room.tracker.logHighscore(playerId, 'sp_sharpshooter', w?.shotsFired || 0, rSharpshooter.isNewPb);
     }
 
-    const boards = buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, 
+    const boards = buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias, 
         { fast: rFast.isNewPb, sneak: rSneak.isNewPb, eco: rEco.isNewPb, clear: rClear?.isNewPb ?? false, sharpshooter: rSharpshooter?.isNewPb ?? false }, 
-        { fast: rFast.timestamp, sneak: rSneak.timestamp, eco: rEco.timestamp, clear: rClear?.timestamp, sharpshooter: rSharpshooter?.timestamp }
+        { fast: rFast.timestamp, sneak: rSneak.timestamp, eco: rEco.timestamp, clear: rClear?.timestamp, sharpshooter: rSharpshooter?.timestamp },
+        { fast: { v: timeTaken, s: p.score }, sneak: { v: p.score, s: timeTaken }, eco: { v: Math.floor(f?.current || 0), s: timeTaken }, clear: { v: timeTaken }, sharpshooter: { v: w?.shotsFired || 0, s: timeTaken } }
     );
 
     const runSummaryEntries = mode === 'MP' ?
@@ -96,21 +100,20 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
             { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
             { rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(f?.current || 0)}F`, isMe: true, isNewPb: false },
             { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
-            { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
+            { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
         ];
 
     boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', description: '', entries: runSummaryEntries });
-    if (enemiesLeft > 0) boards.push({ title: '', description: '', isFootnote: true, text: `${enemiesLeft} ENEMIES SURVIVED`, color: '#e74c3c', entries: [] } as any);
     
     return boards;
 }
 
-export function buildMissionLeaderboards(pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string, isNewPbMap?: Record<string, boolean>, timestampsMap?: Record<string, number>) {
+export function buildMissionLeaderboards(pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string, alias: string, isNewPbMap?: Record<string, boolean>, timestampsMap?: Record<string, number>, cv?: Record<string, any>) {
     return [
-        { title: 'BLITZ', description: 'FASTEST CAVERN COMPLETION TIME', entries: buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, uuid, isNewPbMap?.fast ?? false, timestampsMap?.fast, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0')) },
-        { title: 'PACIFIST', description: 'LOWEST SCORE / PACIFIST GHOST RUN', entries: buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, uuid, isNewPbMap?.sneak ?? false, timestampsMap?.sneak, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0)) },
-        { title: 'TREEHUGGER', description: 'LEAST FUEL USED', entries: buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, uuid, isNewPbMap?.eco ?? false, timestampsMap?.eco, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0)) },
-        { title: 'PERFECTION', description: '100% ENEMY WIPE ON TIME', entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, uuid, isNewPbMap?.clear ?? false, timestampsMap?.clear, x => formatTimeMs(x.value)) },
-        { title: 'SNIPER', description: 'LEAST SHOTS FIRED (100% ENEMY WIPE)', entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, uuid, isNewPbMap?.sharpshooter ?? false, timestampsMap?.sharpshooter, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0)) }
+        { title: 'BLITZ', description: 'FASTEST CAVERN COMPLETION TIME', entries: buildLeaderboardContext('sp_fastest', pLevel, mode, physicsHash, uuid, isNewPbMap?.fast ?? false, timestampsMap?.fast, x => formatTimeMs(x.value) + ' | ' + String(x.secondaryValue??0).padStart(6,'0'), 10, { value: cv?.fast.v, secondaryValue: cv?.fast.s, alias }) },
+        { title: 'PACIFIST', description: 'LOWEST SCORE / PACIFIST GHOST RUN', entries: buildLeaderboardContext('sp_sneakiest', pLevel, mode, physicsHash, uuid, isNewPbMap?.sneak ?? false, timestampsMap?.sneak, x => String(x.value).padStart(6,'0') + ' | ' + formatTimeMs(x.secondaryValue??0), 10, { value: cv?.sneak.v, secondaryValue: cv?.sneak.s, alias }) },
+        { title: 'TREEHUGGER', description: 'LEAST FUEL USED', entries: buildLeaderboardContext('sp_eco', pLevel, mode, physicsHash, uuid, isNewPbMap?.eco ?? false, timestampsMap?.eco, x => String(x.value) + 'F | ' + formatTimeMs(x.secondaryValue??0), 10, { value: cv?.eco.v, secondaryValue: cv?.eco.s, alias }) },
+        { title: 'PERFECTION', description: '100% ENEMY WIPE ON TIME', entries: buildLeaderboardContext('sp_cleared', pLevel, mode, physicsHash, uuid, isNewPbMap?.clear ?? false, timestampsMap?.clear, x => formatTimeMs(x.value), 10, cv?.clear ? { value: cv?.clear.v, secondaryValue: cv?.clear.s, alias } : undefined) },
+        { title: 'SNIPER', description: 'LEAST SHOTS FIRED (100% ENEMY WIPE)', entries: buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, uuid, isNewPbMap?.sharpshooter ?? false, timestampsMap?.sharpshooter, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0), 10, cv?.sharpshooter ? { value: cv?.sharpshooter.v, secondaryValue: cv?.sharpshooter.s, alias } : undefined) }
     ];
 }

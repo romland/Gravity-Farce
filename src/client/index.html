@@ -445,9 +445,11 @@
                 if (b.subtitle) panesHtml += `<div style="text-align:center; color:#bdc3c7; font-size:12px; margin-bottom:12px; letter-spacing:1px; font-weight:bold;">${b.subtitle}</div>`;
                 panesHtml += `<table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
                 b.entries.forEach((e, idx) => {
-                    let isMe = e.isMe ? 'style="color:#2ecc71"' : (e.rankLabel === '...' ? 'style="color:#555"' : '');
+                    let col = e.isMe ? 'color:#2ecc71;' : (e.rankLabel === '...' ? 'color:#555;' : '');
+                    let bg = e.isCurrentRun ? 'background:rgba(46,204,113,0.15); font-weight:bold;' : '';
+                    let styleStr = (col || bg) ? `style="${col} ${bg}"` : '';
                     let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
-                    panesHtml += `<tr ${isMe}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
+                    panesHtml += `<tr ${styleStr}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
                 });
                 panesHtml += `</table></div></div>`;
                 boardIndex++;

@@ -246,10 +246,11 @@ io.on('connection', (socket) => {
         const pLevel = playerRooms.get(socket.id) ?? 0;
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
+        const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
         const mode = 'SP';
         const physicsHash = getActivePhysicsHash();
         
-        const boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid);
+        const boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias);
             socket.emit('show_leaderboard', boards, true);
     });
 
