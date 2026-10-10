@@ -14,6 +14,8 @@ import type { PlayerStats } from './core/types';
 import { getLevelCategory, type LevelCategory } from './levels';
 import { TILE_DICTIONARY } from './core/tiles';
 import { GameTracker } from './core/tracker';
+import { SERVER_CONFIG } from './core/config';
+import { getActivePhysicsHash } from './core/records';
 
 export class Room {
     public ecs = new Registry();
@@ -30,7 +32,7 @@ export class Room {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
         this.category = getLevelCategory(levelIndex);
-        this.tracker = new GameTracker(levelIndex, this.category, 'SP');
+        this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         this.spawnEntities();
         this.printLevelStats();
     }
@@ -195,7 +197,7 @@ export class Room {
 
     resetLevel() {
         this.tracker.finishAndSave();
-        this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP');
+        this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }
@@ -265,6 +267,7 @@ export class Room {
         console.log(`- Flying Enemies: ${formatCounts(flying)}`);
         console.log(`- Tanks (Nodes):  ${formatCounts(tanks)}`);
         console.log(`- Powerups:       ${formatCounts(powerups)}`);
+        console.log(`- Physics hash:   ${getActivePhysicsHash()}`);
         console.log(`========================================================\n`);
     }
 }

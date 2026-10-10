@@ -6,7 +6,7 @@ import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
-import { recordDB, formatTimeMs, buildLeaderboardContext } from './core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext, getActivePhysicsHash } from './core/records';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
 
@@ -101,18 +101,20 @@ function handleTransition(id: string) {
         const e = oldRoom.ecs.getPlayerEntity(id);
         if (e !== undefined) {
             const p = oldRoom.ecs.players.get(e)!;
+            const f = oldRoom.ecs.fuelTanks.get(e);
+            const w = oldRoom.ecs.weaponMounts.get(e);
             const timeTaken = Date.now() - p.joinedAt;
             const mode = oldRoom.ecs.players.size > 1 ? 'MP' : 'SP';
-            const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 });
+            const physicsHash = getActivePhysicsHash();
             
             if (oldRoom.category === 'mission') {
                 const rFast = recordDB.submitRecord('sp_fastest', pLevel, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
                 const rSneak = recordDB.submitRecord('sp_sneakiest', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
-                const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(p.fuel), secondaryValue: timeTaken });
+                const rEco = recordDB.submitRecord('sp_eco', pLevel, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.current || 0), secondaryValue: timeTaken });
 
                 if (rFast.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_fastest', timeTaken, rFast.isNewPb);
                 if (rSneak.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_sneakiest', p.score, rSneak.isNewPb);
-                if (rEco.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_eco', Math.floor(p.fuel), rEco.isNewPb);
+                if (rEco.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_eco', Math.floor(f?.current || 0), rEco.isNewPb);
 
                 let rClear = null;
                 let rSharpshooter = null;
@@ -131,9 +133,9 @@ function handleTransition(id: string) {
 
                 if (enemiesLeft === 0) {
                     rClear = recordDB.submitRecord('sp_cleared', pLevel, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
-                    rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.shotsFired, secondaryValue: timeTaken });
+                    rSharpshooter = recordDB.submitRecord('sp_sharpshooter', pLevel, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: w?.shotsFired || 0, secondaryValue: timeTaken });
                     if (rClear.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_cleared', timeTaken, rClear.isNewPb);
-                    if (rSharpshooter.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_sharpshooter', p.shotsFired, rSharpshooter.isNewPb);
+                    if (rSharpshooter.rank !== -1) oldRoom.tracker.logHighscore(id, 'sp_sharpshooter', w?.shotsFired || 0, rSharpshooter.isNewPb);
                     oldRoom.tracker.isCompleted = true;
                 }
 
@@ -152,17 +154,17 @@ function handleTransition(id: string) {
                 });
 
                 const runSummaryEntries = mode === 'MP' ?
-                    Array.from(oldRoom.ecs.players.entries()).map(([_, op]) => ({
+                    Array.from(oldRoom.ecs.players.entries()).map(([oe, op]) => ({
                         rankLabel: op.id === id ? 'YOU' : 'PILOT',
                         alias: op.alias,
-                        displayValue: `SCR:${op.score} | FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
+                        displayValue: `SCR:${op.score} | FUL:${Math.floor(oldRoom.ecs.fuelTanks.get(oe)?.current || 0)} | SHT:${oldRoom.ecs.weaponMounts.get(oe)?.shotsFired || 0}`,
                         isMe: op.id === id,
                         isNewPb: false
                     })) : [
                         { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
                         { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
-                        { rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
-                        { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false },
+                        { rankLabel: 'FUEL', alias: 'GAS LEFT', displayValue: `${Math.floor(f?.current || 0)}F`, isMe: true, isNewPb: false },
+                        { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
                         { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: enemiesLeft === 0 ? '100%' : `${enemiesLeft} SURVIVORS`, isMe: true, isNewPb: false }
                     ];
 
@@ -253,6 +255,23 @@ io.on('connection', (socket) => {
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
             if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, false);
+            } else if (action === 'powerup') {
+                const roomIndex = playerRooms.get(socket.id);
+                if (roomIndex !== undefined) {
+                    const room = rooms.get(roomIndex);
+                    if (room) {
+                        const e = room.ecs.getPlayerEntity(socket.id);
+                        if (e !== undefined) {
+                            const w = room.ecs.weaponMounts.get(e);
+                            if (w) {
+                                w.activeModeId = 0xD6; // 0xD6 = Double Shot
+                                w.charges = 999;
+                                const t = room.ecs.transforms.get(e);
+                                if (t) room.ecs.events.push({ type: 'floating_text', text: 'DEBUG: 2X WEAPON', color: '#f39c12', x: t.x, y: t.y - 30 });
+                            }
+                        }
+                    }
+                }
         }
     });
 
@@ -283,7 +302,8 @@ io.on('connection', (socket) => {
                 };
 
                 if (rawInputs?.shoot) {
-                    p.shootLatch = true;
+                    const w = room.ecs.weaponMounts.get(e);
+                    if (w) w.shootLatch = true;
                 }
             }
         }
@@ -294,7 +314,7 @@ io.on('connection', (socket) => {
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
         const mode = 'SP';
-        const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 });
+        const physicsHash = getActivePhysicsHash();
         
         const boards = getLeaderboardBoards(pLevel, mode, physicsHash, uuid);
             socket.emit('show_leaderboard', boards, true);
@@ -326,11 +346,11 @@ function getLeaderboardBoards(
     const ctxSharpshooter = buildLeaderboardContext('sp_sharpshooter', pLevel, mode, physicsHash, uuid, isNewPbMap?.sharpshooter ?? false, timestampsMap?.sharpshooter, x => String(x.value) + ' SHOTS | ' + formatTimeMs(x.secondaryValue??0));
 
     return [
-        { title: 'Blitzer', description: 'FASTEST CAVERN COMPLETION TIME', entries: ctxFastest },
-        { title: 'Sneaker', description: 'LOWEST SCORE / PACIFIST GHOST RUN', entries: ctxSneak },
-        { title: 'Eco-runner', description: 'MOST FUEL CONSERVED', entries: ctxEco },
-        { title: 'Completionist', description: '100% ENEMY WIPE TIME', entries: ctxClear },
-        { title: 'Sharpshooter', description: 'LEAST SHOTS FIRED (100% WIPE)', entries: ctxSharpshooter }
+        { title: 'BLITZ', description: 'FASTEST CAVERN COMPLETION TIME', entries: ctxFastest },
+        { title: 'PACIFIST', description: 'LOWEST SCORE / PACIFIST GHOST RUN', entries: ctxSneak },
+        { title: 'TREEHUGGER', description: 'LEAST FUEL USED', entries: ctxEco },
+        { title: 'PERFECTION', description: '100% ENEMY WIPE ON TIME', entries: ctxClear },
+        { title: 'SNIPER', description: 'LEAST SHOTS FIRED (100% ENEMY WIPE)', entries: ctxSharpshooter }
     ];
 }
 

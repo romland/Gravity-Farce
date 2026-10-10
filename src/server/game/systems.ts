@@ -4,29 +4,27 @@ import { Server } from 'socket.io';
 import { sysTanks } from './tank-ai';
 import { sysFlyingEnemies } from './flying-ai';
 
+// Maybe in the future an option would be extracting weapons into a data-driven pattern and make a `game/weapons.ts` but ah...
 export function sysWeapons(ecs: Registry) {
-    for (const [e, p] of ecs.players.entries()) {
+    for (const [e, mount] of ecs.weaponMounts.entries()) {
+        const p = ecs.players.get(e);
         if (p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
 
-        if (p.gunCooldown > 0) {
-            p.gunCooldown--;
+        if (mount.cooldown > 0) mount.cooldown--;
+        
+        let activeShoot = p.inputs.shoot || mount.shootLatch;
+        
+        if (activeShoot && !mount.prevShoot) {
+            mount.cooldown = Math.min(mount.cooldown, 4);
         }
         
-        let activeShoot = p.inputs.shoot || p.shootLatch;
-        
-        // Allow fast manual clicking by resetting cooldown on new trigger pull,
-        // but maintain a small minimum delay to prevent macro/cheat spam
-        if (activeShoot && !p.prevShoot) {
-            p.gunCooldown = Math.min(p.gunCooldown, 4);
-        }
-        
-        if (activeShoot && p.gunCooldown <= 0) {
+        if (activeShoot && mount.cooldown <= 0) {
             const offset = 14; 
             const bSpeed = p.type === 'classic' ? 4.0 : 2.2; 
 
-             if (p.doubleShotAmmo > 0) {
+             if (mount.activeModeId === 0xD6) { // Double Shot Mode
                  const perpX = -Math.sin(t.angle) * 6;
                  const perpY = Math.cos(t.angle) * 6;
                  const noseX = t.x + Math.cos(t.angle) * offset;
@@ -36,8 +34,8 @@ export function sysWeapons(ecs: Registry) {
 
                  spawnBullet(ecs, noseX + perpX, noseY + perpY, bulletVx, bulletVy, true, p.id);
                  spawnBullet(ecs, noseX - perpX, noseY - perpY, bulletVx, bulletVy, true, p.id);
-                 p.doubleShotAmmo--;
-                 p.shotsFired += 2;
+                 mount.charges--;
+                 mount.shotsFired += 2;
              } else {
                  spawnBullet(
                      ecs, 
@@ -48,15 +46,20 @@ export function sysWeapons(ecs: Registry) {
                      true, 
                      p.id
                  );
-                 p.shotsFired++;
+                 mount.shotsFired++;
+                 if (mount.activeModeId !== 0xD5) mount.charges--;
              }
             
             // Auto-fire is deliberately slow. Fast firing requires manual pressing.
-            p.gunCooldown = p.type === 'classic' ? 30 : 40;
+             if (mount.charges <= 0 && mount.activeModeId !== 0xD5) {
+                 mount.activeModeId = 0xD5;
+             }
+            
+             mount.cooldown = mount.baseCooldown;
         }
         
-        p.prevShoot = activeShoot; 
-        p.shootLatch = false;
+        mount.prevShoot = activeShoot; 
+        mount.shootLatch = false;
     }
 }
 
@@ -66,7 +69,7 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
     const CULL_MARGIN = 400; 
     
     const totalMapCargo = Array.from(ecs.cargos.values()).filter(c => c.active).length;
-    const totalCargoRemaining = totalMapCargo + Array.from(ecs.players.values()).reduce((sum, p) => sum + p.cargoStack.length, 0);
+    const totalCargoRemaining = totalMapCargo + Array.from(ecs.cargoBays.values()).reduce((sum, inv) => sum + inv.stack.length, 0);
     
     for (const [e, p] of ecs.players.entries()) {
         const t = ecs.transforms.get(e)!;
@@ -85,9 +88,11 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
         for (const [oe, op] of ecs.players.entries()) {
             const ot = ecs.transforms.get(oe)!;
             const ov = ecs.velocities.get(oe)!;
+            const oInv = ecs.cargoBays.get(oe);
+            const oFuel = ecs.fuelTanks.get(oe);
             
             if (Math.abs(ot.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ot.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: op.cargoStack, fuel: op.fuel, race: op.race, alias: op.alias };
+                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: oInv?.stack || [], fuel: oFuel?.current || 0, race: op.race, alias: op.alias };
             }
         }
         for (const [te, turret] of ecs.turrets.entries()) {

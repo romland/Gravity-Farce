@@ -21,23 +21,18 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         joinedAt: stats?.joinedAt ?? Date.now(),
         isDead: false,
         inputs: { up: false, left: false, right: false, shoot: false },
-        shootLatch: false,
-        prevShoot: false,
-        gunCooldown: 0,
         respawnRequest: false,
         angleAcc: 0,
         angleStep: 0,
         isLanded: false,
         score: stats?.score ?? 0,
-        cargoStack: [],
-        unloadTimer: 0,
-        doubleShotAmmo: stats?.doubleShotAmmo ?? 0,
-        fuel: stats?.fuel ?? 76464,
-         shotsFired: stats?.shotsFired ?? 0,
         spawnX: x,
         spawnY: y,
         race: stats?.race
     });
+    ecs.fuelTanks.set(e, { current: 76464, max: 99999 });
+    ecs.cargoBays.set(e, { stack: [], unloadTimer: 0, maxWeight: 3 });
+    ecs.weaponMounts.set(e, { cooldown: 0, baseCooldown: 40, activeModeId: 0xD5, charges: 0, shotsFired: 0, shootLatch: false, prevShoot: false });
     return e;
 }
 
@@ -46,8 +41,10 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         if (p.type !== 'modern' || p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
+        const inv = ecs.cargoBays.get(e);
+        const f = ecs.fuelTanks.get(e);
 
-         const weight = p.cargoStack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
+         const weight = inv ? inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0) : 0;
          const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
          const weightThrust = THRUST * (1.0 - (weight * 0.15));
 
@@ -73,8 +70,8 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         v.angularVelocity *= 0.93; 
         t.angle += v.angularVelocity;
 
-        if (p.inputs.up && p.fuel > 0) {
-             p.fuel = Math.max(0, p.fuel - 15);
+        if (p.inputs.up && f && f.current > 0) {
+             f.current = Math.max(0, f.current - 15);
              v.vx += Math.cos(t.angle) * weightThrust;
              v.vy += Math.sin(t.angle) * weightThrust;
         }

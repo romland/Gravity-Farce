@@ -42,24 +42,37 @@ export interface Player {
     type: 'classic' | 'modern';
     isDead: boolean;
     inputs: Inputs;
-    shootLatch: boolean;
-    prevShoot: boolean;
-    gunCooldown: number;
     respawnRequest: boolean;
     angleAcc: number;
     angleStep: number;
     isLanded: boolean;
     score: number;
     joinedAt: number;
-    cargoStack: number[];
-    unloadTimer: number;
-    doubleShotAmmo: number;
-    fuel: number;
-    shotsFired: number;
     spawnX: number;
     spawnY: number;
     advancing?: boolean;
     race?: PlayerRaceState;
+}
+
+export interface FuelTank {
+    current: number;
+    max: number;
+}
+
+export interface CargoBay {
+    stack: number[];
+    unloadTimer: number;
+    maxWeight: number;
+}
+
+export interface WeaponMount {
+    baseCooldown: number;
+    cooldown: number;
+    activeModeId: number;
+    charges: number;
+    shotsFired: number;
+    shootLatch: boolean;
+    prevShoot: boolean;
 }
 
 export interface Turret {
@@ -155,6 +168,9 @@ export class Registry {
     public cargos = new Map<Entity, Cargo>();
     public powerups = new Map<Entity, Powerup>();
     public bullets = new Map<Entity, Bullet>();
+    public fuelTanks = new Map<Entity, FuelTank>();
+    public cargoBays = new Map<Entity, CargoBay>();
+    public weaponMounts = new Map<Entity, WeaponMount>();
     public events: GameEvent[] = [];
 
     create(): Entity { 
@@ -172,6 +188,9 @@ export class Registry {
         this.bullets.delete(e);
         this.cargos.delete(e);
         this.powerups.delete(e);
+        this.fuelTanks.delete(e);
+        this.cargoBays.delete(e);
+        this.weaponMounts.delete(e);
     }
 
     getPlayerEntity(id: string): Entity | undefined {

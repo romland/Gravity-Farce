@@ -21,11 +21,14 @@ export function sysCargo(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
 
     for (const [pe, p] of ecs.players.entries()) {
+        const inv = ecs.cargoBays.get(pe);
+        if (!inv) continue;
+
         if (p.isDead) {
-            if (p.cargoStack.length > 0) {
+            if (inv.stack.length > 0) {
                 // IMPNOTE: The Hard Reset - Authentic Amiga punishment. 
                 // Cargo instantly respawns at its original starting coordinates if the player explodes.
-                p.cargoStack = [];
+                inv.stack = [];
                 for (const [ce, cargo] of ecs.cargos.entries()) {
                     if (cargo.heldBy === p.id) {
                         cargo.active = true;
@@ -42,7 +45,7 @@ export function sysCargo(ecs: Registry, room: Room) {
         const pt = ecs.transforms.get(pe)!;
 
         // 1. Homebase Unloading Logic
-        if (p.isLanded && p.cargoStack.length > 0) {
+        if (p.isLanded && inv.stack.length > 0) {
             const tileX = Math.floor(pt.x / 32);
             const tileY = Math.floor(pt.y / 32) + 1; // Inspect the tile directly beneath the ship
             const tileId = room.level.rawMap[tileY]?.[tileX];
@@ -52,15 +55,15 @@ export function sysCargo(ecs: Registry, room: Room) {
             const isAtStartBase = Math.hypot(pt.x - p.spawnX, pt.y - p.spawnY) < 150;
 
             if (isHomePad && isAtStartBase) {
-                if (p.unloadTimer < 0) {
+                if (inv.unloadTimer < 0) {
                     // Locked because we just picked it up!
-                } else if (p.unloadTimer > 0) {
-                    p.unloadTimer--;
+                } else if (inv.unloadTimer > 0) {
+                    inv.unloadTimer--;
                 } else {
-                    const crateId = p.cargoStack.pop()!;
+                    const crateId = inv.stack.pop()!;
                     const points = crateId === 0xD1 ? 5 : 7;
                     p.score += points;
-                    p.unloadTimer = 30; // Frame cooldown between unloading crates
+                    inv.unloadTimer = 30; // Frame cooldown between unloading crates
                     ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
                     ecs.events.push({ type: 'floating_text', text: `CARGO SECURED (+${points})`, color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                     room.tracker.logEvent(p.id, { type: 'cargo_delivered', typeId: crateId });
@@ -74,23 +77,23 @@ export function sysCargo(ecs: Registry, room: Room) {
                     }
                 }
             } else {
-                p.unloadTimer = 0;
+            inv.unloadTimer = 0;
             }
         } else {
-            p.unloadTimer = 0;
+        inv.unloadTimer = 0;
         }
 
         // 2. Authoritative World Pickup
-        const currentWeight = p.cargoStack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
+        const currentWeight = inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
         for (const [ce, cargo] of ecs.cargos.entries()) {
             if (!cargo.active) continue;
             const ct = ecs.transforms.get(ce)!;
 
-            if (p.isLanded && Math.hypot(pt.x - ct.x, pt.y - ct.y) < 48 && currentWeight + cargo.weight <= 3) {
+            if (p.isLanded && Math.hypot(pt.x - ct.x, pt.y - ct.y) < 48 && currentWeight + cargo.weight <= inv.maxWeight) {
                 cargo.active = false;
                 cargo.heldBy = p.id;
-                p.cargoStack.push(cargo.typeId);
-                p.unloadTimer = -1; // Lock unloading until the player takes off
+                inv.stack.push(cargo.typeId);
+                inv.unloadTimer = -1; // Lock unloading until the player takes off
                 ecs.events.push({ type: 'sound', soundId: 9, x: pt.x, y: pt.y });
                 ecs.events.push({ type: 'poof', x: ct.x, y: ct.y });
                 ecs.events.push({ type: 'floating_text', text: 'CARGO ACQUIRED', color: '#f39c12', x: pt.x, y: pt.y - 30 });
@@ -110,7 +113,8 @@ export function sysCargo(ecs: Registry, room: Room) {
     }
     let totalPlayerCargo = 0;
     for (const [oe, op] of ecs.players.entries()) {
-        if (!op.isDead) totalPlayerCargo += op.cargoStack.length;
+        const inv = ecs.cargoBays.get(oe);
+        if (!op.isDead && inv) totalPlayerCargo += inv.stack.length;
     }
     const totalCargoRemaining = totalMapCargo + totalPlayerCargo;
 

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { SERVER_CONFIG } from './config';
 
 /**
  * Defines how a record is evaluated against others.
@@ -187,6 +188,19 @@ export class RecordManager {
 }
 
 export const recordDB = new RecordManager();
+
+export function getActivePhysicsHash(): string {
+/*
+
+TODO add:
+    SERVER_CONFIG.lethalRacingEnemies: false, // Configurable toggle for race course hazards
+    SERVER_CONFIG.raceBumpModifier: 0.6, // Modifier for the bump force
+
+*/
+    return SERVER_CONFIG.useClassicPhysics 
+        ? recordDB.generatePhysicsHash({ gravity: 0.010, thrust: 0.070, maxSpeed: 7.5, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier }) // Classic constants
+        : recordDB.generatePhysicsHash({ gravity: 0.015, thrust: 0.100, maxSpeed: 10.0, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier }); // Modern constants
+}
 
 export function formatTimeMs(diff: number): string {
     let m = Math.floor(diff / 60000).toString().padStart(2, '0');

@@ -25,12 +25,9 @@ export interface LevelData {
 
 export interface PlayerStats {
     score: number;
-    fuel: number;
-    doubleShotAmmo: number;
     race?: PlayerRaceState;
     uuid?: string;
     alias?: string;
     joinedAt?: number;
     shipType?: 'classic' | 'modern';
-    shotsFired?: number;
 }

@@ -218,6 +218,7 @@
             if (debugMode) {
                 if (e.code === 'KeyP') { socket.emit('debug_action', 'pause'); return; }
                 if (e.code === 'KeyC') { freecam = !freecam; return; }
+                if (e.code === 'KeyU') { socket.emit('debug_action', 'powerup'); return; }
                 if (e.code === 'KeyL' || e.code === 'KeyJ') {
                     const lvl = prompt("Jump to level (0-99):");
                     if (lvl !== null && !isNaN(parseInt(lvl))) {

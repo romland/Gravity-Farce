@@ -101,8 +101,11 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     }
 
     p.inputs = { up: false, left: false, right: false, shoot: false };
-    p.shootLatch = false; 
-    p.prevShoot = false;
+    const w = ecs.weaponMounts.get(e);
+    if (w) {
+        w.shootLatch = false;
+        w.prevShoot = false;
+    }
     
     setTimeout(() => { 
         p.respawnRequest = true; 

@@ -1,6 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
-import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext, getActivePhysicsHash } from '../core/records';
 
 export function sysRacing(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
@@ -45,8 +45,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                     
                 // Multiplayer = More than 1 player in the room
                 const mode = ecs.players.size > 1 ? 'MP' : 'SP';
-                // Fake physics hash until we add adjustable physics menus
-                const physicsHash = recordDB.generatePhysicsHash({ gravity: 0.1, thrust: 0.2, maxSpeed: 10 }); 
+                const physicsHash = getActivePhysicsHash();
 
                 // Save Fastest Individual Lap
                 const rLap = recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
@@ -93,16 +92,20 @@ export function sysRacing(ecs: Registry, room: Room) {
 
                     const raceDuration = now - p.race.startTime;
                     const raceSummaryEntries = mode === 'MP' ?
-                        Array.from(room.ecs.players.entries()).map(([_, op]) => ({
-                            rankLabel: op.race && op.race.state === 2 ? formatTimeMs(op.race.finishTime! - op.race.startTime) : 'RACING',
-                            alias: op.alias,
-                            displayValue: `FUL:${Math.floor(op.fuel)} | SHT:${op.shotsFired}`,
-                            isMe: op.id === p.id,
-                            isNewPb: false
-                        })) : [
+                        Array.from(room.ecs.players.entries()).map(([oe, op]) => {
+                            const oF = room.ecs.fuelTanks.get(oe);
+                            const oW = room.ecs.weaponMounts.get(oe);
+                            return {
+                                rankLabel: op.race && op.race.state === 2 ? formatTimeMs(op.race.finishTime! - op.race.startTime) : 'RACING',
+                                alias: op.alias,
+                                displayValue: `FUL:${Math.floor(room.ecs.fuelTanks.get(oe)?.current || 0)} | SHT:${room.ecs.weaponMounts.get(oe)?.shotsFired || 0}`,
+                                isMe: op.id === p.id,
+                                isNewPb: false
+                            };
+                        }) : [
                             { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
-                            { rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(p.fuel)}F`, isMe: true, isNewPb: false },
-                            { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(p.shotsFired), isMe: true, isNewPb: false }
+                            { rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(ecs.fuelTanks.get(pe)?.current || 0)}F`, isMe: true, isNewPb: false },
+                            { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
                         ];
 
                     boards.push({ title: 'RACE RUN SUMMARY', entries: raceSummaryEntries });

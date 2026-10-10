@@ -16,6 +16,8 @@ export interface LogEntry {
     levelIndex: number;
     category: string;
     mode: 'SP' | 'MP';
+    physicsHash: string;
+    isDebug: boolean;
     startedAt: number;
     endedAt: number;
     durationMs: number;
@@ -38,13 +40,15 @@ export class GameTracker {
     private isActive: boolean = true;
     public isCompleted: boolean = false;
     
-    constructor(levelIndex: number, category: string, mode: 'SP' | 'MP') {
+    constructor(levelIndex: number, category: string, mode: 'SP' | 'MP', physicsHash: string, isDebug: boolean) {
         this.uuid = crypto.randomUUID();
         this.entry = {
             gameUuid: this.uuid,
             levelIndex,
             category,
             mode,
+            physicsHash,
+            isDebug,
             startedAt: Date.now(),
             endedAt: 0,
             durationMs: 0,
