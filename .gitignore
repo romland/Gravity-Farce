@@ -15,3 +15,4 @@ data/server_config.json
 dist
 release
 gf-prod-release.tar.gz
+data/game_log.jsonl
