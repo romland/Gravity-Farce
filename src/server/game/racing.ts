@@ -105,7 +105,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                         }) : [
                             { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
                             { rankLabel: 'FUEL', alias: 'REMAINING', displayValue: `${Math.floor(ecs.fuelTanks.get(pe)?.current || 0)}F`, isMe: true, isNewPb: false },
-                            { rankLabel: 'SHOTS', alias: 'FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
+                            { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
                         ];
 
                     boards.push({ title: 'RACE RUN SUMMARY', entries: raceSummaryEntries });

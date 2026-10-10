@@ -10,6 +10,7 @@ import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
 import { sysRacing } from './game/racing';
+import { sysMission } from './game/mission';
 import type { PlayerStats } from './core/types';
 import { getLevelCategory, type LevelCategory } from './levels';
 import { TILE_DICTIONARY } from './core/tiles';
@@ -54,6 +55,7 @@ export class Room {
             sysCargo(this.ecs, this);
             sysPowerups(this.ecs, this);
             sysRacing(this.ecs, this);
+            sysMission(this.ecs, this);
             sysBullets(this.ecs, this);
         }
 

@@ -106,29 +106,4 @@ export function sysCargo(ecs: Registry, room: Room) {
             }
         }
     }
-
-    let totalMapCargo = 0;
-    for (const [ce, cargo] of ecs.cargos.entries()) {
-        if (cargo.active) totalMapCargo++;
-    }
-    let totalPlayerCargo = 0;
-    for (const [oe, op] of ecs.players.entries()) {
-        const inv = ecs.cargoBays.get(oe);
-        if (!op.isDead && inv) totalPlayerCargo += inv.stack.length;
-    }
-    const totalCargoRemaining = totalMapCargo + totalPlayerCargo;
-
-    if (totalCargoRemaining === 0 && room.initialCargoCount > 0 && room.category === 'mission') {
-        for (const [pe, p] of ecs.players.entries()) {
-            if (!p.advancing) {
-                p.advancing = true;
-                room.tracker.isCompleted = true;
-                const pt = ecs.transforms.get(pe);
-                if (pt) {
-                    ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: pt.x, y: pt.y - 60 });
-                }
-                setTimeout(() => room.transitionPlayer(p.id), 3000);
-            }
-        }
-    }
 }

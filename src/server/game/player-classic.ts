@@ -127,17 +127,9 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
 
         const crashed = checkEnvironmentCollisions(sl, t.x, t.y, room.level, canLand, (landY, isEndPad) => {
             land(landY);
-            if (isEndPad && !p.inputs.up && room.initialCargoCount === 0 && room.category === 'mission') {
-                if (!p.advancing) {
-                    p.advancing = true;
-                    advancing = true; 
-                    ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
-                    setTimeout(() => room.transitionPlayer(p.id), 3000);
-                }
-            }
         });
 
-        if (crashed && !advancing) {
+        if (crashed && !p.advancing) {
             killPlayer(ecs, e);
         }
     }
