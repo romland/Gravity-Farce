@@ -3,6 +3,7 @@ import { checkPolyIntersect } from '../core/math';
 import { lineIntersect } from '../core/math';
 import type { Room } from '../Room';
 import { getTurretSpecByTile } from './turret-defs';
+import { spawnExplosionFragments } from './debris';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -218,6 +219,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                             tank.active = false;
                             room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'tank', enemyTypeId: 0, contributors: getContributors(ecs, tank.damageHistory) });
                             ecs.events.push({ type: 'large_explosion', x: tt.x, y: tt.y });
+                            spawnExplosionFragments(ecs, tt.x, tt.y, 'tank');
                             
                             const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                             if (shooterEntity !== undefined) {
@@ -244,6 +246,9 @@ export function sysBullets(ecs: Registry, room: Room) {
                                     flying.active = false;
                                 room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'flying', enemyTypeId: flying.enemyType, contributors: getContributors(ecs, flying.damageHistory) });
                                     ecs.events.push({ type: 'large_explosion', x: ft.x, y: ft.y });
+                                    if (flying.spawnsDebris) {
+                                        spawnExplosionFragments(ecs, ft.x, ft.y, 'flying');
+                                    }
                                     const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                                     if (shooterEntity !== undefined) {
                                         const shooter = ecs.players.get(shooterEntity);

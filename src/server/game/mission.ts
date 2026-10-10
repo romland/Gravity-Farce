@@ -100,7 +100,7 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
             { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
             { rankLabel: 'FUEL', alias: 'CONSUMED', displayValue: `${Math.floor(f?.consumed || 0)}F`, isMe: true, isNewPb: false },
             { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
-            { rankLabel: 'STATUS', alias: 'COMPLETION', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
+            { rankLabel: 'STATUS', alias: 'DESTROYED', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
         ];
 
     boards.unshift({ title: mode === 'MP' ? 'MATCH SUMMARY' : 'SUMMARY', description: '', entries: runSummaryEntries });

@@ -113,6 +113,7 @@ export interface FlyingEnemy {
     directionState: number; // Offset +$02
     maneuverStep: number;   // Offset +$1A (24-frame blindfold timer)
     canShoot: boolean;
+    spawnsDebris: boolean;
     width: number;
     height: number;
     fireTimer: number;
