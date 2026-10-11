@@ -31,6 +31,43 @@ in original
     set to 127 lives: e.g: W 357C2 7f
     on write to it, start debugger: w 0 000357C2 1 W
 
+- Monkey-patch to fix a bug in level-loader of the original game (I actually recall
+  this one being annoying back then too!). If you use "warpXX" after you have exited 
+  a level that was not properly torn down, causing an interrupt deadlock:
+  (when next level enabled VERTB, the CPU got permanently trapped in exception 27)
+        the fix (before it happens) (provided you have RAM here):
+    ->  >W 001ffe00 23fc.w 0003.w 0746.w 0000.w 006c.w 4eb9.w 0002.w e2ba.w 4ef9.w 0002.w f46c.w
+
+        verify:
+        >d 001ffe00
+        001ffe00 23fc 0003 0746 0000 006c move.l #$00030746,$0000006c [0003014e]
+        001ffe0a 4eb9 0002 e2ba           jsr $0002e2ba
+        001ffe10 4ef9 0002 f46c           jmp $0002f46c
+        001ffe16 0000 0000                or.b #$00,d0
+
+        the jmp to patch:
+    ->  >W 0002f466 4ef9.w 001f.w fe00.w
+        Wrote 4EF9 (20217) at 0002F466.W
+        Wrote 1F (31) at 0002F468.W
+        Wrote FE00 (65024) at 0002F46A.W
+
+        verify:
+        >d 0002f466 2
+        0002f466 4ef9 001f fe00           jmp $001ffe00
+        0002f46c 4cdf 7fff                movem.l (a7)+,d0-d7/a0-a6
+
+    Now, if you forgot to apply the patch and you now sit in a locked state, you can
+    fix it in debugger:
+        > W 0000006c 0003.w 0746.w    ; restores Level 3 interrupt handler ($00030746) back to the vector at $6c
+        > W 0003006a ff.b             ; write $FF to the flag the main game loop is polling forever
+        > W 00dff09c 7fff.w           ; clear pending interrupt requests in INTREQ to stop any active interrupt storm
+        > g
+    copy-pastable
+W 0000006c 0003.w 0746.w
+W 0003006a ff.b
+W 00dff09c 7fff.w
+g
+
 - Collision check at:
     This will remove all collisions except a "correct" landing:
     W 0003511E 4E 71 4E 71 4E 71 4E 71

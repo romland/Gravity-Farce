@@ -50,8 +50,8 @@ Even small annoyances like memory R/W breakpoints that never hit felt like a goo
 Track loaders and DMA getting screwed up by breakpoints. Ah. Almost comforting.  
 
 ...and after a few days I found out that WinUAE had `HH`.  
-...and after that I learned I could dump all code with radare instead of sitting in the debugger.
-...and ...  
+...and after that I learned I could dump all code with radare instead of sitting in the debugger.  
+...but I had forgotten all about $dff006 ...  I could not make heads or tails out of waypoint tiles due to it. Quite a few hours were spent on getting enemy movement right due to this. Luckily, if you're old enough to remember Amiga fondly, you have no hair any more. Well, not me anyway. So, no hair lost this time.
 
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
