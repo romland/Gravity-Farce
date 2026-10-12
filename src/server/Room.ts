@@ -42,6 +42,7 @@ export class Room {
         if (this.ecs.players.size === 0) return;
 
         if (!isPaused) {
+            this.globalWaveTimer++;
             for (const [e, p] of this.ecs.players.entries()) {
                 if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
             }

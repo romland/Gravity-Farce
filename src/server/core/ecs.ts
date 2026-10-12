@@ -124,6 +124,8 @@ export interface FlyingEnemy {
     lastDx?: number;
     lastDy?: number;
     outOfBoundsLogged?: boolean;
+    segmentId?: string;
+    pointIndex?: number;
 }
 
 export interface HomingMissile {
