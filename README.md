@@ -1,13 +1,13 @@
 # Gravity Farce
 
-#### **There are many gravity games, many copy-cats and some predecessors.**  
-### But `Gravity Force` was simply the best.  
+#### **There are many gravity games, a bunch of copy-cats and some predecessors.**  
+### But `Gravity Force` by Stephan Wenzler was simply the best.  
 <img width="300px" src="./.github/gf2026.jpg" align="right">
 
-It was in the backlog for 30-35 years but I now finally got around to finding out **why** it was awesome.  
+It was on the backlog for 30-35 years but I now finally got around to finding out **why** it was awesome.  
 So I decided to throw some hours at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
 
-It's awesome that a lot of old games getting a second life these days! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. More on this below.
+It's awesome that a lot of old games getting a second life these days! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.
 
 
 ### Server and Cheating
@@ -29,7 +29,7 @@ _But obviously, multi-player is the way to go! `:D`_
 If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
 
 ### Party like it's 1989: Play It
-... todo ...
+https://...
 
 ### Levels and Data
 All levels (multi- and single player) and power-ups and similar structures are ported over from the
