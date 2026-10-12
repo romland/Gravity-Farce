@@ -20,8 +20,8 @@ export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: str
         active: true,
         role: 'pursuit',
         reactionTimer: 0,
-        state: 'attack',
-        stateTimer: 0,
+        state: 'takeoff',
+        stateTimer: 20,
         path: [],
         pathTimer: 0
     });
@@ -128,20 +128,26 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     // Recovery behavior if crashed or landed
     if (p.isLanded) {
         bot.state = 'takeoff';
-        bot.stateTimer = 35; // Controlled vertical launch
+        bot.stateTimer = 20; // Controlled vertical launch
         p.inputs.up = true; // Blast off immediately
         return;
     }
 
     // Takeoff sequence
     if (bot.state === 'takeoff') {
-        if (bot.stateTimer > 0) {
+        const floorHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y + 60 }, room.level);
+        const ceilingHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y - 60 }, room.level);
+        const floorDist = floorHit ? floorHit.y - t.y : 999;
+        const ceilingDist = ceilingHit ? t.y - ceilingHit.y : 999;
+
+        // Abort vertical launch if ceiling is too close (<35px) or once 22px pad clearance is reached
+        if (ceilingDist < 35 || floorDist > 22 || bot.stateTimer <= 0) {
+            bot.state = 'attack';
+        } else {
             bot.stateTimer--;
             p.inputs.up = true;
             applyAngularControl(p, t, v, -Math.PI / 2); // Hold upright (-90deg)
             return;
-        } else {
-            bot.state = 'attack';
         }
     }
 
