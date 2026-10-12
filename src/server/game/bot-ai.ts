@@ -611,21 +611,57 @@ function generateRoamPath(map: number[][], sx: number, sy: number): {x: number, 
     if (!map) return [];
     const startX = Math.floor(sx / 32);
     const startY = Math.floor(sy / 32);
+    const mapH = map.length;
+    if (mapH === 0) return [];
+    const mapW = map[0].length;
 
-    for (let attempt = 0; attempt < 8; attempt++) {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 12 + Math.floor(Math.random() * 10);
-        const rx = Math.max(1, Math.min(map[0].length - 2, startX + Math.round(Math.cos(angle) * radius)));
-        const ry = Math.max(1, Math.min(map.length - 2, startY + Math.round(Math.sin(angle) * radius)));
+    const queue: { x: number, y: number }[] = [];
+    const visited = new Set<string>();
 
-        if (!TILE_DICTIONARY[map[ry]?.[rx]]?.solid) {
-            const raw = calculatePath(map, sx, sy, rx * 32 + 16, ry * 32 + 16);
-            if (raw.length > 0 && raw[raw.length - 1].x === rx && raw[raw.length - 1].y === ry) {
-                return raw;
+    queue.push({ x: startX, y: startY });
+    visited.add(`${startX},${startY}`);
+
+    const targetDist = 25 + Math.floor(Math.random() * 15); // Flood outward 25-40 tiles
+    let furthestNode = { x: startX, y: startY };
+    let maxDistSq = 0;
+
+    let iterations = 0;
+    
+    // Randomized Flood Fill (Find a deep destination)
+    while (queue.length > 0 && iterations < 800) {
+        iterations++;
+        const current = queue.shift()!;
+        
+        const distSq = (current.x - startX) ** 2 + (current.y - startY) ** 2;
+        if (distSq > maxDistSq) {
+            maxDistSq = distSq;
+            furthestNode = current;
+        }
+
+        // Stop once we've reached deep enough into the cavern
+        if (distSq >= targetDist * targetDist) break;
+
+        // Shuffle neighbors to ensure organic, randomized tunnel exploration
+        const neighbors = [
+            {x: current.x + 1, y: current.y}, {x: current.x - 1, y: current.y},
+            {x: current.x, y: current.y + 1}, {x: current.x, y: current.y - 1}
+        ].sort(() => Math.random() - 0.5);
+
+        for (const n of neighbors) {
+            if (n.y < 0 || n.y >= mapH || n.x < 0 || n.x >= mapW) continue;
+            if (TILE_DICTIONARY[map[n.y][n.x]]?.solid) continue;
+
+            const nKey = `${n.x},${n.y}`;
+            if (!visited.has(nKey)) {
+                visited.add(nKey);
+                queue.push(n);
             }
         }
     }
-    return [];
+
+    // We found a guaranteed reachable open-air tile deep in the cavern.
+    // NOW, use the heavy A* with wall-penalties to map a safe, midline flight path to it!
+    return calculatePath(map, sx, sy, furthestNode.x * 32 + 16, furthestNode.y * 32 + 16);
 }
 
 function findSafePadPosition(level: import('../core/types').LevelData | undefined, x: number, y: number, botAlias: string = 'BOT'): { x: number, y: number } {
