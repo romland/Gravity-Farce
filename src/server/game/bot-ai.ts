@@ -331,6 +331,17 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         }
     }
 
+    // --- TACTICAL SENSORS EXTENSION (Friends, Enemies, Bullets) ---
+    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim);
+    if (tactics.friendlyInLineOfFire) {
+        p.inputs.shoot = false; // CEASE FIRE! Squadmate in the crosshairs.
+    }
+    if (tactics.isEmergency) {
+        isEmergency = true;
+        repelX += tactics.repelX;
+        repelY += tactics.repelY;
+    }
+
     if (isEmergency) {
         forceX += repelX;
         forceY += repelY;
@@ -688,4 +699,108 @@ function findSafePadPosition(level: import('../core/types').LevelData | undefine
     const safeY = airY >= 0 ? airY * 32 + 16 : y;
 
     return { x, y: safeY };
+}
+// ----------------------------------------------------------------------------
+// Tactical Sensor Extensions
+// ----------------------------------------------------------------------------
+
+interface TacticalSensors {
+    friendlyInLineOfFire: boolean;
+    repelX: number;
+    repelY: number;
+    isEmergency: boolean;
+}
+
+function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../core/ecs').Transform, myV: import('../core/ecs').Velocity, noseAngle: number, targetDist: number): TacticalSensors {
+    const tactics: TacticalSensors = { friendlyInLineOfFire: false, repelX: 0, repelY: 0, isEmergency: false };
+
+    // 1. SQUADMATES (Friendly Fire & Clumping Avoidance)
+    const bots = Array.from(ecs.bots.entries());
+    for (const [otherE] of bots) {
+        if (otherE === myEnt) continue;
+        const pt = ecs.transforms.get(otherE);
+        const pp = ecs.players.get(otherE);
+        if (!pt || pp?.isDead) continue;
+
+        const distToFriend = Math.hypot(pt.x - myT.x, pt.y - myT.y);
+        
+        // Friendly Fire Check: Are they in front of us, between us and the target?
+        if (distToFriend < targetDist) {
+            const angleToFriend = Math.atan2(pt.y - myT.y, pt.x - myT.x);
+            const diff = Math.abs(getAngleDiff(noseAngle, angleToFriend));
+            // 24px wide safety cylinder down the line of fire
+            if (Math.sin(diff) * distToFriend < 24) {
+                tactics.friendlyInLineOfFire = true;
+            }
+        }
+
+        // Boids-style Separation: Prevent squadmates from colliding
+        if (distToFriend < 70 && distToFriend > 1) {
+            const push = Math.pow((70 - distToFriend) / 70, 2) * 4.0;
+            tactics.repelX -= ((pt.x - myT.x) / distToFriend) * push;
+            tactics.repelY -= ((pt.y - myT.y) / distToFriend) * push;
+            tactics.isEmergency = true;
+        }
+    }
+
+    // 2. ENEMIES (Ramming Avoidance)
+    const humans = Array.from(ecs.players.entries()).filter(([e, p]) => !p.isDead && !ecs.bots.has(e));
+    for (const [he] of humans) {
+        const ht = ecs.transforms.get(he);
+        if (!ht) continue;
+        const distToHuman = Math.hypot(ht.x - myT.x, ht.y - myT.y);
+        if (distToHuman < 90 && distToHuman > 1) {
+            const push = Math.pow((90 - distToHuman) / 90, 2) * 5.0; // Push back from target to maintain shooting distance
+            tactics.repelX -= ((ht.x - myT.x) / distToHuman) * push;
+            tactics.repelY -= ((ht.y - myT.y) / distToHuman) * push;
+            tactics.isEmergency = true;
+        }
+    }
+
+    // 3. INCOMING BULLETS (Evasion)
+    const projectilesMap = (ecs as any).bullets || (ecs as any).projectiles;
+    if (projectilesMap) {
+        const myId = (ecs.players.get(myEnt) as any)?.id || (ecs.players.get(myEnt) as any)?.uuid;
+        for (const [pe, proj] of projectilesMap.entries()) {
+            const pt = ecs.transforms.get(pe) || (proj as any); // Sometimes bullets store x/y directly
+            const pv = ecs.velocities.get(pe) || (proj as any);
+            if (!pt || !pv) continue;
+
+            // Ignore our own bullets
+            if (proj.ownerId === myId) continue;
+
+            const dx = pt.x - myT.x;
+            const dy = pt.y - myT.y;
+            const distToBullet = Math.hypot(dx, dy);
+
+            if (distToBullet < 250) { // Radar range for bullets
+                // Relative velocity (is it approaching?)
+                const relativeVx = pv.vx - myV.vx;
+                const relativeVy = pv.vy - myV.vy;
+                const dotProduct = (dx * relativeVx + dy * relativeVy);
+                
+                // dotProduct < 0 means it's actively closing distance
+                if (dotProduct < 0) {
+                    const timeToImpact = -dotProduct / (relativeVx * relativeVx + relativeVy * relativeVy);
+                    if (timeToImpact > 0 && timeToImpact < 20) { // Will hit in < 20 frames
+                        const projX = pt.x + pv.vx * timeToImpact;
+                        const projY = pt.y + pv.vy * timeToImpact;
+                        const myProjX = myT.x + myV.vx * timeToImpact;
+                        const myProjY = myT.y + myV.vy * timeToImpact;
+                        
+                        const missDist = Math.hypot(projX - myProjX, projY - myProjY);
+                        if (missDist < 35) { // Collision imminent!
+                            // EVADE perpendicular to the bullet's travel vector
+                            const evadeAngle = Math.atan2(pv.vy, pv.vx) + (Math.PI / 2);
+                            tactics.repelX += Math.cos(evadeAngle) * 8.0;
+                            tactics.repelY += Math.sin(evadeAngle) * 8.0;
+                            tactics.isEmergency = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return tactics;
 }
