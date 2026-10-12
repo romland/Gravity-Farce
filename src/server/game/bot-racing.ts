@@ -88,7 +88,7 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     if (bot.path.length === 0 || bot.pathTimer <= 0 || (bot as any).lastCpNum !== currentCpNum) {
         (bot as any).lastCpNum = currentCpNum;
         const rawPath1 = calculatePathToGate(room.level.rawMap, t.x, t.y, targetCp);
-        
+
         // F1 Stitching: Plan path to Current Checkpoint, THEN path to Next Checkpoint.
         // But NEVER prune across checkpoints, ensuring we actually cross the required gate.
         const pruned1 = prunePath(rawPath1, room, { x: t.x, y: t.y });
@@ -108,20 +108,20 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         } else {
             bot.path = pruned1;
         }
-        bot.pathTimer = 15; 
+        bot.pathTimer = 15;
     }
 
     // FOLLOW OPTIMAL RACING LINE (F1 PURE PURSUIT)
     const currentSpeed = Math.hypot(v.vx, v.vy);
     const MAX_SHIP_SPEED = 7.5;
     let targetIdx = 0;
-    
+
     if (bot.path && bot.path.length > 0) {
         // Dynamic Lookahead based on speed. Faster = aim further ahead for smooth apexing.
         const lookaheadDist = Math.max(64, currentSpeed * 24);
 
         let accumDist = 0;
-        let lastPos = {x: t.x, y: t.y};
+        let lastPos = { x: t.x, y: t.y };
 
         for (let i = 0; i < bot.path.length; i++) {
             const wpX = bot.path[i].x * 32 + 16;
@@ -182,7 +182,7 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         targetSpeed = 2.0; // Hairpin brake
     } else if (requiredTurn > Math.PI / 4 && distToAim < 150) {
         targetSpeed = 4.5; // Moderate braking for chicane
-}
+    }
 
     // Desired velocity vector
     const desVx = (dirX / distToAim) * targetSpeed;
