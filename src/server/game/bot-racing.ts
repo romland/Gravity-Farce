@@ -269,6 +269,21 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         // only firing thruster when aligned with correction vector to counteract drift.
         if (angleDiff < 0.35) p.inputs.up = true;
     }
+
+    // BLACK-BOX FLIGHT RECORDER (Ring buffer of last 60 ticks)
+    if (!(bot as any).flightRecorder) (bot as any).flightRecorder = [];
+    const rec = (bot as any).flightRecorder;
+    rec.push({
+        tick: racingTickCounter,
+        x: Math.round(t.x), y: Math.round(t.y),
+        vx: Number(v.vx.toFixed(2)), vy: Number(v.vy.toFixed(2)),
+        speed: Number(currentSpeed.toFixed(2)),
+        facingDeg: Number((t.angle * 180 / Math.PI).toFixed(1)),
+        desiredDeg: Number((desiredAngle * 180 / Math.PI).toFixed(1)),
+        thrust: Boolean(p.inputs.up),
+        safe: isGlidePathSafe
+    });
+    if (rec.length > 60) rec.shift();
 }
 // ----------------------------------------------------------------------------
 // Reused Core Math/Physics Helpers
@@ -509,17 +524,34 @@ function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../co
     const bx = Math.floor(t.x / 32);
     const by = Math.floor(t.y / 32);
 
+    const rec = (bot as any).flightRecorder || [];
+    const maxVy = rec.length > 0 ? Math.max(...rec.map((r: any) => r.vy)) : v.vy;
+    const firstUnsafe = rec.find((r: any) => !r.safe);
+    const unsafeTicksAgo = firstUnsafe ? (racingTickCounter - firstUnsafe.tick) : 0;
+
     console.log(`\n=== [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
     console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
-    console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick`);
+    console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
     console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
     if ((bot as any).lastDesiredAngle !== undefined) {
         const steerErr = (Math.abs(getAngleDiff((bot as any).lastDesiredAngle, t.angle)) * 180 / Math.PI).toFixed(1);
         console.log(`- Steering Target    : ${((bot as any).lastDesiredAngle * 180 / Math.PI).toFixed(1)}° (Alignment Error: ${steerErr}°)`);
     }
     console.log(`- Line Offset        : ${pathOffsetPx} px away from active path node`);
-    console.log(`- Path Nodes Left    : ${bot.path?.length || 0}`);
+    console.log(`- Glide Alert        : ${firstUnsafe ? `First flagged UNSAFE ${unsafeTicksAgo} ticks (~${(unsafeTicksAgo/60).toFixed(2)}s) before impact` : 'Never flagged unsafe'}`);
 
+    if (rec.length > 0) {
+        console.log(`- BLACK-BOX FLIGHT RECORDER (Past ${rec.length} ticks, sampled every 10 ticks):`);
+        console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Speed | Facing -> Desired | Thrust | Safe`);
+        for (let i = Math.max(0, rec.length - 40); i < rec.length; i += 10) {
+            const entry = rec[i];
+            const ago = racingTickCounter - entry.tick;
+            console.log(`  -${String(ago).padStart(2, ' ')}t    | (${entry.x}, ${entry.y}) | (${entry.vx}, ${entry.vy}) | ${entry.speed}  | ${entry.facingDeg}° -> ${entry.desiredDeg}° | ${entry.thrust ? 'ON ' : 'OFF'}   | ${entry.safe ? 'YES' : 'NO '}`);
+        }
+        const lastEntry = rec[rec.length - 1];
+        const lastAgo = racingTickCounter - lastEntry.tick;
+        console.log(`  -${String(lastAgo).padStart(2, ' ')}t    | (${lastEntry.x}, ${lastEntry.y}) | (${lastEntry.vx}, ${lastEntry.vy}) | ${lastEntry.speed}  | ${lastEntry.facingDeg}° -> ${lastEntry.desiredDeg}° | ${lastEntry.thrust ? 'ON ' : 'OFF'}   | ${lastEntry.safe ? 'YES' : 'NO '}`);
+    }
 
     dumpRacingAsciiMap(room, t.x, t.y, targetCp?.center, bot.path, p.alias);
 }
