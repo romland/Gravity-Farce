@@ -3,7 +3,7 @@ import type { Room } from '../Room';
 import { killPlayer, bumpPlayer } from './combat';
 import { spawnBullet } from './combat';
 
-const TANK_SPEED = 4.0; // 1 Amiga pixel * 4x modern scale
+const TANK_SPEED = 1.0;
 const TILE_SIZE = 32;
 const MOVEMENT_FRAMES = TILE_SIZE / TANK_SPEED; // E.g., 16 frames to traverse one 32px tile
 
@@ -18,8 +18,8 @@ export function spawnTank(ecs: Registry, x: number, y: number, debugId: number):
         dirX: 1, // Default start direction
         dirY: 0,
         scoreValue: 50,
-        width: 128,
-        height: 96,
+        width: 64,
+        height: 48,
         damageHistory: {}
     });
     return e;

@@ -7,7 +7,7 @@
 It was in the backlog for 30-35 years but I now finally got around to finding out **why** it was awesome.  
 So I decided to throw some hours at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
 
-There are a lot of old games getting a second life these days, which is awesome! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines.
+It's awesome that a lot of old games getting a second life these days! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. More on this below.
 
 
 ### Server and Cheating
