@@ -229,7 +229,12 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     const distToAim = Math.hypot(dirX, dirY) || 1;
     
     const currentSpeed = Math.hypot(v.vx, v.vy);
-    const targetSpeed = 7.0;
+    
+    // DYNAMIC ENTRY SPEED: Cap target speed on steep descents to prevent uncontrollable vertical plunges
+    let targetSpeed = 7.0;
+    if (dirY > 48 && v.vy > 2.5) {
+        targetSpeed = 3.2; // Slow down entry speed when diving into vertical shafts
+    }
 
     // Desired velocity vector
     const desVx = (dirX / distToAim) * targetSpeed;
@@ -243,15 +248,20 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
 
     // Lookahead Glide Prediction: Will current momentum + gravity crash into a wall in next 45 ticks?
     const glideTicks = Math.min(45, Math.floor(currentSpeed * 7) + 15);
-    const isGlidePathSafe = currentSpeed < 1.5 || !predictGlideCollision(t, v, glideTicks, room);
+    const isGlidePathSafe = currentSpeed < 0.8 || !predictGlideCollision(t, v, glideTicks, room);
 
-    const normDirX = dirX / distToAim;
-    const normDirY = dirY / distToAim;
-    const velDotTarget = currentSpeed > 0.5 ? (v.vx * normDirX + v.vy * normDirY) / currentSpeed : 1.0;
+    // HYSTERESIS / RETRO-BRAKE STATE LOCKING
+    if (!isGlidePathSafe && currentSpeed > 0.8) {
+        (bot as any).emergencyBrakeTimer = 15; // Lock retro-brake state for 15 ticks
+    } else if ((bot as any).emergencyBrakeTimer > 0) {
+        (bot as any).emergencyBrakeTimer--;
+    }
+
+    const isBraking = ((bot as any).emergencyBrakeTimer || 0) > 0;
 
     let desiredAngle: number;
-    if (!isGlidePathSafe && currentSpeed > 2.5 && velDotTarget < 0.2) {
-        // EMERGENCY RETRO-BRAKE: Turn opposite to velocity to kill sideways drift
+    if (isBraking && currentSpeed > 0.5) {
+        // RETRO-BRAKE: Point opposite to velocity vector to kill dangerous momentum/fall
         desiredAngle = Math.atan2(-v.vy, -v.vx);
     } else {
         desiredAngle = Math.atan2(forceY, forceX);
@@ -261,13 +271,24 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     const angleDiff = applyAngularControl(p, t, v, desiredAngle);
 
     // DYNAMIC THROTTLE MANAGEMENT
-    if (isGlidePathSafe) {
+    const thrustDirY = Math.sin(t.angle); // In screen space: > 0 is pointing DOWNWARDS, < 0 is UPWARDS
+
+    if (!isBraking) {
         // Safe line: Keep throttle open if nose is reasonably aligned with force vector
         if (angleDiff < 1.2) p.inputs.up = true;
     } else {
-        // Trajectory unsafe: Lift throttle to let angular rotation whip the nose around tighter,
-        // only firing thruster when aligned with correction vector to counteract drift.
-        if (angleDiff < 0.35) p.inputs.up = true;
+        // Unsafe / Emergency Braking:
+        // 1. Never fire thrusters if facing downwards while falling
+        const isPushingDownWhileFalling = v.vy > 0.5 && thrustDirY > 0.1;
+        
+        // 2. EMERGENCY LIFT: If falling fast (vy > 2.0) and nose has ANY upward tilt (thrustDirY < -0.1),
+        // fire thruster IMMEDIATELY to arrest descent—do not wait for perfect retro-angle alignment!
+        const hasUpwardThrust = thrustDirY < -0.1 && v.vy > 2.0;
+        const thrustCone = hasUpwardThrust ? 1.4 : (thrustDirY < 0.2 ? 0.9 : 0.4);
+
+        if (angleDiff < thrustCone && !isPushingDownWhileFalling) {
+            p.inputs.up = true;
+        }
     }
 
     // BLACK-BOX FLIGHT RECORDER (Ring buffer of last 60 ticks)
