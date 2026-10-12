@@ -31,4 +31,5 @@ export interface PlayerStats {
     joinedAt?: number;
     shipType?: 'classic' | 'modern';
     ip?: string;
+    lives?: number;
 }

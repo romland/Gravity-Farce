@@ -43,6 +43,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                     const lapTime = now - p.race.startTime - p.race.lapTimes.reduce((a, b) => a + b, 0);
                     p.race.lapTimes.push(lapTime);
                     
+                    room.tracker.logEvent(p.id, { type: 'lap_completed', lapNum: p.race.currentLap, lapTime });
+                    
                 // Multiplayer = More than 1 player in the room
                 const mode = ecs.players.size > 1 ? 'MP' : 'SP';
                 const physicsHash = getActivePhysicsHash();
@@ -56,6 +58,15 @@ export function sysRacing(ecs: Registry, room: Room) {
                 });
                 if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
 
+                // Flying Lap (Lap 2+)
+                let rFlying = null;
+                if (p.race.currentLap > 1) {
+                    rFlying = recordDB.submitRecord('flying_lap', room.levelIndex, mode, physicsHash, 'asc', {
+                        playerId: p.uuid, alias: p.alias, value: lapTime, metadata: { ship: p.type, lapNum: p.race.currentLap }
+                    });
+                    if (rFlying.rank !== -1) room.tracker.logHighscore(p.id, 'flying_lap', lapTime, rFlying.isNewPb);
+                }
+
                     if (p.race.currentLap >= p.race.totalLaps) {
                         p.race.state = 2;
                         p.race.finishTime = now;
@@ -63,6 +74,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                         ecs.events.push({ type: 'floating_text', text: 'FINISHED!', color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                         p.score += 5000;
                         room.tracker.isCompleted = true;
+                        
+                        room.tracker.logEvent(p.id, { type: 'race_completed', totalTime: now - p.race.startTime, lapTimes: [...p.race.lapTimes] });
                     
                     const rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
                         playerId: p.uuid,
@@ -73,8 +86,16 @@ export function sysRacing(ecs: Registry, room: Room) {
                     if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
                     room.tracker.isCompleted = true;
                     
+                    // If this is SP, or if all MP players have finished, close the log instantly
+                    let allFinished = true;
+                    for (const op of room.ecs.players.values()) {
+                        if (!op.race || op.race.state !== 2) allFinished = false;
+                    }
+                    if (allFinished) room.tracker.finishAndSave();
+
                     const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value), 10, { value: now - p.race.startTime, alias: p.alias });
                     const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value), 10, { value: lapTime, alias: p.alias });
+                    const ctxFlying = buildLeaderboardContext('flying_lap', room.levelIndex, mode, physicsHash, p.uuid, rFlying?.isNewPb ?? false, rFlying?.timestamp, x => formatTimeMs(x.value), 10, rFlying ? { value: lapTime, alias: p.alias } : undefined);
                     
                     const boards = [];
                     if (mode === 'MP') {
@@ -112,6 +133,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                     boards.push({ title: 'RACE RUN SUMMARY', entries: raceSummaryEntries });
                     boards.push({ title: `TOP ${mode} RACE TIMES`, entries: ctxRaces });
                     boards.push({ title: `TOP ${mode} LAP TIMES`, entries: ctxLaps });
+                    if (p.race.totalLaps > 1) boards.push({ title: `TOP ${mode} FLYING LAPS`, entries: ctxFlying });
 
                     room.emitToPlayer(p.id, 'show_leaderboard', boards);
 
@@ -128,4 +150,12 @@ export function sysRacing(ecs: Registry, room: Room) {
             }
         }
     }
+}
+
+export function buildRaceLeaderboards(pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string, alias: string) {
+    return [
+        { title: `TOP ${mode} RACE TIMES`, entries: buildLeaderboardContext('race_time', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) },
+        { title: `TOP ${mode} LAP TIMES`, entries: buildLeaderboardContext('fastest_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) },
+        { title: `TOP ${mode} FLYING LAPS`, entries: buildLeaderboardContext('flying_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) }
+    ];
 }

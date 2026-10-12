@@ -9,7 +9,9 @@ export type TrackEventType =
     | { type: 'fuel_taken'; amount: number; x: number; y: number }
     | { type: 'game_start'; levelIndex: number; category: string }
     | { type: 'enemy_killed'; enemyCategory: 'turret' | 'tank' | 'flying'; enemyTypeId: number; contributors: Record<string, number> }
-    | { type: 'game_end'; reason: 'completed' | 'abandoned' };
+    | { type: 'game_end'; reason: 'completed' | 'abandoned' }
+    | { type: 'lap_completed'; lapNum: number; lapTime: number }
+    | { type: 'race_completed'; totalTime: number; lapTimes: number[] };
 
 export interface LogEntry {
     gameUuid: string;
@@ -32,6 +34,9 @@ export interface LogEntry {
         cargoDelivered: number;
         fuelConsumed: number;
         shotsFired: number;
+        raceStats?: { totalTime: number; lapTimes: number[] };
+        pingSummary?: { min: number; max: number; avg: number; med: number };
+        _pingSamples?: number[]; // Internal tracking, removed before save
     }>;
 }
 
@@ -62,7 +67,7 @@ export class GameTracker {
 
     public initPlayer(playerId: string, uuid: string, alias: string) {
         if (!this.entry.playerStats[playerId]) {
-            this.entry.playerStats[playerId] = { uuid, alias, deaths: 0, powerupsTaken: 0, fuelTaken: 0, cargoDelivered: 0, fuelConsumed: 0, shotsFired: 0 };
+            this.entry.playerStats[playerId] = { uuid, alias, deaths: 0, powerupsTaken: 0, fuelTaken: 0, cargoDelivered: 0, fuelConsumed: 0, shotsFired: 0, _pingSamples: [] };
         }
     }
 
@@ -76,6 +81,9 @@ export class GameTracker {
             if (event.type === 'powerup_taken') stats.powerupsTaken++;
             if (event.type === 'fuel_taken') stats.fuelTaken++;
             if (event.type === 'cargo_delivered') stats.cargoDelivered++;
+            if (event.type === 'race_completed') {
+                stats.raceStats = { totalTime: event.totalTime, lapTimes: [...event.lapTimes] };
+            }
         }
     }
 
@@ -97,6 +105,12 @@ export class GameTracker {
         }
     }
 
+    public logPing(playerId: string, ping: number) {
+        if (this.isActive && this.entry.playerStats[playerId]?._pingSamples) {
+            this.entry.playerStats[playerId]._pingSamples!.push(ping);
+        }
+    }
+
     public finishAndSave() {
         if (!this.isActive) return;
         this.isActive = false;
@@ -106,6 +120,21 @@ export class GameTracker {
         this.entry.endedAt = Date.now();
         this.entry.durationMs = this.entry.endedAt - this.entry.startedAt;
         this.entry.events.push({ timestamp: this.entry.endedAt, event: { type: 'game_end', reason: 'completed' } });
+        
+        // Calculate ping summaries and strip raw array before saving
+        for (const stats of Object.values(this.entry.playerStats)) {
+            if (stats._pingSamples && stats._pingSamples.length > 0) {
+                const samples = stats._pingSamples.sort((a, b) => a - b);
+                const min = samples[0];
+                const max = samples[samples.length - 1];
+                const avg = Math.round(samples.reduce((a, b) => a + b, 0) / samples.length);
+                const mid = Math.floor(samples.length / 2);
+                const med = samples.length % 2 === 0 ? Math.round((samples[mid - 1] + samples[mid]) / 2) : samples[mid];
+                
+                stats.pingSummary = { min, max, avg, med };
+            }
+            delete stats._pingSamples;
+        }
         
         const logPath = path.resolve(process.cwd(), 'data/game_log.jsonl');
         const dir = path.dirname(logPath);

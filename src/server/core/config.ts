@@ -11,6 +11,7 @@ export interface ServerConfig {
     allowNewRegistrations: boolean;
     requireManualApproval: boolean;
     maxPlayers: number;
+    defaultLives: number;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -22,7 +23,8 @@ const DEFAULT_CONFIG: ServerConfig = {
     useClassicPhysics: true, // Amiga purist mode vs modern
     allowNewRegistrations: true, // If false, only known players can connect
     requireManualApproval: false, // If true, new players must be set to 'approved: true' in JSON
-    maxPlayers: 50 // Global connection cap
+    maxPlayers: 50, // Global connection cap
+    defaultLives: 5
 };
 
 export class ConfigManager {

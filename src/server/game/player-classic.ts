@@ -31,7 +31,9 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         score: stats?.score ?? 0,
         spawnX: x,
         spawnY: y,
-        race: stats?.race
+        race: stats?.race,
+        lives: stats?.lives ?? 5,
+        ping: 0
     });
     ecs.fuelTanks.set(e, { current: 76464, max: 99999, consumed: 0 });
     ecs.cargoBays.set(e, { stack: [], unloadTimer: 0, maxWeight: 3 });

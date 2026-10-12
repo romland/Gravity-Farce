@@ -52,6 +52,8 @@ export interface Player {
     spawnY: number;
     advancing?: boolean;
     race?: PlayerRaceState;
+    lives: number;
+    ping: number;
 }
 
 export interface FuelTank {

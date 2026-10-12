@@ -5,6 +5,7 @@ import type { Room } from '../Room';
 import { getTurretSpecByTile } from './turret-defs';
 import { spawnExplosionFragments } from './debris';
 import { TILE_DICTIONARY } from '../core/tiles';
+import { recordDB, getActivePhysicsHash } from '../core/records';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -109,9 +110,24 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
         w.prevShoot = false;
     }
     
-    setTimeout(() => { 
-        p.respawnRequest = true; 
-    }, 3000);
+    p.lives--;
+
+    if (p.lives <= 0) {
+        // Record arcade score before reset
+        if (room && p.score > 0) {
+            const mode = room.ecs.players.size > 1 ? 'MP' : 'SP';
+            const rScore = recordDB.submitRecord('arcade_score', 0, mode, getActivePhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score });
+            if (rScore.rank !== -1) room.tracker.logHighscore(p.id, 'arcade_score', p.score, rScore.isNewPb);
+        }
+        
+        setTimeout(() => {
+            p.score = 0;
+            p.lives = 5; // Reset to default
+            p.respawnRequest = true;
+        }, 3000);
+    } else {
+        setTimeout(() => { p.respawnRequest = true; }, 3000);
+    }
 }
 
 export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18): boolean {

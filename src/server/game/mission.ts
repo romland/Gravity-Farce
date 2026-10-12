@@ -43,6 +43,7 @@ export function sysMission(ecs: Registry, room: Room) {
         if (missionComplete) {
             p.advancing = true;
             room.tracker.isCompleted = true;
+            room.tracker.finishAndSave();
             ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
             setTimeout(() => room.transitionPlayer(p.id), 3000);
         }

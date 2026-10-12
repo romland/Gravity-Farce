@@ -190,6 +190,7 @@
         let particles = [];
         let floatingTexts = [];
         let lastHudHTML = "";
+        let myPing = 0;
         let raceLights = [];
 
         const inputs = { up: false, left: false, right: false, shoot: false };
@@ -269,6 +270,10 @@
             if (savedLevel !== null) {
                 socket.emit('debug_action', 'jump', { levelIndex: parseInt(savedLevel) });
             }
+        });
+        
+        socket.on('ping', (serverTime) => {
+            socket.emit('pong', serverTime);
         });
         
         let tileDictionary = {};
@@ -882,7 +887,7 @@
                         let color = r.state === 2 ? '#2ecc71' : '#fff';
                         raceUI = ` &nbsp;|&nbsp; LAP: <span style="color:#4facfe">${r.currentLap}/${r.totalLaps}</span> &nbsp;|&nbsp; TIME: <span style="color:${color}">${m}:${s}.${ms}</span>`;
                     }
-                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>${raceUI}</div>`;
+                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; LIVES: <span style="color:#e74c3c">${myServerPlayer.lives}</span> &nbsp;|&nbsp; PING: <span style="color:#95a5a6">${myServerPlayer.ping || 0}ms</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>${raceUI}</div>`;
                     if (newHudHTML !== lastHudHTML) {
                         hud.innerHTML = newHudHTML;
                         lastHudHTML = newHudHTML;

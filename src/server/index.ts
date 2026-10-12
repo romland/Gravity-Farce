@@ -10,6 +10,7 @@ import { getActivePhysicsHash } from './core/records';
 import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
+import { buildRaceLeaderboards } from './game/racing';
 
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
@@ -66,7 +67,8 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
                 alias: p.alias,
                 shipType: p.type,
                 shotsFired: 0,
-                    fuel: 76464
+                fuel: 76464,
+                lives: p.lives
             };
             playerSessionStats.set(id, stats);
             room.removePlayer(id);
@@ -124,7 +126,8 @@ function handleTransition(id: string) {
                 alias: p.alias,
                 shipType: p.type,
                 shotsFired: 0,
-                fuel: 76464
+                fuel: 76464,
+                lives: p.lives
             });
             oldRoom.removePlayer(id);
             if (oldRoom.activeClientIds.size === 0) {
@@ -169,7 +172,8 @@ io.on('connection', (socket) => {
         uuid: uuid,
 		alias: alias,
 		shipType: useClassicPhysics ? 'classic' : 'modern',
-        ip: ip
+        ip: ip,
+        lives: SERVER_CONFIG.defaultLives
     };
     playerSessionStats.set(socket.id, stats);
 
@@ -262,16 +266,37 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('pong', (clientTime: number) => {
+        const roomIndex = playerRooms.get(socket.id);
+        if (roomIndex !== undefined) {
+            const room = rooms.get(roomIndex);
+            if (room) {
+                const e = room.ecs.getPlayerEntity(socket.id);
+                if (e !== undefined) {
+                    const ping = Date.now() - clientTime;
+                    room.ecs.players.get(e)!.ping = ping;
+                    room.tracker.logPing(socket.id, ping);
+                }
+            }
+        }
+    });
+
     socket.on('request_leaderboard', () => {
         const pLevel = playerRooms.get(socket.id) ?? 0;
+        const room = rooms.get(pLevel);
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
         const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
-        const mode = 'SP';
+        const mode = (room && room.activeClientIds.size > 1) ? 'MP' : 'SP';
         const physicsHash = getActivePhysicsHash();
         
-        const boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias);
-            socket.emit('show_leaderboard', boards, true);
+        let boards;
+        if (room && room.category === 'race') {
+            boards = buildRaceLeaderboards(pLevel, mode, physicsHash, uuid, alias);
+        } else {
+            boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias);
+        }
+        socket.emit('show_leaderboard', boards, true);
     });
 
     socket.on('disconnect', () => {
@@ -291,6 +316,13 @@ io.on('connection', (socket) => {
 
 
 const profiler = new ServerProfiler(10000);
+
+setInterval(() => {
+    const now = Date.now();
+    for (const id of playerRooms.keys()) {
+        io.to(id).emit('ping', now);
+    }
+}, 500);
 
 setInterval(() => {
     profiler.begin();

@@ -84,7 +84,7 @@ export function sysTanks(ecs: Registry, room: Room) {
             }
         }
 
-        checkTankPlayerCollisions(ecs, room, t.x, t.y);
+        checkTankPlayerCollisions(ecs, room, t.x, t.y, tank.width, tank.height);
         
         // "Sprinkler" Firing Trigger & Trajectory
         // The Amiga evaluates a chaotic global byte ($0003181E) built from player/scroll coords.
@@ -108,7 +108,7 @@ function isPathNode(map: number[][], x: number, y: number): boolean {
     return tile === 0x32 || tile === 0x33;
 }
 
-function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: number) {
+function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: number, tWidth: number, tHeight: number) {
     for (const [pe, p] of ecs.players.entries()) {
         if (p.isDead) {
             continue;
@@ -116,7 +116,7 @@ function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: nu
 
         const pt = ecs.transforms.get(pe);
 
-        if (pt && Math.abs(pt.x - tx) <= 78 && Math.abs(pt.y - ty) <= 62) { // (Width/2 + 14) and (Height/2 + 14)
+        if (pt && Math.abs(pt.x - tx) <= (tWidth / 2 + 14) && Math.abs(pt.y - ty) <= (tHeight / 2 + 14)) {
             if (room.category === 'race' && !room.isLethalRacing) {
                 bumpPlayer(ecs, room, pe, tx, ty, 6.0);
             } else {
