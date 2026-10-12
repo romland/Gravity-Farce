@@ -44,12 +44,6 @@ function getCheckpoints(room: Room): CheckpointGate[] {
             const avgX = tiles.reduce((acc, t) => acc + t.px, 0) / tiles.length;
             const avgY = tiles.reduce((acc, t) => acc + t.py, 0) / tiles.length;
             cps[i] = { tileId, tiles, center: { x: avgX, y: avgY } };
-        } else if (sortedTileIds.length > 0) {
-            const fallbackTile = sortedTileIds.find(id => id > tileId) || sortedTileIds[0];
-            const fbTiles = cpMap.get(fallbackTile)!;
-            const avgX = fbTiles.reduce((acc, t) => acc + t.px, 0) / fbTiles.length;
-            const avgY = fbTiles.reduce((acc, t) => acc + t.py, 0) / fbTiles.length;
-            cps[i] = { tileId: fallbackTile, tiles: fbTiles, center: { x: avgX, y: avgY } };
         }
     }
     
@@ -198,6 +192,15 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         let wpX = nextWp.x * 32 + 16;
         let wpY = nextWp.y * 32 + 16;
 
+        // Corridor Centering: Push waypoints away from adjacent solid walls into open channel space
+        const map = room.level.rawMap;
+        if (map && map[nextWp.y]) {
+            if (map[nextWp.y]?.[nextWp.x - 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x - 1]]?.solid) wpX += 12;
+            if (map[nextWp.y]?.[nextWp.x + 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x + 1]]?.solid) wpX -= 12;
+            if (map[nextWp.y - 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y - 1][nextWp.x]]?.solid) wpY += 12;
+            if (map[nextWp.y + 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y + 1][nextWp.x]]?.solid) wpY -= 12;
+        }
+
         if (Math.hypot(wpX - t.x, wpY - t.y) < 96) {
             bot.path.shift();
         }
@@ -230,10 +233,25 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     
     const currentSpeed = Math.hypot(v.vx, v.vy);
     
-    // DYNAMIC ENTRY SPEED: Cap target speed on steep descents to prevent uncontrollable vertical plunges
+    // WALL PROXIMITY SPEED GOVERNOR: Scale speed dynamically based on wall distance in velocity direction
+    let wallDistInVelDir = 999;
+    if (currentSpeed > 1.0) {
+        const rayEndX = t.x + (v.vx / currentSpeed) * 180;
+        const rayEndY = t.y + (v.vy / currentSpeed) * 180;
+        const hit = raycastEnvironment({ x: t.x, y: t.y }, { x: rayEndX, y: rayEndY }, room.level);
+        if (hit) {
+            wallDistInVelDir = Math.hypot(hit.x - t.x, hit.y - t.y);
+        }
+    }
+    // DYNAMIC ENTRY SPEED: Keep high speed (5.5) on descents while keeping gravity under control
     let targetSpeed = 7.0;
+    if (wallDistInVelDir < 150) {
+        const effD = Math.max(0, wallDistInVelDir - 24);
+        const maxSafe = Math.sqrt(0.36 * effD + 11.6) - 2.16;
+        targetSpeed = Math.min(targetSpeed, Math.max(2.0, maxSafe));
+    }
     if (dirY > 48 && v.vy > 2.5) {
-        targetSpeed = 3.2; // Slow down entry speed when diving into vertical shafts
+        targetSpeed = Math.min(targetSpeed, 5.5);
     }
 
     // Desired velocity vector
@@ -246,13 +264,13 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     const forceX = desVx - v.vx;
     const forceY = (desVy - v.vy) - GRAVITY;
 
-    // Lookahead Glide Prediction: Will current momentum + gravity crash into a wall in next 45 ticks?
-    const glideTicks = Math.min(45, Math.floor(currentSpeed * 7) + 15);
-    const isGlidePathSafe = currentSpeed < 0.8 || !predictGlideCollision(t, v, glideTicks, room);
+    // Snappier 30-tick lookahead window to prevent premature false-positive braking
+    const glideTicks = Math.min(30, Math.floor(currentSpeed * 4) + 10);
+    const isGlidePathSafe = currentSpeed < 1.2 || !predictGlideCollision(t, v, glideTicks, room);
 
     // HYSTERESIS / RETRO-BRAKE STATE LOCKING
-    if (!isGlidePathSafe && currentSpeed > 0.8) {
-        (bot as any).emergencyBrakeTimer = 15; // Lock retro-brake state for 15 ticks
+    if (!isGlidePathSafe && currentSpeed > 1.2) {
+        (bot as any).emergencyBrakeTimer = 8; // Short 8-tick pulse to shed speed without freezing
     } else if ((bot as any).emergencyBrakeTimer > 0) {
         (bot as any).emergencyBrakeTimer--;
     }
@@ -354,7 +372,7 @@ function hasClearPath(p1: {x: number, y: number}, p2: {x: number, y: number}, le
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
-    const margin = 24; // Increased margin so paths give walls wide berth
+    const margin = 18; // Reduced to 18px to fit cleanly through narrow corridors without triggering alerts
 
     if (raycastEnvironment(p1, p2, level)) return false;
     if (raycastEnvironment({x: p1.x + nx * margin, y: p1.y + ny * margin}, {x: p2.x + nx * margin, y: p2.y + ny * margin}, level)) return false;
