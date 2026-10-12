@@ -304,17 +304,30 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const normDirX = dirX / distToAim;
     const normDirY = dirY / distToAim;
     
-    const velDotTarget = velSpeed > 0.5 ? (v.vx * normDirX + v.vy * normDirY) / velSpeed : 1.0;
+    let isEmergency = false;
+    let repelX = 0;
+    let repelY = 0;
 
-    let forceX = normDirX * cruiseSpeed - v.vx;
-    let forceY = normDirY * cruiseSpeed - v.vy - 1.2;
+    // --- TACTICAL SENSORS EXTENSION (Friends, Map Enemies, Bullets) ---
+    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim);
+    if (tactics.friendlyInLineOfFire) {
+        p.inputs.shoot = false; // CEASE FIRE! Squadmate in the crosshairs.
+    }
+    if (tactics.isEmergency) {
+        isEmergency = true;
+        repelX += tactics.repelX;
+        repelY += tactics.repelY;
+    }
+    
+    // Apply brakes if waiting for an enemy to cross
+    const cruiseSpeedAdj = cruiseSpeed * tactics.throttleMultiplier;
+
+    let forceX = normDirX * cruiseSpeedAdj - v.vx;
+    let forceY = normDirY * cruiseSpeedAdj - v.vy - 1.2;
 
     const velMag = Math.hypot(v.vx, v.vy);
     const moveAngle = velMag > 0.5 ? Math.atan2(v.vy, v.vx) : t.angle;
     const RAY_DIST = 120;
-    let isEmergency = false;
-    let repelX = 0;
-    let repelY = 0;
 
     const testAngles = [moveAngle, moveAngle - 0.4, moveAngle + 0.4, moveAngle - 0.8, moveAngle + 0.8];
     for (const ang of testAngles) {
@@ -331,17 +344,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         }
     }
 
-    // --- TACTICAL SENSORS EXTENSION (Friends, Enemies, Bullets) ---
-    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim);
-    if (tactics.friendlyInLineOfFire) {
-        p.inputs.shoot = false; // CEASE FIRE! Squadmate in the crosshairs.
-    }
-    if (tactics.isEmergency) {
-        isEmergency = true;
-        repelX += tactics.repelX;
-        repelY += tactics.repelY;
-    }
-
     if (isEmergency) {
         forceX += repelX;
         forceY += repelY;
@@ -353,6 +355,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const isGlidePathSafe = currentSpeed > 1.0 && !predictGlideCollision(t, v, glideTicks, room);
     const headingDiff = velSpeed > 0.5 ? Math.abs(getAngleDiff(Math.atan2(v.vy, v.vx), Math.atan2(dirY, dirX))) : 0;
 
+    const velDotTarget = velSpeed > 0.5 ? (v.vx * normDirX + v.vy * normDirY) / velSpeed : 1.0;
     const isHeadingToCollision = !isGlidePathSafe && currentSpeed > 1.0;
     const needsRetroBrake = (isEmergency && velSpeed > 0.8) || (isHeadingToCollision && velSpeed > 0.8) || (velSpeed > 1.2 && velDotTarget < 0.2);
 
@@ -622,57 +625,21 @@ function generateRoamPath(map: number[][], sx: number, sy: number): {x: number, 
     if (!map) return [];
     const startX = Math.floor(sx / 32);
     const startY = Math.floor(sy / 32);
-    const mapH = map.length;
-    if (mapH === 0) return [];
-    const mapW = map[0].length;
 
-    const queue: { x: number, y: number }[] = [];
-    const visited = new Set<string>();
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 12 + Math.floor(Math.random() * 10);
+        const rx = Math.max(1, Math.min(map[0].length - 2, startX + Math.round(Math.cos(angle) * radius)));
+        const ry = Math.max(1, Math.min(map.length - 2, startY + Math.round(Math.sin(angle) * radius)));
 
-    queue.push({ x: startX, y: startY });
-    visited.add(`${startX},${startY}`);
-
-    const targetDist = 25 + Math.floor(Math.random() * 15); // Flood outward 25-40 tiles
-    let furthestNode = { x: startX, y: startY };
-    let maxDistSq = 0;
-
-    let iterations = 0;
-    
-    // Randomized Flood Fill (Find a deep destination)
-    while (queue.length > 0 && iterations < 800) {
-        iterations++;
-        const current = queue.shift()!;
-        
-        const distSq = (current.x - startX) ** 2 + (current.y - startY) ** 2;
-        if (distSq > maxDistSq) {
-            maxDistSq = distSq;
-            furthestNode = current;
-        }
-
-        // Stop once we've reached deep enough into the cavern
-        if (distSq >= targetDist * targetDist) break;
-
-        // Shuffle neighbors to ensure organic, randomized tunnel exploration
-        const neighbors = [
-            {x: current.x + 1, y: current.y}, {x: current.x - 1, y: current.y},
-            {x: current.x, y: current.y + 1}, {x: current.x, y: current.y - 1}
-        ].sort(() => Math.random() - 0.5);
-
-        for (const n of neighbors) {
-            if (n.y < 0 || n.y >= mapH || n.x < 0 || n.x >= mapW) continue;
-            if (TILE_DICTIONARY[map[n.y][n.x]]?.solid) continue;
-
-            const nKey = `${n.x},${n.y}`;
-            if (!visited.has(nKey)) {
-                visited.add(nKey);
-                queue.push(n);
+        if (!TILE_DICTIONARY[map[ry]?.[rx]]?.solid) {
+            const raw = calculatePath(map, sx, sy, rx * 32 + 16, ry * 32 + 16);
+            if (raw.length > 0 && raw[raw.length - 1].x === rx && raw[raw.length - 1].y === ry) {
+                return raw;
             }
         }
     }
-
-    // We found a guaranteed reachable open-air tile deep in the cavern.
-    // NOW, use the heavy A* with wall-penalties to map a safe, midline flight path to it!
-    return calculatePath(map, sx, sy, furthestNode.x * 32 + 16, furthestNode.y * 32 + 16);
+    return [];
 }
 
 function findSafePadPosition(level: import('../core/types').LevelData | undefined, x: number, y: number, botAlias: string = 'BOT'): { x: number, y: number } {
@@ -700,6 +667,7 @@ function findSafePadPosition(level: import('../core/types').LevelData | undefine
 
     return { x, y: safeY };
 }
+
 // ----------------------------------------------------------------------------
 // Tactical Sensor Extensions
 // ----------------------------------------------------------------------------
@@ -709,10 +677,11 @@ interface TacticalSensors {
     repelX: number;
     repelY: number;
     isEmergency: boolean;
+    throttleMultiplier: number;
 }
 
 function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../core/ecs').Transform, myV: import('../core/ecs').Velocity, noseAngle: number, targetDist: number): TacticalSensors {
-    const tactics: TacticalSensors = { friendlyInLineOfFire: false, repelX: 0, repelY: 0, isEmergency: false };
+    const tactics: TacticalSensors = { friendlyInLineOfFire: false, repelX: 0, repelY: 0, isEmergency: false, throttleMultiplier: 1.0 };
 
     // 1. SQUADMATES (Friendly Fire & Clumping Avoidance)
     const bots = Array.from(ecs.bots.entries());
@@ -757,7 +726,37 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
         }
     }
 
-    // 3. INCOMING BULLETS (Evasion)
+    // 3. MAP ENEMIES (Patrols / Flying Hazards) -> Anticipate and Wait
+    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).hazards || (ecs as any).mapEntities;
+    if (mapEnemiesMap) {
+        for (const [ee, enemyData] of mapEnemiesMap.entries()) {
+            const et = ecs.transforms.get(ee);
+            const ev = ecs.velocities.get(ee);
+            if (!et || !ev) continue;
+
+            const distToEnemy = Math.hypot(et.x - myT.x, et.y - myT.y);
+            
+            // Radar range for anticipating patrol routes
+            if (distToEnemy < 350) {
+                // Predict where both entities will be 40 frames (~0.6s) from now
+                const myFutureX = myT.x + myV.vx * 40;
+                const myFutureY = myT.y + myV.vy * 40;
+                
+                const enFutureX = et.x + ev.vx * 40;
+                const enFutureY = et.y + ev.vy * 40;
+
+                const futureDist = Math.hypot(myFutureX - enFutureX, myFutureY - enFutureY);
+                
+                // If trajectories cross (future distance is very tight), yield!
+                if (futureDist < 60 && distToEnemy > 60) {
+                    // Cut cruise speed to 0. The bot will automatically fire reverse thrusters to brake and hover, letting the enemy pass.
+                    tactics.throttleMultiplier = 0.0; 
+                }
+            }
+        }
+    }
+
+    // 4. INCOMING BULLETS (Evasion)
     const projectilesMap = (ecs as any).bullets || (ecs as any).projectiles;
     if (projectilesMap) {
         const myId = (ecs.players.get(myEnt) as any)?.id || (ecs.players.get(myEnt) as any)?.uuid;
