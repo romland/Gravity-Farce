@@ -56,7 +56,6 @@ export class FlyingPathManager {
         const mapHeight = map.length;
         const mapWidth = map[0].length;
         const SCALE = 4; // Translates Amiga 8x8 space to 32x32 view
-        const OFFSET = 16; 
 
         const initialSegId = `${startX},${startY},0,0`;
 
@@ -99,7 +98,7 @@ export class FlyingPathManager {
                 const engineTileX = Math.floor(state.absX / 8);
                 const engineTileY = Math.floor(state.absY / 8);
 
-                state.points.push({ x: state.absX * SCALE + OFFSET, y: state.absY * SCALE + OFFSET });
+                state.points.push({ x: state.absX * SCALE, y: state.absY * SCALE });
 
                 if (engineTileX < 0 || engineTileX >= mapWidth || engineTileY < 0 || engineTileY >= mapHeight) {
                     this.segments.set(state.segmentId, { id: state.segmentId, points: state.points, nextIds: [] });

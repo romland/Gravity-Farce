@@ -39,8 +39,13 @@ const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
 export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number): Entity {
     const specs = FLYING_ENEMY_TEMPLATES[type] || FLYING_ENEMY_TEMPLATES[0xE4];
 
+    // Level loader passes x,y as the center of the 32x32 spawn tile.
+    // The Amiga spawned them with the top-left of the enemy at the top-left of the tile.
+    const startCenterX = (x - 16) + (specs.width / 2);
+    const startCenterY = (y - 16) + (specs.height / 2);
+
     const e = ecs.create();
-    ecs.transforms.set(e, { x, y, angle: 0 });
+    ecs.transforms.set(e, { x: startCenterX, y: startCenterY, angle: 0 });
     ecs.flyingEnemies.set(e, {
         active: true,
         hp: specs.hp,
@@ -110,8 +115,10 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
                         }
                     }
 
-                    const dx = nextPt.x - t.x;
-                    const dy = nextPt.y - t.y;
+                    const targetX = nextPt.x + (enemy.width / 2);
+                    const targetY = nextPt.y + (enemy.height / 2);
+                    const dx = targetX - t.x;
+                    const dy = targetY - t.y;
                     const dist = Math.hypot(dx, dy);
 
                     if (specs.rotates && dist > 0.1) {
@@ -123,8 +130,8 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
                     }
 
                     if (dist <= remainingMove) {
-                        t.x = nextPt.x;
-                        t.y = nextPt.y;
+                        t.x = targetX;
+                        t.y = targetY;
                         remainingMove -= dist;
                         enemy.pointIndex = (enemy.pointIndex || 0) + 1;
                     } else {
@@ -143,7 +150,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
             const vx = Math.cos(angle) * bulletSpeed;
             const vy = Math.sin(angle) * bulletSpeed;
 
-            spawnBullet(ecs, t.x + 16, t.y + 16, vx, vy, false, 'npc', 150);
+            spawnBullet(ecs, t.x, t.y, vx, vy, false, 'npc', 150);
             ecs.events.push({ type: 'sound', soundId: 10, x: t.x, y: t.y });
 
             if (enemy.burstRemaining > 0) {
