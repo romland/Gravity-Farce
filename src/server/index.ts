@@ -181,30 +181,48 @@ io.on('connection', (socket) => {
     socket.emit('levelIndex', room.levelIndex);
 	room.addPlayer(socket.id, stats.shipType || 'classic', stats);
 
-    socket.on('debug_action', (action, payload) => {
-        if (!SERVER_CONFIG.debugMode) return;
+    socket.on('debug_action', (action: string, payload) => {
+        if (!SERVER_CONFIG.debugMode) {
+            return;
+        }
+
         if (action === 'pause') {
             isServerPaused = !isServerPaused;
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
-            if (!isNaN(tgt)) handleTransitionToLevel(socket.id, tgt, false);
-            } else if (action === 'powerup') {
-                const roomIndex = playerRooms.get(socket.id);
-                if (roomIndex !== undefined) {
-                    const room = rooms.get(roomIndex);
-                    if (room) {
-                        const e = room.ecs.getPlayerEntity(socket.id);
-                        if (e !== undefined) {
-                            const w = room.ecs.weaponMounts.get(e);
-                            if (w) {
-                                w.activeModeId = 0xD6; // 0xD6 = Double Shot
-                                w.charges = 999;
-                                const t = room.ecs.transforms.get(e);
-                                if (t) room.ecs.events.push({ type: 'floating_text', text: 'DEBUG: 2X WEAPON', color: '#f39c12', x: t.x, y: t.y - 30 });
+            if (!isNaN(tgt)) {
+                handleTransitionToLevel(socket.id, tgt, false);
+            }
+        } else if (action.startsWith("powerup-")) {
+            const roomIndex = playerRooms.get(socket.id);
+
+            if (roomIndex !== undefined) {
+                const room = rooms.get(roomIndex);
+
+                if (room) {
+                    const e = room.ecs.getPlayerEntity(socket.id);
+
+                    if (e !== undefined) {
+                        const w = room.ecs.weaponMounts.get(e);
+
+                        if (w) {
+                            if(action.endsWith("-0xD6")) {
+                                w.activeModeId = 0xD6; // Double Shot
+                            } else if(action.endsWith("-0xD7")) {
+                                w.activeModeId = 0xD7; // Triple Shot
+                            } else if(action.endsWith("-0xD8")) {
+                                w.activeModeId = 0xD8; // Rear Shot
+                            }
+                            w.charges = 999;
+
+                            const t = room.ecs.transforms.get(e);
+                            if (t) {
+                                room.ecs.events.push({ type: 'floating_text', text: 'DEBUG: POWERUP ', color: '#f39c12', x: t.x, y: t.y - 30 });
                             }
                         }
                     }
                 }
+            }
         }
     });
 

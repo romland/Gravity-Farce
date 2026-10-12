@@ -24,30 +24,86 @@ export function sysWeapons(ecs: Registry) {
             const offset = 14; 
             const bSpeed = p.type === 'classic' ? 4.0 : 2.2; 
 
-             if (mount.activeModeId === 0xD6) { // Double Shot Mode
-                 const perpX = -Math.sin(t.angle) * 6;
-                 const perpY = Math.cos(t.angle) * 6;
-                 const noseX = t.x + Math.cos(t.angle) * offset;
-                 const noseY = t.y + Math.sin(t.angle) * offset;
-                 const bulletVx = v.vx + Math.cos(t.angle) * bSpeed;
-                 const bulletVy = v.vy + Math.sin(t.angle) * bSpeed;
+            if (mount.activeModeId === 0xD6) { // Double Shot Mode (2 linear bullets per press)
+                const bx = t.x + Math.cos(t.angle) * offset;
+                const by = t.y + Math.sin(t.angle) * offset;
+                const bvx = v.vx + Math.cos(t.angle) * bSpeed;
+                const bvy = v.vy + Math.sin(t.angle) * bSpeed;
+                
+                // Fire two bullets in sequence along the same line, slightly offset in life/position
+                spawnBullet(ecs, bx, by, bvx, bvy, true, p.id, 400);
+                spawnBullet(ecs, bx - Math.cos(t.angle) * 10, by - Math.sin(t.angle) * 10, bvx, bvy, true, p.id, 400);
+                
+                mount.shotsFired += 2;
+                mount.charges--;
+            } else if (mount.activeModeId === 0xD6) {
+                // PARALLEL Double Shot Mode
+                // This is NOT used in game; does not exist in any level
+                const perpX = -Math.sin(t.angle) * 6;
+                const perpY = Math.cos(t.angle) * 6;
+                const noseX = t.x + Math.cos(t.angle) * offset;
+                const noseY = t.y + Math.sin(t.angle) * offset;
+                const bulletVx = v.vx + Math.cos(t.angle) * bSpeed;
+                const bulletVy = v.vy + Math.sin(t.angle) * bSpeed;
 
-                 spawnBullet(ecs, noseX + perpX, noseY + perpY, bulletVx, bulletVy, true, p.id);
-                 spawnBullet(ecs, noseX - perpX, noseY - perpY, bulletVx, bulletVy, true, p.id);
-                 mount.charges--;
-                 mount.shotsFired += 2;
-             } else {
-                 spawnBullet(
-                     ecs, 
-                     t.x + Math.cos(t.angle) * offset, 
-                     t.y + Math.sin(t.angle) * offset, 
-                     v.vx + Math.cos(t.angle) * bSpeed, 
-                     v.vy + Math.sin(t.angle) * bSpeed, 
-                     true, 
-                     p.id
-                 );
-                 mount.shotsFired++;
-                 if (mount.activeModeId !== 0xD5) mount.charges--;
+                spawnBullet(ecs, noseX + perpX, noseY + perpY, bulletVx, bulletVy, true, p.id);
+                spawnBullet(ecs, noseX - perpX, noseY - perpY, bulletVx, bulletVy, true, p.id);
+                mount.charges--;
+                mount.shotsFired += 2;
+            } else if (mount.activeModeId === 0xD7) { // Spread Weapon Mode (3-way fan)
+                const spreadAngle = 0.25; // ~14 degrees offset
+                for (let i = -1; i <= 1; i++) {
+                    const curAngle = t.angle + (i * spreadAngle);
+                    spawnBullet(
+                            ecs,
+                            t.x + Math.cos(curAngle) * offset,
+                            t.y + Math.sin(curAngle) * offset,
+                            v.vx + Math.cos(curAngle) * bSpeed,
+                            v.vy + Math.sin(curAngle) * bSpeed,
+                            true,
+                            p.id
+                    );
+                    mount.shotsFired++;
+                }
+                mount.charges--;
+            } else if (mount.activeModeId === 0xD8) { // Rear Shot Mode (Forward + 180° Rearward)
+                const rearAngle = t.angle + Math.PI;
+
+                // Front shot
+                spawnBullet(
+                    ecs,
+                    t.x + Math.cos(t.angle) * offset,
+                    t.y + Math.sin(t.angle) * offset,
+                    v.vx + Math.cos(t.angle) * bSpeed,
+                    v.vy + Math.sin(t.angle) * bSpeed,
+                    true,
+                    p.id
+                );
+                // Rear shot
+                spawnBullet(
+                    ecs,
+                    t.x + Math.cos(rearAngle) * offset,
+                    t.y + Math.sin(rearAngle) * offset,
+                    v.vx + Math.cos(rearAngle) * bSpeed,
+                    v.vy + Math.sin(rearAngle) * bSpeed,
+                    true,
+                    p.id
+                );
+
+                mount.shotsFired += 2;
+                mount.charges--;                
+            } else {
+                spawnBullet(
+                    ecs, 
+                    t.x + Math.cos(t.angle) * offset, 
+                    t.y + Math.sin(t.angle) * offset, 
+                    v.vx + Math.cos(t.angle) * bSpeed, 
+                    v.vy + Math.sin(t.angle) * bSpeed, 
+                    true, 
+                    p.id
+                );
+                mount.shotsFired++;
+                if (mount.activeModeId !== 0xD5) mount.charges--;
              }
             
             // Auto-fire is deliberately slow. Fast firing requires manual pressing.
