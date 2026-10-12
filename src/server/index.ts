@@ -230,22 +230,29 @@ io.on('connection', (socket) => {
                     }
                 }
             }
-        } else if (action === 'spawn_bot') {
-            const roomIndex = playerRooms.get(socket.id);
-            if (roomIndex !== undefined) {
-                const room = rooms.get(roomIndex);
-                if (room && room.category === 'dogfight') {
-                    const p2Spawn = room.level.entities.find(e => e.type === 'spawn' && e.props?.player === 2);
-                    let sx = 100, sy = 100;
-                    if (p2Spawn) {
-                        sx = p2Spawn.x + (Math.random() * 60 - 30); // Jitter spawn slightly
-                        sy = p2Spawn.y + (Math.random() * 60 - 30);
-                    }
-                    const botAlias = `B${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
-                    spawnDogfightBot(room.ecs, sx, sy, botAlias);
-                }
+} else if (action === 'spawn_bot') {
+    const roomIndex = playerRooms.get(socket.id);
+    if (roomIndex !== undefined) {
+        const room = rooms.get(roomIndex);
+        if (room && room.category === 'dogfight') {
+            // Find Player 2 landing pad entity in map level
+            const p2Spawn = room.level.entities.find(e => 
+                (e.type === 'spawn' || e.type === 'player_spawn' || e.type === 0xE3) && 
+                (e.props?.player === 2 || (e as any).player === 2)
+            ) || room.level.entities.find(e => e.type === 'spawn' || e.type === 0xE3 || e.type === 0xE2);
+
+            if (p2Spawn) {
+                // Spread multiple bots along Player 2's pad width (X axis), NEVER change Y
+                const xOffset = (Math.random() * 32 - 16); 
+                const sx = p2Spawn.x + xOffset;
+                const sy = p2Spawn.y; // Exact Y position of Player 2's pad platform
+
+                const botAlias = `B${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
+                spawnDogfightBot(room.ecs, sx, sy, botAlias, room.level);
             }
         }
+    }
+}
     });
 
     socket.on('next_level', () => {

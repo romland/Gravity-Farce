@@ -10,18 +10,28 @@ import { SERVER_CONFIG } from '../core/config';
 const PREDICTION_FRAMES = 15;
 const BOT_UUID_PREFIX = 'BOT_';
 
-export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string): Entity {
+export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
+    const safePos = findSafePadPosition(level, x, y, alias);
     const botId = BOT_UUID_PREFIX + alias;
-    // Spawn as a standard player to inherit all physics, collisions, and damage
-    const e = spawnModernPlayer(ecs, botId, x, y, { uuid: botId, alias, shipType: 'modern' });
+    const e = spawnModernPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'modern' });
     
+    // Ensure initial physics state is upright and resting cleanly on pad
+    const t = ecs.transforms.get(e);
+    if (t) t.angle = -Math.PI / 2;
+    
+    const v = ecs.velocities.get(e);
+    if (v) { v.vx = 0; v.vy = 0; v.angularVelocity = 0; }
+    
+    const p = ecs.players.get(e);
+    if (p) p.isLanded = true;
+
     // Attach the brain
     ecs.bots.set(e, {
         active: true,
         role: 'pursuit',
         reactionTimer: 0,
         state: 'takeoff',
-        stateTimer: 20,
+        stateTimer: 25,
         path: [],
         pathTimer: 0
     });
@@ -35,7 +45,6 @@ export function sysBotAI(ecs: Registry, room: Room) {
     const bots = Array.from(ecs.bots.entries());
     const activeBots = bots.filter(([e]) => !ecs.players.get(e)?.isDead);
     const humans = Array.from(ecs.players.entries()).filter(([e, p]) => !p.isDead && !ecs.bots.has(e));
-
 
     // Log ASCII map and crash telemetry only when a bot actually dies
     for (const [e, bot] of bots) {
@@ -70,18 +79,16 @@ export function sysBotAI(ecs: Registry, room: Room) {
 function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], humans: [Entity, import('../core/ecs').Player][], ecs: Registry) {
     if (humans.length === 0) return;
 
-    // Map targets to the number of bots tracking them to force cooperation/spreading
     const targetCounts = new Map<string, number>();
 
     for (const [e, bot] of bots) {
         if (bot.reactionTimer > 0) {
             bot.reactionTimer--;
-            continue; // Simulate reaction time delay
+            continue;
         }
 
         const myPos = ecs.transforms.get(e)!;
         
-        // Find closest human
         let closestHuman: string | undefined;
         let minDist = Infinity;
 
@@ -98,17 +105,16 @@ function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hu
             bot.targetId = closestHuman;
             const currentAttackers = targetCounts.get(closestHuman) || 0;
             
-            // Smart Cooperative Role Assignment
             if (currentAttackers === 0) {
-                bot.role = 'pursuit'; // 1st bot goes straight for the kill
+                bot.role = 'pursuit';
             } else if (currentAttackers === 1) {
-                bot.role = 'flank-high'; // 2nd bot tries to get the high-ground advantage
+                bot.role = 'flank-high';
             } else {
-                bot.role = 'intercept'; // 3rd+ bot leads the target
+                bot.role = 'intercept';
             }
             
             targetCounts.set(closestHuman, currentAttackers + 1);
-            bot.reactionTimer = 15; // Re-evaluate every 1/4 second
+            bot.reactionTimer = 15;
         }
     }
 }
@@ -122,31 +128,27 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const t = ecs.transforms.get(e)!;
     const v = ecs.velocities.get(e)!;
 
-    // Reset inputs
     p.inputs = { up: false, left: false, right: false, shoot: false };
 
-    // Recovery behavior if crashed or landed
     if (p.isLanded) {
         bot.state = 'takeoff';
-        bot.stateTimer = 20; // Controlled vertical launch
-        p.inputs.up = true; // Blast off immediately
+        bot.stateTimer = 20;
+        p.inputs.up = true;
         return;
     }
 
-    // Takeoff sequence
     if (bot.state === 'takeoff') {
         const floorHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y + 60 }, room.level);
         const ceilingHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y - 60 }, room.level);
         const floorDist = floorHit ? floorHit.y - t.y : 999;
         const ceilingDist = ceilingHit ? t.y - ceilingHit.y : 999;
 
-        // Abort vertical launch if ceiling is too close (<35px) or once 22px pad clearance is reached
         if (ceilingDist < 35 || floorDist > 22 || bot.stateTimer <= 0) {
             bot.state = 'attack';
         } else {
             bot.stateTimer--;
             p.inputs.up = true;
-            applyAngularControl(p, t, v, -Math.PI / 2); // Hold upright (-90deg)
+            applyAngularControl(p, t, v, -Math.PI / 2);
             return;
         }
     }
@@ -164,7 +166,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     if (targetT && targetV) {
         const dist = Math.hypot(targetT.x - t.x, targetT.y - t.y);
 
-        // PATH STABILITY & ROAM LOGIC
         if (bot.path.length === 0 || bot.pathTimer <= 0) {
             const rawPath = calculatePath(room.level.rawMap, t.x, t.y, targetT.x, targetT.y);
             const targetTileX = Math.floor(targetT.x / 32);
@@ -173,7 +174,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
             const reachedTarget = !!lastNode && lastNode.x === targetTileX && lastNode.y === targetTileY;
 
             if (!reachedTarget && dist > 250 && !hasLOS) {
-                // Target is behind a wall/unreachable in current A* depth -> Enter Roam Mode
                 bot.state = 'roam';
                 bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
             } else {
@@ -190,7 +190,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         if (bot.path && bot.path.length > 0) {
             let nextWp = bot.path[0];
             
-            // Calculate center of target tile + push target away from nearby walls for extra corner clearance
             let wpX = nextWp.x * 32 + 16;
             let wpY = nextWp.y * 32 + 16;
             const map = room.level.rawMap;
@@ -204,7 +203,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
             aimX = wpX;
             aimY = wpY;
 
-            // Pop waypoint when within 32px
             if (Math.hypot(aimX - t.x, aimY - t.y) < 32) {
                 const popped = bot.path.shift();
                 if (SERVER_CONFIG.debugMode && popped) {
@@ -227,7 +225,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
             }
         }
 
-        // PREDICTIVE TARGET LEADING (Bullet speed ~12 px/frame)
         const BULLET_SPEED = 12.0;
         const leadTicks = Math.min(35, dist / BULLET_SPEED);
         const predX = targetT.x + targetV.vx * leadTicks;
@@ -237,12 +234,10 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         hasLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: targetT.x, y: targetT.y }, room.level);
         hasPredictedLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: predX, y: predY }, room.level);
 
-        // Firing Logic: Shoot when aligned with predicted intercept OR suppressive spam near corners
         const alignDiff = Math.abs(getAngleDiff(angleToPredicted, t.angle));
         if (alignDiff < 0.35 && dist < 600 && (hasLOS || hasPredictedLOS)) {
             p.inputs.shoot = true;
         } else if (dist < 400 && hasLOS && Math.random() < 0.15) {
-            // Suppressive corner spam
             p.inputs.shoot = true;
         }
     }
@@ -251,7 +246,6 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const dirY = aimY - t.y;
     const distToAim = Math.hypot(dirX, dirY) || 1;
     
-    // Dynamic Speed Cap: Open up speed to 4.5 on long straightaways, constrain to 2.0 near bends
     const straightawayDist = getStraightawayDistance(t, bot.path, room);
     const maxCruise = straightawayDist > 120 ? 4.5 : 2.0;
     const cruiseSpeed = Math.min(maxCruise, distToAim / 20);
@@ -260,13 +254,11 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const normDirX = dirX / distToAim;
     const normDirY = dirY / distToAim;
     
-    // Calculate alignment between current movement and target direction
     const velDotTarget = velSpeed > 0.5 ? (v.vx * normDirX + v.vy * normDirY) / velSpeed : 1.0;
 
     let forceX = normDirX * cruiseSpeed - v.vx;
     let forceY = normDirY * cruiseSpeed - v.vy - 1.2;
 
-    // Forward-Cone Wall Avoidance Radar
     const velMag = Math.hypot(v.vx, v.vy);
     const moveAngle = velMag > 0.5 ? Math.atan2(v.vy, v.vx) : t.angle;
     const RAY_DIST = 120;
@@ -296,12 +288,10 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
     const currentSpeed = Math.hypot(v.vx, v.vy);
 
-    // GLIDE LOGIC: Simulate momentum + parabolic gravity projection step-by-step
     const glideTicks = Math.min(25, Math.floor(currentSpeed * 6) + 10);
     const isGlidePathSafe = currentSpeed > 1.0 && !predictGlideCollision(t, v, glideTicks, room);
     const headingDiff = velSpeed > 0.5 ? Math.abs(getAngleDiff(Math.atan2(v.vy, v.vx), Math.atan2(dirY, dirX))) : 0;
 
-    // RETRO-BRAKING: If heading towards a wall collision or drifting heavily off-course, reverse thruster!
     const isHeadingToCollision = !isGlidePathSafe && currentSpeed > 1.0;
     const needsRetroBrake = (isEmergency && velSpeed > 0.8) || (isHeadingToCollision && velSpeed > 0.8) || (velSpeed > 1.2 && velDotTarget < 0.2);
 
@@ -310,9 +300,9 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
     let desiredAngle: number;
     if (needsRetroBrake) {
-        desiredAngle = Math.atan2(-v.vy, -v.vx); // Reverse nose 180deg from motion vector to brake
+        desiredAngle = Math.atan2(-v.vy, -v.vx);
     } else if (wantsToAimAtTarget && isGlidePathSafe && currentSpeed > 1.0) {
-        desiredAngle = angleToPredicted; // Swivel nose to aim & shoot while gliding safely!
+        desiredAngle = angleToPredicted;
     } else {
         desiredAngle = navAngle;
     }
@@ -320,11 +310,9 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const angleDiff = applyAngularControl(p, t, v, desiredAngle);
     const thrustCone = needsRetroBrake ? 1.2 : (isEmergency ? 1.2 : 0.5);
 
-    // THRUST GATING: If aiming off-axis from flight path to shoot, DO NOT THRUST!
     const flightAlignDiff = Math.abs(getAngleDiff(desiredAngle, navAngle));
     const isAimingOffCourse = wantsToAimAtTarget && desiredAngle === angleToPredicted && flightAlignDiff > 0.6;
 
-    // Cut thrust if coasting parabolic arc is safe OR if aiming off-course to shoot
     const needsThrust = !isAimingOffCourse && (
         isEmergency ||
         !isGlidePathSafe ||
@@ -343,7 +331,6 @@ function applyAngularControl(p: import('../core/types').Player, t: import('../co
     const diff = getAngleDiff(desiredAngle, t.angle);
     const Kp = 0.15;
     const Kd = 1.0;
-    // Read actual angular velocity from player component
     const angVel = (p as any).angleStep || (p as any).angularVelocity || (v as any).angularVelocity || 0;
     const desiredAngVel = diff * Kp;
     const torque = desiredAngVel - angVel * Kd;
@@ -354,9 +341,6 @@ function applyAngularControl(p: import('../core/types').Player, t: import('../co
     return Math.abs(diff);
 }
 
-
-// Calculates how far ahead the path remains a straight, unobstructed line
-// Simulates ballistic flight (velocity + gravity drift step-by-step) to check if coasting is safe
 function predictGlideCollision(t: {x: number, y: number}, v: {vx: number, vy: number}, ticks: number, room: Room): boolean {
     const GRAVITY = 0.12;
     let prevX = t.x;
@@ -366,13 +350,14 @@ function predictGlideCollision(t: {x: number, y: number}, v: {vx: number, vy: nu
         const curX = t.x + v.vx * k;
         const curY = t.y + v.vy * k + 0.5 * GRAVITY * k * k;
         if (!hasClearPath({ x: prevX, y: prevY }, { x: curX, y: curY }, room.level)) {
-            return true; // Direct parabolic collision with terrain
+            return true;
         }
         prevX = curX;
         prevY = curY;
     }
     return false;
 }
+
 function getStraightawayDistance(t: {x: number, y: number}, path: {x: number, y: number}[], room: Room): number {
     if (!path || path.length === 0) return 0;
     let dist = 0;
@@ -397,14 +382,13 @@ function getAngleDiff(target: number, current: number): number {
     return diff;
 }
 
-// Thickness-checked line of sight for path pruning
 function hasClearPath(p1: {x: number, y: number}, p2: {x: number, y: number}, level: import('../core/types').LevelData): boolean {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
-    const margin = 15; // Increased to 15px to force wide arcing margins around corner vertices
+    const margin = 15;
 
     if (raycastEnvironment(p1, p2, level)) return false;
     if (raycastEnvironment({x: p1.x + nx * margin, y: p1.y + ny * margin}, {x: p2.x + nx * margin, y: p2.y + ny * margin}, level)) return false;
@@ -417,7 +401,6 @@ function prunePath(rawPath: {x: number, y: number}[], room: Room, botPos?: {x: n
     if (rawPath.length === 0) return [];
     if (rawPath.length <= 2) return [...rawPath];
 
-    // Find the furthest node in early rawPath that is directly visible from botPos
     let startIdx = 0;
     if (botPos) {
         for (let i = Math.min(rawPath.length - 1, 8); i >= 0; i--) {
@@ -448,7 +431,6 @@ function prunePath(rawPath: {x: number, y: number}[], room: Room, botPos?: {x: n
     return pruned;
 }
 
-// A* Pathfinding optimized for Caverns
 function calculatePath(map: number[][], sx: number, sy: number, tx: number, ty: number): {x: number, y: number}[] {
     if (!map) return [];
     
@@ -493,12 +475,11 @@ function calculatePath(map: number[][], sx: number, sy: number, tx: number, ty: 
             if (n.y < 0 || n.y >= map.length || n.x < 0 || n.x >= map[0].length) continue;
             
             const tileId = map[n.y][n.x];
-            if (TILE_DICTIONARY[tileId]?.solid) continue; // Impassable wall
+            if (TILE_DICTIONARY[tileId]?.solid) continue;
 
             const nKey = `${n.x},${n.y}`;
             if (closed.has(nKey)) continue;
 
-            // 2-RING WALL PENALTY: Heavily penalize tiles adjacent to walls so A* prefers midline nodes
             let wallPenalty = 0;
             for (let dy = -2; dy <= 2; dy++) {
                 for (let dx = -2; dx <= 2; dx++) {
@@ -572,7 +553,6 @@ function dumpAsciiMap(room: Room, botX: number, botY: number, targetX: number, t
     console.log(ascii);
 }
 
-// Generates a valid roaming path in open cavern space when target is unreachable/behind wall
 function generateRoamPath(map: number[][], sx: number, sy: number): {x: number, y: number}[] {
     if (!map) return [];
     const startX = Math.floor(sx / 32);
@@ -592,4 +572,29 @@ function generateRoamPath(map: number[][], sx: number, sy: number): {x: number, 
         }
     }
     return [];
+}
+
+function findSafePadPosition(level: import('../core/types').LevelData | undefined, x: number, y: number, botAlias: string = 'BOT'): { x: number, y: number } {
+    if (!level || !level.rawMap) return { x, y };
+    const map = level.rawMap;
+    const mapH = map.length;
+    if (mapH === 0) return { x, y };
+    const mapW = map[0].length;
+
+    const tileX = Math.max(0, Math.min(mapW - 1, Math.floor(x / 32)));
+    const tileY = Math.max(0, Math.min(mapH - 1, Math.floor(y / 32)));
+
+    // If requested spawn position is ALREADY in open air (not solid), trust the map entity's exact Y coordinate!
+    if (!TILE_DICTIONARY[map[tileY]?.[tileX]]?.solid) {
+        return { x, y };
+    }
+
+    // Step up if raw spawn coordinates are inside solid wall terrain
+    let airY = tileY;
+    while (airY >= 0 && TILE_DICTIONARY[map[airY]?.[tileX]]?.solid) {
+        airY--;
+    }
+    const safeY = airY >= 0 ? airY * 32 + 16 : y;
+
+    return { x, y: safeY };
 }
