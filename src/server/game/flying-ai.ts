@@ -2,6 +2,7 @@ import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { killPlayer, spawnBullet, bumpPlayer } from './combat';
 import { getPathManager } from './flying-paths';
+import { SERVER_CONFIG } from '../core/config';
 
 const TILE_SIZE = 32;
 
@@ -22,18 +23,18 @@ export interface FlyingEnemySpecs {
 // Memory-verified template structs mapped directly from RAM $00031570
 // Enemy traversal speed is globally fixed to 1 unit/frame. 'bulletSpeed' is decoded from the BCD array at offset +$0A.
 const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
-    0xE4: { hp: 8,  scoreValue: 100, canShoot: true,  spawnsDebris: false, width: 96, height: 64, bulletSpeed: 1.2, rotates: false },
-    0xE5: { hp: -1, scoreValue: 200, canShoot: false, spawnsDebris: false, width: 96, height: 64, bulletSpeed: 0.0, rotates: false }, 
-    0xE6: { hp: 6,  scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xE7: { hp: 3,  scoreValue: 150, canShoot: true,  spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 1.2, rotates: false },
-    0xE8: { hp: 5,  scoreValue: 250, canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xE9: { hp: 12, scoreValue: 90,  canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xEA: { hp: 12, scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xEB: { hp: -1, scoreValue: 100, canShoot: false, spawnsDebris: false, width: 96, height: 64, bulletSpeed: 0.0, rotates: false }, 
-    0xEC: { hp: 6,  scoreValue: 75,  canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xED: { hp: 6,  scoreValue: 200, canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xEE: { hp: 9,  scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false },
-    0xEF: { hp: 25, scoreValue: 80,  canShoot: false, spawnsDebris: true,  width: 96, height: 64, bulletSpeed: 0.0, rotates: false }
+    0xE4: { hp: 8,  scoreValue: 100, canShoot: true,  spawnsDebris: false, width: 192, height: 128, bulletSpeed: 1.2, rotates: false },
+    0xE5: { hp: -1, scoreValue: 200, canShoot: false, spawnsDebris: false, width: 192, height: 128, bulletSpeed: 0.0, rotates: false }, 
+    0xE6: { hp: 6,  scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xE7: { hp: 3,  scoreValue: 150, canShoot: true,  spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 1.2, rotates: false },
+    0xE8: { hp: 5,  scoreValue: 250, canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xE9: { hp: 12, scoreValue: 90,  canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xEA: { hp: 12, scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xEB: { hp: -1, scoreValue: 100, canShoot: false, spawnsDebris: false, width: 192, height: 128, bulletSpeed: 0.0, rotates: false }, 
+    0xEC: { hp: 6,  scoreValue: 75,  canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xED: { hp: 6,  scoreValue: 200, canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xEE: { hp: 9,  scoreValue: 100, canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false },
+    0xEF: { hp: 25, scoreValue: 80,  canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false }
 };
 
 export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number): Entity {
@@ -77,6 +78,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
     if (!room.level || !room.level.rawMap) return;
 
     const pathManager = getPathManager(room.levelIndex, room.level.rawMap);
+    const AMIGA_SPEED = 50 / SERVER_CONFIG.tickRate;
 
     for (const [e, enemy] of ecs.flyingEnemies.entries()) {
         if (!enemy.active) continue;
@@ -96,49 +98,45 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         if (enemy.segmentId) {
             const segment = pathManager.segments.get(enemy.segmentId);
             if (segment && segment.points.length > 0) {
-                // Amiga engine natively moves flying enemies at 1 absolute unit per frame.
-                // Scaled to 60hz interpolation:
-                let remainingMove = 3.1; //1.0 * 3.333; 
+                const floatIndex = enemy.pointIndex || 0;
+                const currentIndex = Math.floor(floatIndex);
+                const pt1 = segment.points[currentIndex];
+                if (!pt1) {
+                    if (segment.nextIds.length > 0) {
+                        const pickIdx = (room.globalWaveTimer % segment.nextIds.length);
+                        const nextLink = segment.nextIds[pickIdx];
+                        const [nSeg, nPt] = nextLink.split(':');
+                        enemy.segmentId = nSeg;
+                        // Preserve the fractional overflow so speed remains perfectly consistent across segment jumps
+                        enemy.pointIndex = parseInt(nPt || '0', 10) + (floatIndex - currentIndex);
+                        continue; // Process jump on next tick
+                    }
+                } else {
+                    const nextIndex = Math.min(currentIndex + 1, segment.points.length - 1);
+                    const pt2 = segment.points[nextIndex];
+                    const fraction = floatIndex - currentIndex;
+                    const lerpX = pt1.x + (pt2.x - pt1.x) * fraction;
+                    const lerpY = pt1.y + (pt2.y - pt1.y) * fraction;
 
-                while (remainingMove > 0) {
-                    const nextPt = segment.points[enemy.pointIndex || 0];
-                    if (!nextPt) {
-                        if (segment.nextIds.length > 0) {
-                            const pickIdx = (room.globalWaveTimer % segment.nextIds.length);
-                            const nextLink = segment.nextIds[pickIdx];
-                            const [nSeg, nPt] = nextLink.split(':');
-                            enemy.segmentId = nSeg;
-                            enemy.pointIndex = parseInt(nPt || '0', 10);
-                            break;
-                        } else {
-                            break; 
+                    if (specs.rotates) {
+                        // Look ahead a few frames to smooth out stair-stepping angles
+                        const lookAhead = segment.points[Math.min(currentIndex + 4, segment.points.length - 1)];
+                        if (lookAhead) {
+                            const dy = (lookAhead.y + (enemy.height / 2)) - t.y;
+                            const dx = (lookAhead.x + (enemy.width / 2)) - t.x;
+                            if (Math.hypot(dx, dy) > 0.1) {
+                                const targetAngle = Math.atan2(dy, dx);
+                                let diff = targetAngle - t.angle;
+                                while (diff > Math.PI) diff -= Math.PI * 2;
+                                while (diff < -Math.PI) diff += Math.PI * 2;
+                                t.angle += diff * 0.15;
+                            }
                         }
                     }
 
-                    const targetX = nextPt.x + (enemy.width / 2);
-                    const targetY = nextPt.y + (enemy.height / 2);
-                    const dx = targetX - t.x;
-                    const dy = targetY - t.y;
-                    const dist = Math.hypot(dx, dy);
-
-                    if (specs.rotates && dist > 0.1) {
-                        const targetAngle = Math.atan2(dy, dx);
-                        let diff = targetAngle - t.angle;
-                        while (diff > Math.PI) diff -= Math.PI * 2;
-                        while (diff < -Math.PI) diff += Math.PI * 2;
-                        t.angle += diff * 0.15; // Smooth rotation to hide pixel stair-stepping
-                    }
-
-                    if (dist <= remainingMove) {
-                        t.x = targetX;
-                        t.y = targetY;
-                        remainingMove -= dist;
-                        enemy.pointIndex = (enemy.pointIndex || 0) + 1;
-                    } else {
-                        t.x += (dx / dist) * remainingMove;
-                        t.y += (dy / dist) * remainingMove;
-                        remainingMove = 0;
-                    }
+                    t.x = lerpX + (enemy.width / 2);
+                    t.y = lerpY + (enemy.height / 2);
+                    enemy.pointIndex = floatIndex + AMIGA_SPEED;
                 }
             }
         }

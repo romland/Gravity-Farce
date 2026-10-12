@@ -110,8 +110,6 @@ export interface FlyingEnemy {
     debugId: number;
     enemyType: number;
     scoreValue: number;
-    directionState: number; // Offset +$02
-    maneuverStep: number;   // Offset +$1A (24-frame blindfold timer)
     canShoot: boolean;
     spawnsDebris: boolean;
     width: number;

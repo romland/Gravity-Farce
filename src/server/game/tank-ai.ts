@@ -3,7 +3,7 @@ import type { Room } from '../Room';
 import { killPlayer, bumpPlayer } from './combat';
 import { spawnBullet } from './combat';
 
-const TANK_SPEED = 1.0; // Pixels per frame
+const TANK_SPEED = 4.0; // 1 Amiga pixel * 4x modern scale
 const TILE_SIZE = 32;
 const MOVEMENT_FRAMES = TILE_SIZE / TANK_SPEED; // E.g., 16 frames to traverse one 32px tile
 
@@ -18,8 +18,8 @@ export function spawnTank(ecs: Registry, x: number, y: number, debugId: number):
         dirX: 1, // Default start direction
         dirY: 0,
         scoreValue: 50,
-        width: 32,
-        height: 24,
+        width: 128,
+        height: 96,
         damageHistory: {}
     });
     return e;
@@ -64,7 +64,7 @@ export function sysTanks(ecs: Registry, room: Room) {
         // Placeholder implementation until we find the real trigger mechanism.
         if (Math.random() < 0.005) {
             // Spawns bullet at center-top of tank, traveling straight up (-5.0 velocity)
-            spawnBullet(ecs, t.x, t.y - 12, 0, -5.0, false, 'npc', 120);
+            spawnBullet(ecs, t.x, t.y - 48, 0, -5.0, false, 'npc', 120);
             ecs.events.push({ type: 'sound', soundId: 9, x: t.x, y: t.y });
         }
     }
@@ -103,7 +103,7 @@ function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: nu
     for (const [pe, p] of ecs.players.entries()) {
         if (p.isDead) continue;
         const pt = ecs.transforms.get(pe);
-        if (pt && Math.abs(pt.x - tx) <= 30 && Math.abs(pt.y - ty) <= 26) {
+        if (pt && Math.abs(pt.x - tx) <= 78 && Math.abs(pt.y - ty) <= 62) { // (Width/2 + 14) and (Height/2 + 14)
             if (room.category === 'race' && !room.isLethalRacing) {
                 bumpPlayer(ecs, room, pe, tx, ty, 6.0);
             } else {
