@@ -309,15 +309,15 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 
 	if (rec.length > 0) {
 		console.log(`- BLACK-BOX FLIGHT RECORDER (Past ${rec.length} ticks, sampled every 10 ticks):`);
-		console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Speed | Facing -> Desired | Thrust | Safe`);
-		for (let i = Math.max(0, rec.length - 40); i < rec.length; i += 10) {
+        console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Spd / Tgt | Face -> Desir | DistAim | Offset | Thr | Safe`);
+        for (let i = Math.max(0, rec.length - 240); i < rec.length; i += 10) {
 			const entry = rec[i];
 			const ago = currentTick - entry.tick;
-			console.log(`  -${String(ago).padStart(2, ' ')}t    | (${entry.x}, ${entry.y}) | (${entry.vx}, ${entry.vy}) | ${entry.speed}  | ${entry.facingDeg}° -> ${entry.desiredDeg}° | ${entry.thrust ? 'ON ' : 'OFF'}   | ${entry.safe ? 'YES' : 'NO '}`);
+            console.log(`  -${String(ago).padStart(3, ' ')}t   | (${String(entry.x).padStart(3)}, ${String(entry.y).padStart(3)}) | (${String(entry.vx).padStart(5)}, ${String(entry.vy).padStart(5)}) | ${String(entry.speed).padStart(4)}/ ${String(entry.targetSpeed || 0).padStart(4)} | ${String(entry.facingDeg).padStart(5)}° -> ${String(entry.desiredDeg).padStart(5)}° | ${String(entry.distToAim || 0).padStart(7)} | ${String(entry.pathOffset || 0).padStart(6)} | ${entry.thrust ? 'ON ' : 'OFF'} | ${entry.safe ? 'YES' : 'NO '}`);
 		}
 		const lastEntry = rec[rec.length - 1];
 		const lastAgo = currentTick - lastEntry.tick;
-		console.log(`  -${String(lastAgo).padStart(2, ' ')}t    | (${lastEntry.x}, ${lastEntry.y}) | (${lastEntry.vx}, ${lastEntry.vy}) | ${lastEntry.speed}  | ${lastEntry.facingDeg}° -> ${lastEntry.desiredDeg}° | ${lastEntry.thrust ? 'ON ' : 'OFF'}   | ${lastEntry.safe ? 'YES' : 'NO '}`);
+        console.log(`  -${String(lastAgo).padStart(3, ' ')}t   | (${String(lastEntry.x).padStart(3)}, ${String(lastEntry.y).padStart(3)}) | (${String(lastEntry.vx).padStart(5)}, ${String(lastEntry.vy).padStart(5)}) | ${String(lastEntry.speed).padStart(4)}/ ${String(lastEntry.targetSpeed || 0).padStart(4)} | ${String(lastEntry.facingDeg).padStart(5)}° -> ${String(lastEntry.desiredDeg).padStart(5)}° | ${String(lastEntry.distToAim || 0).padStart(7)} | ${String(lastEntry.pathOffset || 0).padStart(6)} | ${lastEntry.thrust ? 'ON ' : 'OFF'} | ${lastEntry.safe ? 'YES' : 'NO '}`);
 	}
 
 	dumpRacingAsciiMap(room, t.x, t.y, targetCp?.center, bot.path, p.alias);
