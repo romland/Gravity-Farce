@@ -57,15 +57,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x2F: { id: 0x2F, description: "Tree", known: true },
     0x30: { id: 0x30, description: "Tree", known: true },
     0x31: { id: 0x31, description: "Tree part", known: true },
-    0x32: { id: 0x32, description: "Enemy: Tank path node 0", entity: { type: 'path_node', props: { index: 0 } }, known: true },
+    
+    0x32: { id: 0x32, description: "Enemy: Tank path node", entity: { type: 'path_node', props: { index: 0 } }, known: true },
     0x33: { id: 0x33, description: "Enemy: Tank path node 1", entity: { type: 'path_node', props: { index: 1 } }, known: true },
-    0x34: { id: 0x34, description: "Enemy: Tank path node 2", entity: { type: 'path_node', props: { index: 2 } }, known: true },
-    0x35: { id: 0x35, description: "Enemy: Tank path node 3", entity: { type: 'path_node', props: { index: 3 } }, known: true },
-    0x36: { id: 0x36, description: "Enemy: Tank path node 4", entity: { type: 'path_node', props: { index: 4 } }, known: true },
-    0x37: { id: 0x37, description: "Enemy: Tank path node 5", entity: { type: 'path_node', props: { index: 5 } }, known: true },
-    0x38: { id: 0x38, description: "Enemy: Tank path node 6", entity: { type: 'path_node', props: { index: 6 } }, known: true },
-    0x39: { id: 0x39, description: "Enemy: Tank path node 7", entity: { type: 'path_node', props: { index: 7 } }, known: true },
-    0x3A: { id: 0x3A, description: "Enemy: Tank path node 8", entity: { type: 'path_node', props: { index: 8 } }, known: true },
+
     0x3B: { id: 0x3B, description: "Race: Blinking checkpoint 1", known: false },
     0x3C: { id: 0x3C, description: "Race: Blinking checkpoint 2", known: false },
     0x3D: { id: 0x3D, description: "Race: Blinking checkpoint 3", known: false },
