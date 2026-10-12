@@ -605,8 +605,10 @@ function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targetCenter
 
     const pathSet = new Set(path.map(node => `${node.x},${node.y}`));
 
-    const minX = Math.max(0, Math.min(bx, cx) - 4);
-    const maxX = Math.min(map[0].length - 1, Math.max(bx, cx) + 4);
+    const minX = 0; // Show the full width of the cavern
+    const maxX = map[0].length - 1;    
+    // const minX = Math.max(0, Math.min(bx, cx) - 4);
+    // const maxX = Math.min(map[0].length - 1, Math.max(bx, cx) + 4);
     const minY = Math.max(0, Math.min(by, cy) - 4);
     const maxY = Math.min(map.length - 1, Math.max(by, cy) + 4);
     let ascii = `--- RACING MAP SLICE [${botAlias}] (B=Crash Site, C=Target Gate, *=Path, #=Wall) ---\n`;
