@@ -7,6 +7,7 @@ import { spawnClassicPlayer, sysClassicPlayers } from './game/player-classic';
 import { sysWeapons, sysNetworkSync } from './game/systems';
 import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
+import { sysBotAI } from './game/bot-ai';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
 import { sysRacing } from './game/racing';
@@ -51,6 +52,7 @@ export class Room {
             sysClassicPlayers(this.ecs, this);
             sysWeapons(this.ecs);
             sysTurrets(this.ecs, this);
+            sysBotAI(this.ecs, this);
             sysTanks(this.ecs, this);
             sysFlyingEnemies(this.ecs, this);
             sysCargo(this.ecs, this);

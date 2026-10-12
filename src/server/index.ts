@@ -11,6 +11,7 @@ import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
 import { buildRaceLeaderboards } from './game/racing';
+import { spawnDogfightBot } from './game/bot-ai';
 
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
@@ -227,6 +228,21 @@ io.on('connection', (socket) => {
                             }
                         }
                     }
+                }
+            }
+        } else if (action === 'spawn_bot') {
+            const roomIndex = playerRooms.get(socket.id);
+            if (roomIndex !== undefined) {
+                const room = rooms.get(roomIndex);
+                if (room && room.category === 'dogfight') {
+                    const p2Spawn = room.level.entities.find(e => e.type === 'spawn' && e.props?.player === 2);
+                    let sx = 100, sy = 100;
+                    if (p2Spawn) {
+                        sx = p2Spawn.x + (Math.random() * 60 - 30); // Jitter spawn slightly
+                        sy = p2Spawn.y + (Math.random() * 60 - 30);
+                    }
+                    const botAlias = `B${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
+                    spawnDogfightBot(room.ecs, sx, sy, botAlias);
                 }
             }
         }

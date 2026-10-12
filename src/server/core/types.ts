@@ -33,3 +33,14 @@ export interface PlayerStats {
     ip?: string;
     lives?: number;
 }
+
+export interface BotState {
+    active: boolean;
+    role: 'pursuit' | 'intercept' | 'flank-high';
+    targetId?: string;
+    reactionTimer: number;
+    state: 'takeoff' | 'evade' | 'attack';
+    stateTimer: number;
+    path: { x: number, y: number }[];
+    pathTimer: number;
+}

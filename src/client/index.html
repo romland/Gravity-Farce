@@ -117,6 +117,7 @@
     <div style="position: absolute; top: 24px; left: 24px; z-index: 20; display: flex; align-items: center; gap: 12px; pointer-events: none;">
         <div id="hud">CAVERN SECURED: AWAITING DEPLOYMENT</div>
         <button onclick="socket.emit('request_leaderboard')" style="pointer-events: auto; background: rgba(20, 25, 30, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(79, 172, 254, 0.4); color: #4facfe; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onmouseover="this.style.background='rgba(79, 172, 254, 0.2)'" onmouseout="this.style.background='rgba(20, 25, 30, 0.7)'">HIGHSCORES</button>
+        <button id="btn-spawn-bot" onclick="socket.emit('debug_action', 'spawn_bot')" style="display:none; pointer-events: auto; background: rgba(20, 25, 30, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(231, 76, 60, 0.4); color: #e74c3c; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onmouseover="this.style.background='rgba(231, 76, 60, 0.2)'" onmouseout="this.style.background='rgba(20, 25, 30, 0.7)'">+ BOT</button>
     </div>
     <canvas id="gameCanvas"></canvas>
     <div id="touch-controls">
@@ -222,6 +223,7 @@
                 if (e.code === 'KeyU') { socket.emit('debug_action', 'powerup-0xD6'); return; }
                 if (e.code === 'KeyI') { socket.emit('debug_action', 'powerup-0xD7'); return; }
                 if (e.code === 'KeyO') { socket.emit('debug_action', 'powerup-0xD8'); return; }
+                if (e.code === 'KeyB') { socket.emit('debug_action', 'spawn_bot'); return; }
                 if (e.code === 'KeyL' || e.code === 'KeyJ') {
                     const lvl = prompt("Jump to level (0-99):");
                     if (lvl !== null && !isNaN(parseInt(lvl))) {
@@ -282,7 +284,10 @@
         });
         
         socket.on('serverConfig', (config) => { 
-            debugMode = config.debugMode; 
+            debugMode = config.debugMode;
+            if (debugMode) {
+                document.getElementById('btn-spawn-bot').style.display = 'block';
+            }
         });
         
         socket.on('levelIndex', (idx) => {
@@ -862,6 +867,7 @@
                     r.cargoStack = s.cargoStack;
                     r.race = s.race;
                         r.alias = s.alias;
+                        r.isBot = s.isBot; r.botState = s.botState; r.botPath = s.botPath;
                 }
             }
 
@@ -980,6 +986,27 @@
                 drawShip(renderState.players[id], id === myId);
             }
             
+            // Debug Bot AI Visualizations
+            if (debugMode) {
+                for (let id in renderState.players) {
+                    const p = renderState.players[id];
+                    if (p.isBot && !p.isDead) {
+                        ctx.save();
+                        if (p.botPath && p.botPath.length > 0) {
+                            ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(p.x, p.y);
+                            for (let pt of p.botPath) ctx.lineTo(pt.x * 32 + 16, pt.y * 32 + 16);
+                            ctx.stroke();
+                        }
+                        ctx.fillStyle = '#0f0';
+                        ctx.fillText(`[${p.botState.toUpperCase()}]`, p.x, p.y - 45);
+                        ctx.restore();
+                    }
+                }
+            }
+
             // Debug Tile Overlay
             if (level.rawMap) {
                 ctx.font = '600 14px system-ui, monospace';

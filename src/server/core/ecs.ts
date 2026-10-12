@@ -1,4 +1,4 @@
-import type { Inputs } from './types';
+import type { Inputs, BotState } from './types';
 
 export type Entity = number;
 
@@ -178,6 +178,7 @@ export class Registry {
     public fuelTanks = new Map<Entity, FuelTank>();
     public cargoBays = new Map<Entity, CargoBay>();
     public weaponMounts = new Map<Entity, WeaponMount>();
+    public bots = new Map<Entity, BotState>();
     public events: GameEvent[] = [];
 
     create(): Entity { 
@@ -198,6 +199,7 @@ export class Registry {
         this.fuelTanks.delete(e);
         this.cargoBays.delete(e);
         this.weaponMounts.delete(e);
+        this.bots.delete(e);
     }
 
     getPlayerEntity(id: string): Entity | undefined {

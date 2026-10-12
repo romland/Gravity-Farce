@@ -3,6 +3,7 @@ import { spawnBullet } from './combat';
 import { Server } from 'socket.io';
 import { sysTanks } from './tank-ai';
 import { sysFlyingEnemies } from './flying-ai';
+import { sysBotAI } from './bot-ai';
 
 // Maybe in the future an option would be extracting weapons into a data-driven pattern and make a `game/weapons.ts` but ah...
 export function sysWeapons(ecs: Registry) {
@@ -146,9 +147,10 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             const ov = ecs.velocities.get(oe)!;
             const oInv = ecs.cargoBays.get(oe);
             const oFuel = ecs.fuelTanks.get(oe);
+            const oBot = ecs.bots.get(oe);
             
             if (Math.abs(ot.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ot.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: oInv?.stack || [], fuel: oFuel?.current || 0, race: op.race, alias: op.alias, lives: op.lives, ping: op.ping };
+                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: oInv?.stack || [], fuel: oFuel?.current || 0, race: op.race, alias: op.alias, lives: op.lives, ping: op.ping, isBot: !!oBot, botState: oBot?.state, botPath: oBot?.path };
             }
         }
         for (const [te, turret] of ecs.turrets.entries()) {
