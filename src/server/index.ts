@@ -147,6 +147,7 @@ io.on('connection', (socket) => {
     const auth = socket.handshake.auth || {};
     let alias = auth.alias || 'UNK';
     const uuid = auth.uuid || socket.id;
+    const ip = socket.handshake.address;
 
     console.log(`Pilot "${alias}" connected:`, socket.id);
 
@@ -167,7 +168,8 @@ io.on('connection', (socket) => {
         score: 0,
         uuid: uuid,
 		alias: alias,
-		shipType: useClassicPhysics ? 'classic' : 'modern'
+		shipType: useClassicPhysics ? 'classic' : 'modern',
+        ip: ip
     };
     playerSessionStats.set(socket.id, stats);
 

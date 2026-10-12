@@ -4,6 +4,7 @@ import { lineIntersect } from '../core/math';
 import type { Room } from '../Room';
 import { getTurretSpecByTile } from './turret-defs';
 import { spawnExplosionFragments } from './debris';
+import { TILE_DICTIONARY } from '../core/tiles';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -151,21 +152,31 @@ export function sysBullets(ecs: Registry, room: Room) {
         let hit = false;
         let hitX = t.x; let hitY = t.y;
 
-        for (const [pe, p] of ecs.players.entries()) {
-            const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
-            if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) {
-                hit = true;
-            }
-            
-            if (room.level.walls) {
-                for (const wall of room.level.walls) {
-                    if (checkPolyIntersect(bLine, wall)) { 
-                        hit = true; 
-                        break; 
-                    }
+        const bLine = [[{x:ox, y:oy}, {x:t.x, y:t.y}]];
+        if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) {
+            hit = true;
+        }
+        
+        if (!hit && room.level.walls) {
+            for (const wall of room.level.walls) {
+                if (checkPolyIntersect(bLine, wall)) { 
+                    hit = true; 
+                    break; 
                 }
             }
+        }
 
+        // Fallback: If bullet spawned directly inside a solid block (e.g. rear-shot while landed)
+        if (!hit && room.level.rawMap) {
+            const tx = Math.floor(t.x / 32);
+            const ty = Math.floor(t.y / 32);
+            const tId = room.level.rawMap[ty]?.[tx];
+            if (tId !== undefined && TILE_DICTIONARY[tId]?.solid) {
+                hit = true;
+            }
+        }
+
+        for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             
             const pt = ecs.transforms.get(pe)!;
