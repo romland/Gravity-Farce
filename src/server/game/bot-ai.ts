@@ -58,6 +58,12 @@ export function sysBotAI(ecs: Registry, room: Room) {
     // Telemetry logs on crash
     for (const [e, bot] of bots) {
         const p = ecs.players.get(e);
+        
+        // PREVENT GHOST BULLETS: Release the trigger on dead bots so corpses don't keep firing
+        if (p?.isDead && p.inputs) {
+            p.inputs = { up: false, left: false, right: false, shoot: false };
+        }
+
         if (p?.isDead && (bot as any).wasAlive) {
             (bot as any).wasAlive = false;
             if (SERVER_CONFIG.debugMode) {
@@ -74,7 +80,18 @@ export function sysBotAI(ecs: Registry, room: Room) {
         }
     }
 
-    assignSquadRoles(activeBots, humans, ecs);
+    const hostiles: { id: string, e: Entity, isHuman: boolean }[] = humans.map(([e, p]) => ({ id: p.id, e, isHuman: true }));
+    
+    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
+    if (mapEnemiesMap) {
+        for (const [ee, en] of mapEnemiesMap.entries()) {
+            if (en.isDead || en.health <= 0) continue;
+            const id = en.id || en.uuid || `npc_${ee}`;
+            hostiles.push({ id, e: ee as Entity, isHuman: false });
+        }
+    }
+
+    assignSquadRoles(activeBots, hostiles, ecs);
 
     for (const [e, bot] of activeBots) {
         processBotFlight(ecs, room, e, bot);
@@ -85,8 +102,8 @@ export function sysBotAI(ecs: Registry, room: Room) {
 // Squad Role Assignment
 // ----------------------------------------------------------------------------
 
-function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], humans: [Entity, import('../core/ecs').Player][], ecs: Registry) {
-    if (humans.length === 0) return;
+function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hostiles: { id: string, e: Entity, isHuman: boolean }[], ecs: Registry) {
+    if (hostiles.length === 0) return;
 
     const targetCounts = new Map<string, number>();
 
@@ -100,12 +117,20 @@ function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hu
         let closestHuman: string | undefined;
         let minDist = Infinity;
 
-        for (const [he, hp] of humans) {
-            const hPos = ecs.transforms.get(he)!;
+        for (const target of hostiles) {
+            const hPos = getEntityPos(ecs, target.e);
+            if (!hPos) continue;
             const d = Math.hypot(hPos.x - myPos.x, hPos.y - myPos.y);
-            if (d < minDist) {
-                minDist = d;
-                closestHuman = hp.id;
+            let adjustedDist = target.isHuman ? d : d + 300;
+            
+            // TARGET STICKINESS: Keep hammering the same target until it dies instead of giving up after a 3-bullet burst
+            if (target.id === bot.targetId) {
+                adjustedDist -= 600;
+            }
+
+            if (adjustedDist < minDist) {
+                minDist = adjustedDist;
+                closestHuman = target.id;
             }
         }
 
@@ -164,9 +189,9 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         }
     }
 
-    const targetEntity = bot.targetId ? ecs.getPlayerEntity(bot.targetId) : undefined;
-    const targetT = targetEntity !== undefined ? ecs.transforms.get(targetEntity) : undefined;
-    const targetV = targetEntity !== undefined ? ecs.velocities.get(targetEntity) : undefined;
+    const targetEntity = resolveTargetEntity(ecs, bot.targetId);
+    const targetT = targetEntity !== undefined ? getEntityPos(ecs, targetEntity) : undefined;
+    const targetV = targetEntity !== undefined ? getEntityVel(ecs, targetEntity) : undefined;
 
     let aimX = t.x;
     let aimY = t.y - 100;
@@ -174,8 +199,14 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     let hasPredictedLOS = false;
     let angleToPredicted = 0;
 
-    if (targetT && targetV) {
+    if (targetT) {
         const dist = Math.hypot(targetT.x - t.x, targetT.y - t.y);
+        const tVx = targetV?.vx || 0;
+        const tVy = targetV?.vy || 0;
+
+        if (SERVER_CONFIG.debugMode && globalTickCounter % 30 === 0 && bot.targetId) {
+            console.log(`[BOT-COMBAT] ${p.alias} -> ${bot.targetId} | Dist: ${Math.round(dist)} | State: ${bot.state} | PathLen: ${bot.path.length} | tVx: ${Math.round(tVx)}`);
+        }
 
         // PATH RECALCULATION & PARTIAL PATH STITCHING
         if (bot.path.length === 0 || bot.pathTimer <= 0) {
@@ -268,8 +299,8 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
             aimX = targetT.x;
             aimY = targetT.y;
             if (bot.role === 'intercept') {
-                aimX += targetV.vx * PREDICTION_FRAMES;
-                aimY += targetV.vy * PREDICTION_FRAMES;
+                aimX += tVx * PREDICTION_FRAMES;
+                aimY += tVy * PREDICTION_FRAMES;
             } else if (bot.role === 'flank-high') {
                 aimY -= 150;
             }
@@ -277,18 +308,26 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
         const BULLET_SPEED = 12.0;
         const leadTicks = Math.min(35, dist / BULLET_SPEED);
-        const predX = targetT.x + targetV.vx * leadTicks;
-        const predY = targetT.y + targetV.vy * leadTicks;
+        const predX = targetT.x + tVx * leadTicks;
+        const predY = targetT.y + tVy * leadTicks;
         
         angleToPredicted = Math.atan2(predY - t.y, predX - t.x);
         hasLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: targetT.x, y: targetT.y }, room.level);
         hasPredictedLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: predX, y: predY }, room.level);
 
         const alignDiff = Math.abs(getAngleDiff(angleToPredicted, t.angle));
-        if (alignDiff < 0.35 && dist < 600 && (hasLOS || hasPredictedLOS)) {
-            p.inputs.shoot = true;
-        } else if (dist < 400 && hasLOS && Math.random() < 0.15) {
-            p.inputs.shoot = true;
+        
+        let wantsToShoot = false;
+        // Widen the acceptable aiming cone (0.6 rads) and increase engagement distance to 800px so they open fire immediately
+        if (alignDiff < 0.6 && dist < 800 && (hasLOS || hasPredictedLOS)) {
+            wantsToShoot = true;
+        } else if (dist < 600 && hasLOS && Math.random() < 0.4) {
+            wantsToShoot = true;
+        }
+        
+        if (wantsToShoot) {
+            // MAG DUMP: Hold trigger for 3 frames, release for 1. Maximizes fire rate without jamming semi-autos.
+            p.inputs.shoot = (globalTickCounter % 4 !== 0);
         }
     }
 
@@ -298,7 +337,17 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     
     const straightawayDist = getStraightawayDistance(t, bot.path, room);
     const maxCruise = straightawayDist > 120 ? 4.5 : 2.0;
-    const cruiseSpeed = Math.min(maxCruise, distToAim / 20);
+    let cruiseSpeed = Math.min(maxCruise, distToAim / 15);
+
+    // STANDOFF BRAKES: If directly engaging (no path waypoints) and closer than 180px, brake/reverse
+    if (bot.path.length === 0 && targetT && distToAim < 180) {
+        cruiseSpeed = distToAim < 100 ? -2.0 : 0.0;
+    }
+
+    // STANDOFF BRAKES: If directly engaging (no path waypoints) and closer than 180px, brake/reverse
+    if (bot.path.length === 0 && distToAim < 180) {
+        cruiseSpeed = distToAim < 100 ? -2.0 : 0.0;
+    }
 
     const velSpeed = Math.hypot(v.vx, v.vy);
     const normDirX = dirX / distToAim;
@@ -395,6 +444,28 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 // Physics & Math Helpers
 // ----------------------------------------------------------------------------
 
+function resolveTargetEntity(ecs: Registry, targetId: string | undefined): Entity | undefined {
+    if (!targetId) return undefined;
+    const playerEnt = ecs.getPlayerEntity(targetId);
+    if (playerEnt !== undefined) return playerEnt;
+
+    const enemyMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
+    if (enemyMap) {
+        for (const [ee, en] of enemyMap.entries()) {
+            if (en.id === targetId || en.uuid === targetId || `npc_${ee}` === targetId) return ee;
+        }
+    }
+    return undefined;
+}
+
+function getEntityPos(ecs: Registry, e: Entity) {
+    return ecs.transforms.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+}
+
+function getEntityVel(ecs: Registry, e: Entity) {
+    return ecs.velocities.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+}
+
 function applyAngularControl(p: import('../core/types').Player, t: import('../core/ecs').Transform, v: import('../core/ecs').Velocity, desiredAngle: number): number {
     const diff = getAngleDiff(desiredAngle, t.angle);
     const Kp = 0.15;
@@ -456,7 +527,7 @@ function hasClearPath(p1: {x: number, y: number}, p2: {x: number, y: number}, le
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len;
     const ny = dx / len;
-    const margin = 15;
+    const margin = 22;
 
     if (raycastEnvironment(p1, p2, level)) return false;
     if (raycastEnvironment({x: p1.x + nx * margin, y: p1.y + ny * margin}, {x: p2.x + nx * margin, y: p2.y + ny * margin}, level)) return false;
@@ -668,7 +739,6 @@ function findSafePadPosition(level: import('../core/types').LevelData | undefine
     return { x, y: safeY };
 }
 
-// ----------------------------------------------------------------------------
 // Tactical Sensor Extensions
 // ----------------------------------------------------------------------------
 
