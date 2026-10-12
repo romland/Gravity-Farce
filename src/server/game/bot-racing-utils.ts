@@ -3,6 +3,9 @@ import type { Room } from '../Room';
 import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
+import { spawnClassicPlayer } from './player-classic';
+
+export const BOT_UUID_PREFIX = 'RACER_';
 
 export interface CheckpointGate {
     tileId: number;
@@ -264,6 +267,62 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
     return path;
 }
 
+export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState, p: import('../core/types').Player, currentTick: number) {
+    const t = ecs.transforms.get(e);
+    const v = ecs.velocities.get(e);
+    if (!t || !v) return;
+
+    const speed = Math.hypot(v.vx, v.vy);
+    const motionAngleRad = Math.atan2(v.vy, v.vx);
+    const motionAngleDeg = (motionAngleRad * 180 / Math.PI).toFixed(1);
+    const facingAngleDeg = (t.angle * 180 / Math.PI).toFixed(1);
+    const driftAngleDeg = (Math.abs(getAngleDiff(motionAngleRad, t.angle)) * 180 / Math.PI).toFixed(1);
+
+    const cpNum = p.race ? p.race.nextCheckpoint : 1;
+    const checkpoints = getCheckpoints(room);
+    const targetCp = checkpoints[cpNum - 1];
+
+    let pathOffsetPx = 0;
+    if (bot.path && bot.path.length > 0) {
+        const wp = bot.path[0];
+        pathOffsetPx = Math.round(Math.hypot(t.x - (wp.x * 32 + 16), t.y - (wp.y * 32 + 16)));
+    }
+
+    const bx = Math.floor(t.x / 32);
+    const by = Math.floor(t.y / 32);
+
+    const rec = (bot as any).flightRecorder || [];
+    const maxVy = rec.length > 0 ? Math.max(...rec.map((r: any) => r.vy)) : v.vy;
+    const firstUnsafe = rec.find((r: any) => !r.safe);
+    const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
+
+    console.log(`\n=== [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
+    console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
+    console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
+    console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
+    if ((bot as any).lastDesiredAngle !== undefined) {
+        const steerErr = (Math.abs(getAngleDiff((bot as any).lastDesiredAngle, t.angle)) * 180 / Math.PI).toFixed(1);
+        console.log(`- Steering Target    : ${((bot as any).lastDesiredAngle * 180 / Math.PI).toFixed(1)}° (Alignment Error: ${steerErr}°)`);
+    }
+    console.log(`- Line Offset        : ${pathOffsetPx} px away from active path node`);
+    console.log(`- Glide Alert        : ${firstUnsafe ? `First flagged UNSAFE ${unsafeTicksAgo} ticks (~${(unsafeTicksAgo/60).toFixed(2)}s) before impact` : 'Never flagged unsafe'}`);
+
+    if (rec.length > 0) {
+        console.log(`- BLACK-BOX FLIGHT RECORDER (Past ${rec.length} ticks, sampled every 10 ticks):`);
+        console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Speed | Facing -> Desired | Thrust | Safe`);
+        for (let i = Math.max(0, rec.length - 40); i < rec.length; i += 10) {
+            const entry = rec[i];
+            const ago = currentTick - entry.tick;
+            console.log(`  -${String(ago).padStart(2, ' ')}t    | (${entry.x}, ${entry.y}) | (${entry.vx}, ${entry.vy}) | ${entry.speed}  | ${entry.facingDeg}° -> ${entry.desiredDeg}° | ${entry.thrust ? 'ON ' : 'OFF'}   | ${entry.safe ? 'YES' : 'NO '}`);
+        }
+        const lastEntry = rec[rec.length - 1];
+        const lastAgo = currentTick - lastEntry.tick;
+        console.log(`  -${String(lastAgo).padStart(2, ' ')}t    | (${lastEntry.x}, ${lastEntry.y}) | (${lastEntry.vx}, ${lastEntry.vy}) | ${lastEntry.speed}  | ${lastEntry.facingDeg}° -> ${lastEntry.desiredDeg}° | ${lastEntry.thrust ? 'ON ' : 'OFF'}   | ${lastEntry.safe ? 'YES' : 'NO '}`);
+    }
+
+    dumpRacingAsciiMap(room, t.x, t.y, targetCp?.center, bot.path, p.alias);
+}
+
 export function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targetCenter?: {x: number, y: number}, path: {x: number, y: number}[] = [], botAlias: string = 'RACER') {
     const map = room.level.rawMap;
     if (!map) return;
@@ -291,4 +350,35 @@ export function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targe
         ascii += row + '\n';
     }
     console.log(ascii + '\n');
+}
+
+export function spawnRacingBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
+    const safePos = findSafePadPosition(level, x, y);
+    const botId = BOT_UUID_PREFIX + alias;
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic' });
+    
+    const t = ecs.transforms.get(e);
+    if (t) t.angle = -Math.PI / 2;
+    
+    const v = ecs.velocities.get(e);
+    if (v) { v.vx = 0; v.vy = 0; v.angularVelocity = 0; }
+    
+    const p = ecs.players.get(e);
+    if (p) p.isLanded = true;
+
+    if (SERVER_CONFIG.debugMode) {
+        console.log(`[BOT-RACING] Spawned Racing Bot "${alias}" at (${Math.round(safePos.x)}, ${Math.round(safePos.y)})`);
+    }
+
+    ecs.bots.set(e, {
+        active: true,
+        role: 'racer',
+        reactionTimer: 0,
+        state: 'takeoff',
+        stateTimer: 20,
+        path: [],
+        pathTimer: 0
+    });
+    
+    return e;
 }
