@@ -43,6 +43,9 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x1E: { id: 0x1E, description: "teal brick 2 + bottom left 1", known: true },
     0x1F: { id: 0x1F, description: "teal brick", known: true },
     0x20: { id: 0x20, description: "teal brick left half", known: true },
+    0x21: { id: 0x21, description: "teal brick two wide", known: true },
+    0x22: { id: 0x22, description: "teal brick", known: true },
+    // not used: 0x23
     0x24: { id: 0x24, description: "teal brick 1 bottom right", known: true },
     0x25: { id: 0x25, description: "some teal brick", known: true },
     0x26: { id: 0x26, description: "some teal brick", known: true },
@@ -57,10 +60,15 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x2F: { id: 0x2F, description: "Tree", known: true },
     0x30: { id: 0x30, description: "Tree", known: true },
     0x31: { id: 0x31, description: "Tree part", known: true },
-    
     0x32: { id: 0x32, description: "Enemy: Tank path node", entity: { type: 'path_node', props: { index: 0 } }, known: true },
     0x33: { id: 0x33, description: "Enemy: Tank path node 1", entity: { type: 'path_node', props: { index: 1 } }, known: true },
-
+    0x34: { id: 0x34, description: "Tree", known: true },
+    0x35: { id: 0x35, description: "Tree", known: true },
+    0x36: { id: 0x36, description: "Tree", known: true },
+    0x37: { id: 0x37, description: "Tree", known: true },
+    0x38: { id: 0x38, description: "Tree", known: true },
+    0x39: { id: 0x39, description: "Tree", known: true },
+    0x3a: { id: 0x3a, description: "Tree", known: true },
     0x3B: { id: 0x3B, description: "Race: Blinking checkpoint 1", known: false },
     0x3C: { id: 0x3C, description: "Race: Blinking checkpoint 2", known: false },
     0x3D: { id: 0x3D, description: "Race: Blinking checkpoint 3", known: false },
@@ -81,11 +89,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x4C: { id: 0x4C, description: "Race: Right-side checkpoint number holder", known: true },
     0x4D: { id: 0x4D, description: "Race: Right-side checkpoint number holder", known: true },
     0x4E: { id: 0x4E, description: "Race: Right-side checkpoint number holder", known: true },
-
+    // not used: 0x4F - 0x5A
     0x5B: { id: 0x5B, description: "thin standalone rock start", known: true },
     0x5C: { id: 0x5C, description: "thin standalone rock middle", known: true },
     0x5D: { id: 0x5D, description: "thin standalone rock end", known: true },
-
     0x5E: { id: 0x5E, description: "right side rock", known: true },
     0x5F: { id: 0x5F, description: "right side rock", known: true },
     0x60: { id: 0x60, description: "right side rock", known: true },
@@ -103,13 +110,10 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x6C: { id: 0x6C, description: "Decorative base", known: true },
     0x6D: { id: 0x6D, description: "Decorative base", known: true },
     0x6E: { id: 0x6E, description: "Decorative base", known: true },
-
     0x6F: { id: 0x6F, description: "Gravity Well Graphic Left Side (pulls right)", known: true },
     0x70: { id: 0x70, description: "Gravity Well Graphic Right Side (pulls left)", known: true },
-
     0x71: { id: 0x71, description: "Gravity Well Graphic Bottom Side (pulls down)", known: true },  // assumed, have not seen them yet
     0x72: { id: 0x72, description: "Gravity Well Graphic Top Side (pulls up)", known: true },
-
     0x73: { id: 0x73, description: "bottom thin rock?", known: true },
     0x74: { id: 0x74, description: "vertical left thin rock", known: true },
     0x75: { id: 0x75, description: "horizontal thinner upper rock", known: true },
@@ -126,13 +130,18 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x81: { id: 0x81, description: 'Blinking pole (empty left side)', known: true },
     0x82: { id: 0x82, description: 'Blinking pole bottom (smaller than the other?)', known: true },
     0x83: { id: 0x83, description: 'Blinking pole top (smaller than the other?)', known: true },
+    0x84: { id: 0x84, description: 'Rock, but inverted texture', known: true },
+    0x85: { id: 0x85, description: 'Rock, but inverted texture', known: true },
     0x86: { id: 0x86, description: 'Teal decorative boxes/barrels', known: true },
     0x87: { id: 0x87, description: 'Teal decorative boxes/barrels', known: true },
     0x88: { id: 0x88, description: 'Teal decorative boxes/barrels', known: true },
     0x89: { id: 0x89, description: 'Teal decorative boxes/barrels', known: true },
     0x8A: { id: 0x8A, description: 'Teal decorative boxes/barrels', known: true },
     0x8B: { id: 0x8B, description: 'Teal decorative boxes/barrels', known: true },
+    0x8C: { id: 0x8c, description: 'Teal decorative boxes/barrels', known: true },
+    // not used: 0x8D - 0x8E
     0x8F: { id: 0x8F, description: 'Teal decorative boxes/barrels', known: true },
+    // not used: 0x90 - 0xAD
     0xae: { id: 0xae, description: 'turret 4-way cone variant (type 4)', entity: { type: 'turret', props: { turretType: 0xAE } }, known: false },
     0xaf: { id: 0xaf, description: 'turret pointing up, 3-way cone (type 1)', entity: { type: 'turret', props: { turretType: 0xAF } }, known: false },
     0xb0: { id: 0xb0, description: 'turret pointing up, 4-way cone (type 3)', entity: { type: 'turret', props: { turretType: 0xB0 } }, known: false },
@@ -163,7 +172,6 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xC9: { id: 0xC9, description: "Trigger zone for turret 0xBA (5-way half-circle fan)", known: true },
     0xCA: { id: 0xCA, description: "Trigger zone for turret 0xBB (heavy 3-way cone)", known: true },
     0xCB: { id: 0xCB, description: "Trigger zone for turret 0xBC (heavy 3-way cone variant)", known: true },
-
     0xCC: { id: 0xCC, description: 'Gravity Well Zone (Pulls RIGHT)', entity: { type: 'trigger', props: { id: 0xCC } }, known: true },
     0xCD: { id: 0xCD, description: 'Gravity Well Zone (Pulls DOWN)', entity: { type: 'trigger', props: { id: 0xCD } }, known: true },
     0xCE: { id: 0xCE, description: 'Gravity Well Zone (Pulls LEFT)', entity: { type: 'trigger', props: { id: 0xCE } }, known: true },
@@ -171,13 +179,12 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xD0: { id: 0xD0, description: 'Powerup: Fuel Pod (+50,000 Fuel)', entity: { type: 'powerup', props: { typeId: 0xD0 } }, known: true },
     0xD1: { id: 0xD1, description: 'Pickup package (Small)', entity: { type: 'cargo', props: { typeId: 0xD1 } }, known: true },
     0xD2: { id: 0xD2, description: 'Pickup package (Large)', entity: { type: 'cargo', props: { typeId: 0xD2 } }, known: true },
-    
+    // not used: 0xD3 - 0xD4
     0xD5: { id: 0xD5, description: 'Powerup: Overcharge', entity: { type: 'powerup', props: { typeId: 0xD5 } }, known: true },
     0xD6: { id: 0xD6, description: 'Powerup: Double Shot (100 charges)', entity: { type: 'powerup', props: { typeId: 0xD6 } }, known: true },
     0xD7: { id: 0xD7, description: 'Powerup: Spread Weapon', entity: { type: 'powerup', props: { typeId: 0xD7 } }, known: true },
     0xD8: { id: 0xD8, description: 'Powerup: Utility Boost', entity: { type: 'powerup', props: { typeId: 0xD8 } }, known: true },
-
-
+    // not used: 0xD9
     0xDA: { id: 0xDA, description: 'Race objective 1 (invisible start line)', known: true },
     0xDB: { id: 0xDB, description: 'Race objective 2 (invisible checkpoint line)', known: true },
     0xDC: { id: 0xDC, description: 'Race objective 3 (invisible checkpoint line)', known: true },
@@ -200,16 +207,20 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0xED: { id: 0xED, description: 'Flying Enemy: 6 HP', entity: { type: 'flying_enemy', props: { enemyType: 0xED } }, known: false },
     0xEE: { id: 0xEE, description: 'Flying Enemy: 9 HP', entity: { type: 'flying_enemy', props: { enemyType: 0xEE } }, known: false },
     0xEF: { id: 0xEF, description: 'Flying Enemy: 25 HP', entity: { type: 'flying_enemy', props: { enemyType: 0xEF } }, known: false },
-    0xF0: { id: 0xF0, description: 'Waypoint Node 0', known: false },
-    0xF1: { id: 0xF1, description: 'Waypoint Node 1', known: false },
-    0xF2: { id: 0xF2, description: 'Waypoint Node 2', known: false },
-    0xF3: { id: 0xF3, description: 'Waypoint Node 3', known: false },
-    0xF8: { id: 0xF8, description: 'Waypoint Node 8', known: false },
-    0xF9: { id: 0xF9, description: 'Waypoint Node 9', known: false },
-    0xFA: { id: 0xFA, description: 'Waypoint Node 10', known: false },
-    0xFB: { id: 0xFB, description: 'Waypoint Node 11', known: false },
-    0xFC: { id: 0xFC, description: 'Waypoint Node 12', known: false },
-    0xFD: { id: 0xFD, description: 'Waypoint Node 13', known: false },
-    0xFE: { id: 0xFE, description: 'Waypoint Node 14', known: false },
-    0xFF: { id: 0xFF, description: 'Waypoint Node 15', known: false },
+    0xF0: { id: 0xF0, description: 'Waypoint Node 0', known: true },
+    0xF1: { id: 0xF1, description: 'Waypoint Node 1', known: true },
+    0xF2: { id: 0xF2, description: 'Waypoint Node 2', known: true },
+    0xF3: { id: 0xF3, description: 'Waypoint Node 3', known: true },
+    0xF4: { id: 0xF4, description: 'Waypoint Node 3', known: true },
+    0xF5: { id: 0xF5, description: 'Waypoint Node 3', known: true },
+    0xF6: { id: 0xF6, description: 'Waypoint Node 3', known: true },
+    0xF7: { id: 0xF7, description: 'Waypoint Node 3', known: true },
+    0xF8: { id: 0xF8, description: 'Waypoint Node 8', known: true },
+    0xF9: { id: 0xF9, description: 'Waypoint Node 9', known: true },
+    0xFA: { id: 0xFA, description: 'Waypoint Node 10', known: true },
+    0xFB: { id: 0xFB, description: 'Waypoint Node 11', known: true },
+    0xFC: { id: 0xFC, description: 'Waypoint Node 12', known: true },
+    0xFD: { id: 0xFD, description: 'Waypoint Node 13', known: true },
+    0xFE: { id: 0xFE, description: 'Waypoint Node 14', known: true },
+    0xFF: { id: 0xFF, description: 'Waypoint Node 15', known: true },
 };
