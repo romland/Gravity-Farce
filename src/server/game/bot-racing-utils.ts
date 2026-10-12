@@ -296,7 +296,7 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 	const firstUnsafe = rec.find((r: any) => !r.safe);
 	const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
 
-	console.log(`\n=== [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
+    console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
 	console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
 	console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
 	console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
