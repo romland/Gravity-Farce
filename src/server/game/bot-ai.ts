@@ -10,6 +10,14 @@ import { SERVER_CONFIG } from '../core/config';
 const PREDICTION_FRAMES = 15;
 const BOT_UUID_PREFIX = 'BOT_';
 
+// Shared Partial Path Cache for Target Squads
+interface SharedTargetPath {
+    path: { x: number; y: number }[];
+    tick: number;
+}
+const sharedTargetPaths = new Map<string, SharedTargetPath>();
+let globalTickCounter = 0;
+
 export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
     const safePos = findSafePadPosition(level, x, y, alias);
     const botId = BOT_UUID_PREFIX + alias;
@@ -31,7 +39,7 @@ export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: str
         role: 'pursuit',
         reactionTimer: 0,
         state: 'takeoff',
-        stateTimer: 25,
+        stateTimer: 20,
         path: [],
         pathTimer: 0
     });
@@ -41,12 +49,13 @@ export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: str
 
 export function sysBotAI(ecs: Registry, room: Room) {
     if (room.category !== 'dogfight') return;
+    globalTickCounter++;
 
     const bots = Array.from(ecs.bots.entries());
     const activeBots = bots.filter(([e]) => !ecs.players.get(e)?.isDead);
     const humans = Array.from(ecs.players.entries()).filter(([e, p]) => !p.isDead && !ecs.bots.has(e));
 
-    // Log ASCII map and crash telemetry only when a bot actually dies
+    // Telemetry logs on crash
     for (const [e, bot] of bots) {
         const p = ecs.players.get(e);
         if (p?.isDead && (bot as any).wasAlive) {
@@ -73,7 +82,7 @@ export function sysBotAI(ecs: Registry, room: Room) {
 }
 
 // ----------------------------------------------------------------------------
-// Small Methods: High-Level Squad Logic
+// Squad Role Assignment
 // ----------------------------------------------------------------------------
 
 function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], humans: [Entity, import('../core/ecs').Player][], ecs: Registry) {
@@ -88,7 +97,6 @@ function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hu
         }
 
         const myPos = ecs.transforms.get(e)!;
-        
         let closestHuman: string | undefined;
         let minDist = Infinity;
 
@@ -120,7 +128,7 @@ function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hu
 }
 
 // ----------------------------------------------------------------------------
-// Small Methods: Low-Level Flight & Steering
+// Flight Control & Navigation
 // ----------------------------------------------------------------------------
 
 function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState) {
@@ -130,20 +138,23 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
     p.inputs = { up: false, left: false, right: false, shoot: false };
 
+    // 1. LANDED RECOVERY: Blast off vertically and return immediately
     if (p.isLanded) {
         bot.state = 'takeoff';
         bot.stateTimer = 20;
         p.inputs.up = true;
+        applyAngularControl(p, t, v, -Math.PI / 2);
         return;
     }
 
+    // 2. TAKEOFF SEQUENCE: Ascend vertically until hull clears pad (22px) or ceiling gets close (<45px)
     if (bot.state === 'takeoff') {
         const floorHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y + 60 }, room.level);
         const ceilingHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y - 60 }, room.level);
         const floorDist = floorHit ? floorHit.y - t.y : 999;
         const ceilingDist = ceilingHit ? t.y - ceilingHit.y : 999;
 
-        if (ceilingDist < 35 || floorDist > 22 || bot.stateTimer <= 0) {
+        if (ceilingDist < 45 || floorDist >= 22 || bot.stateTimer <= 0) {
             bot.state = 'attack';
         } else {
             bot.stateTimer--;
@@ -166,23 +177,62 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     if (targetT && targetV) {
         const dist = Math.hypot(targetT.x - t.x, targetT.y - t.y);
 
+        // PATH RECALCULATION & PARTIAL PATH STITCHING
         if (bot.path.length === 0 || bot.pathTimer <= 0) {
-            const rawPath = calculatePath(room.level.rawMap, t.x, t.y, targetT.x, targetT.y);
-            const targetTileX = Math.floor(targetT.x / 32);
-            const targetTileY = Math.floor(targetT.y / 32);
-            const lastNode = rawPath[rawPath.length - 1];
-            const reachedTarget = !!lastNode && lastNode.x === targetTileX && lastNode.y === targetTileY;
+            hasLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: targetT.x, y: targetT.y }, room.level);
+            let stitchedPath: { x: number; y: number }[] | null = null;
 
-            if (!reachedTarget && dist > 250 && !hasLOS) {
-                bot.state = 'roam';
-                bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
-            } else {
-                bot.state = 'attack';
-                bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
+            // Try Partial Path Stitching onto an existing squadmate's path to the same target
+            if (bot.targetId) {
+                const cached = sharedTargetPaths.get(bot.targetId);
+                if (cached && (globalTickCounter - cached.tick < 30) && cached.path.length > 0) {
+                    let bestIndex = -1;
+                    let minDist = Infinity;
+
+                    for (let i = 0; i < cached.path.length; i++) {
+                        const wp = cached.path[i];
+                        const wpPx = { x: wp.x * 32 + 16, y: wp.y * 32 + 16 };
+                        const d = Math.hypot(wpPx.x - t.x, wpPx.y - t.y);
+
+                        if (d < minDist && hasClearPath({ x: t.x, y: t.y }, wpPx, room.level)) {
+                            minDist = d;
+                            bestIndex = i;
+                        }
+                    }
+
+                    if (bestIndex !== -1) {
+                        stitchedPath = cached.path.slice(bestIndex);
+                    }
+                }
             }
+
+            if (stitchedPath && stitchedPath.length > 0) {
+                bot.state = 'attack';
+                bot.path = [...stitchedPath];
+            } else {
+                const rawPath = calculatePath(room.level.rawMap, t.x, t.y, targetT.x, targetT.y);
+                const targetTileX = Math.floor(targetT.x / 32);
+                const targetTileY = Math.floor(targetT.y / 32);
+                const lastNode = rawPath[rawPath.length - 1];
+                const reachedTarget = !!lastNode && lastNode.x === targetTileX && lastNode.y === targetTileY;
+
+                if (!reachedTarget && dist > 250 && !hasLOS) {
+                    bot.state = 'roam';
+                    bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
+                } else {
+                    bot.state = 'attack';
+                    bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
+                }
+
+                // Publish full pruned path to cache for squadmates
+                if (bot.targetId && bot.path.length > 0 && bot.state === 'attack') {
+                    sharedTargetPaths.set(bot.targetId, { path: [...bot.path], tick: globalTickCounter });
+                }
+            }
+
             bot.pathTimer = 90 + Math.floor(Math.random() * 30);
             if (SERVER_CONFIG.debugMode) {
-                console.log(`[BOT-AI] ${p.alias} Path Recalc (State: ${bot.state}): ${bot.path.length} nodes (raw ${rawPath.length}, reached: ${reachedTarget}). Dist: ${Math.round(dist)}`);
+                console.log(`[BOT-AI] ${p.alias} Path Recalc (State: ${bot.state}): ${bot.path.length} nodes. Dist: ${Math.round(dist)}`);
             }
         }
         bot.pathTimer--;
@@ -326,6 +376,10 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         p.inputs.up = true;
     }
 }
+
+// ----------------------------------------------------------------------------
+// Physics & Math Helpers
+// ----------------------------------------------------------------------------
 
 function applyAngularControl(p: import('../core/types').Player, t: import('../core/ecs').Transform, v: import('../core/ecs').Velocity, desiredAngle: number): number {
     const diff = getAngleDiff(desiredAngle, t.angle);
@@ -584,7 +638,8 @@ function findSafePadPosition(level: import('../core/types').LevelData | undefine
     const tileX = Math.max(0, Math.min(mapW - 1, Math.floor(x / 32)));
     const tileY = Math.max(0, Math.min(mapH - 1, Math.floor(y / 32)));
 
-    // If requested spawn position is ALREADY in open air (not solid), trust the map entity's exact Y coordinate!
+    // IF RAW MAP ENTITY SPAWN POINT IS ALREADY IN OPEN AIR (NOT SOLID), USE IT DIRECTLY!
+    // NEVER SCAN DOWNWARDS PAST NON-SOLID OVERLAY TILES INTO BEDROCK!
     if (!TILE_DICTIONARY[map[tileY]?.[tileX]]?.solid) {
         return { x, y };
     }
