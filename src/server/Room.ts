@@ -8,6 +8,7 @@ import { sysWeapons, sysNetworkSync } from './game/systems';
 import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
 import { sysBotAI } from './game/bot-ai';
+import { sysRacingBotAI } from './game/bot-racing';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
 import { sysRacing } from './game/racing';
@@ -53,6 +54,7 @@ export class Room {
             sysWeapons(this.ecs);
             sysTurrets(this.ecs, this);
             sysBotAI(this.ecs, this);
+            sysRacingBotAI(this.ecs, this);
             sysTanks(this.ecs, this);
             sysFlyingEnemies(this.ecs, this);
             sysCargo(this.ecs, this);
