@@ -1,63 +1,18 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { raycastEnvironment } from '../core/math';
-import { spawnModernPlayer } from './player-modern';
+import { spawnClassicPlayer } from './player-classic';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
+import { findSafePadPosition, getCheckpoints, calculatePathToGate, prunePath, hasClearPath, applyAngularControl, predictGlideCollision, getAngleDiff, dumpRacingAsciiMap } from './bot-racing-utils';
 
 const BOT_UUID_PREFIX = 'RACER_';
-
 let racingTickCounter = 0;
-
-interface CheckpointGate {
-    tileId: number;
-    tiles: { x: number; y: number; px: number; py: number }[];
-    center: { x: number; y: number };
-}
-
-const cachedCheckpoints = new Map<string, CheckpointGate[]>();
-
-function getCheckpoints(room: Room): CheckpointGate[] {
-    if (cachedCheckpoints.has(room.id)) return cachedCheckpoints.get(room.id)!;
-    
-    const cpMap = new Map<number, { x: number; y: number; px: number; py: number }[]>();
-    const map = room.level.rawMap;
-    if (map) {
-        for (let y = 0; y < map.length; y++) {
-            for (let x = 0; x < map[y].length; x++) {
-                const tileId = map[y][x];
-                if (tileId >= 0xDA && tileId <= 0xE1) {
-                    if (!cpMap.has(tileId)) cpMap.set(tileId, []);
-                    cpMap.get(tileId)!.push({ x, y, px: x * 32 + 16, py: y * 32 + 16 });
-                }
-            }
-        }
-    }
-    
-    const sortedTileIds = Array.from(cpMap.keys()).sort((a, b) => a - b);
-    const cps: CheckpointGate[] = [];
-    
-    for (let i = 0; i < 8; i++) {
-        const tileId = 0xDA + i;
-        const tiles = cpMap.get(tileId);
-        if (tiles && tiles.length > 0) {
-            const avgX = tiles.reduce((acc, t) => acc + t.px, 0) / tiles.length;
-            const avgY = tiles.reduce((acc, t) => acc + t.py, 0) / tiles.length;
-            cps[i] = { tileId, tiles, center: { x: avgX, y: avgY } };
-        }
-    }
-    
-    if (SERVER_CONFIG.debugMode) {
-        console.log(`[BOT-RACING] Level ${room.levelIndex} Gates Mapped: ${sortedTileIds.length} checkpoint lines found.`);
-    }
-    cachedCheckpoints.set(room.id, cps);
-    return cps;
-}
 
 export function spawnRacingBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
     const safePos = findSafePadPosition(level, x, y);
     const botId = BOT_UUID_PREFIX + alias;
-    const e = spawnModernPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'modern' });
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic' });
     
     const t = ecs.transforms.get(e);
     if (t) t.angle = -Math.PI / 2;
@@ -95,7 +50,7 @@ export function sysRacingBotAI(ecs: Registry, room: Room) {
         if (p?.isDead && (bot as any).wasAlive) {
             (bot as any).wasAlive = false;
             if (SERVER_CONFIG.debugMode) {
-                logRacingCrash(ecs, room, e, bot, p);
+                logRacingCrash(ecs, room, e, bot, p, racingTickCounter);
             }
         } else if (p && !p.isDead) {
             (bot as any).wasAlive = true;
@@ -126,8 +81,6 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         bot.state = 'takeoff';
         bot.stateTimer = 20;
         p.isLanded = false;
-        p.inputs.up = true;
-        applyAngularControl(p, t, v, -Math.PI / 2);
         return;
     }
 
@@ -168,7 +121,10 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         (bot as any).lastCpNum = currentCpNum;
         const rawPath1 = calculatePathToGate(room.level.rawMap, t.x, t.y, targetCp);
         
-        // Look ahead to CP N+1 (including lap wrap-around) to stitch a continuous multi-gate racing line
+            // F1 Stitching: Plan path to Current Checkpoint, THEN path to Next Checkpoint.
+            // But NEVER prune across checkpoints, ensuring we actually cross the required gate.
+            const pruned1 = prunePath(rawPath1, room, { x: t.x, y: t.y });
+
         const validCps = checkpoints.filter(Boolean);
         const nextIndex = validCps.length > 0 ? (currentCpNum % validCps.length) : 0;
         const futureCp = validCps[nextIndex];
@@ -178,49 +134,66 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
             const startX = lastNode.x * 32 + 16;
             const startY = lastNode.y * 32 + 16;
             const rawPath2 = calculatePathToGate(room.level.rawMap, startX, startY, futureCp);
-            const combined = [...rawPath1, ...rawPath2.slice(1)];
-            bot.path = prunePath(combined, room, { x: t.x, y: t.y });
+                const pruned2 = prunePath(rawPath2, room);
+                // Combine, preserving the checkpoint gate node precisely
+                bot.path = [...pruned1, ...pruned2.slice(1)];
         } else {
-            bot.path = prunePath(rawPath1, room, { x: t.x, y: t.y });
+                bot.path = pruned1;
         }
-        bot.pathTimer = 30;
+            bot.pathTimer = 15; 
     }
-    // FOLLOW OPTIMAL RACING LINE (F1 STYLE)
+
+        // FOLLOW OPTIMAL RACING LINE (F1 PURE PURSUIT)
+        const currentSpeed = Math.hypot(v.vx, v.vy);
+        const MAX_SHIP_SPEED = 7.5;
+        
     if (bot.path && bot.path.length > 0) {
-        // 1. Apex Cutting: Pop waypoints extremely early (96px / 3 tiles out) to maintain momentum
-        let nextWp = bot.path[0];
-        let wpX = nextWp.x * 32 + 16;
-        let wpY = nextWp.y * 32 + 16;
+            // Dynamic Lookahead based on speed. Faster = aim further ahead for smooth apexing.
+            const lookaheadDist = Math.max(64, currentSpeed * 24);
 
-        // Corridor Centering: Push waypoints away from adjacent solid walls into open channel space
-        const map = room.level.rawMap;
-        if (map && map[nextWp.y]) {
-            if (map[nextWp.y]?.[nextWp.x - 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x - 1]]?.solid) wpX += 12;
-            if (map[nextWp.y]?.[nextWp.x + 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x + 1]]?.solid) wpX -= 12;
-            if (map[nextWp.y - 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y - 1][nextWp.x]]?.solid) wpY += 12;
-            if (map[nextWp.y + 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y + 1][nextWp.x]]?.solid) wpY -= 12;
-        }
+            let targetIdx = 0;
+            let accumDist = 0;
+            let lastPos = {x: t.x, y: t.y};
 
-        if (Math.hypot(wpX - t.x, wpY - t.y) < 96) {
-            bot.path.shift();
-        }
+            for (let i = 0; i < bot.path.length; i++) {
+                const wpX = bot.path[i].x * 32 + 16;
+                const wpY = bot.path[i].y * 32 + 16;
+                const d = Math.hypot(wpX - lastPos.x, wpY - lastPos.y);
+                accumDist += d;
+                lastPos = { x: wpX, y: wpY };
 
-        // 2. Lookahead Targeting: Aim at the furthest visible point on the path to start turns early
-        let lookaheadIdx = 0;
-        for (let i = 0; i < Math.min(bot.path.length, 6); i++) {
-            const testX = bot.path[i].x * 32 + 16;
-            const testY = bot.path[i].y * 32 + 16;
-            if (hasClearPath({ x: t.x, y: t.y }, { x: testX, y: testY }, room.level)) {
-                lookaheadIdx = i;
-            } else {
-                break;
+                if (hasClearPath({ x: t.x, y: t.y }, { x: wpX, y: wpY }, room.level)) {
+                    targetIdx = i;
+                    if (accumDist >= lookaheadDist) {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
+
+            // Pop deeply passed waypoints to avoid doubling back
+            if (targetIdx > 0 && Math.hypot(t.x - (bot.path[0].x * 32 + 16), t.y - (bot.path[0].y * 32 + 16)) < 48) {
+            bot.path.shift();
+                targetIdx = Math.max(0, targetIdx - 1);
         }
 
-        if (bot.path.length > 0 && bot.path[lookaheadIdx]) {
-            aimX = bot.path[lookaheadIdx].x * 32 + 16;
-            aimY = bot.path[lookaheadIdx].y * 32 + 16;
         }
+            if (bot.path[targetIdx]) {
+                // Apex / Corridor Centering
+                let wpX = bot.path[targetIdx].x * 32 + 16;
+                let wpY = bot.path[targetIdx].y * 32 + 16;
+                const map = room.level.rawMap;
+                const nx = bot.path[targetIdx].x;
+                const ny = bot.path[targetIdx].y;
+                if (map && map[ny]) {
+                    if (map[ny]?.[nx - 1] && TILE_DICTIONARY[map[ny][nx - 1]]?.solid) wpX += 16;
+                    if (map[ny]?.[nx + 1] && TILE_DICTIONARY[map[ny][nx + 1]]?.solid) wpX -= 16;
+                    if (map[ny - 1]?.[nx] && TILE_DICTIONARY[map[ny - 1][nx]]?.solid) wpY += 16;
+                    if (map[ny + 1]?.[nx] && TILE_DICTIONARY[map[ny + 1][nx]]?.solid) wpY -= 16;
+                }
+                aimX = wpX;
+                aimY = wpY;
     } else {
         aimX = targetCp.center.x;
         aimY = targetCp.center.y;
@@ -231,82 +204,43 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     const dirY = aimY - t.y;
     const distToAim = Math.hypot(dirX, dirY) || 1;
     
-    const currentSpeed = Math.hypot(v.vx, v.vy);
-    
-    // WALL PROXIMITY SPEED GOVERNOR: Scale speed dynamically based on wall distance in velocity direction
-    let wallDistInVelDir = 999;
-    if (currentSpeed > 1.0) {
-        const rayEndX = t.x + (v.vx / currentSpeed) * 180;
-        const rayEndY = t.y + (v.vy / currentSpeed) * 180;
-        const hit = raycastEnvironment({ x: t.x, y: t.y }, { x: rayEndX, y: rayEndY }, room.level);
-        if (hit) {
-            wallDistInVelDir = Math.hypot(hit.x - t.x, hit.y - t.y);
-        }
-    }
-    // DYNAMIC ENTRY SPEED: Keep high speed (5.5) on descents while keeping gravity under control
-    let targetSpeed = 7.0;
-    if (wallDistInVelDir < 150) {
-        const effD = Math.max(0, wallDistInVelDir - 24);
-        const maxSafe = Math.sqrt(0.36 * effD + 11.6) - 2.16;
-        targetSpeed = Math.min(targetSpeed, Math.max(2.0, maxSafe));
-    }
-    if (dirY > 48 && v.vy > 2.5) {
-        targetSpeed = Math.min(targetSpeed, 5.5);
+        const targetAngle = Math.atan2(dirY, dirX);
+        const currentMotionAngle = currentSpeed > 0.5 ? Math.atan2(v.vy, v.vx) : t.angle;
+        const requiredTurn = Math.abs(getAngleDiff(targetAngle, currentMotionAngle));
+
+        // Speed Governor: Only brake if the turn is impossibly sharp.
+        let targetSpeed = MAX_SHIP_SPEED;
+        if (requiredTurn > Math.PI / 2 && distToAim < 250) {
+            targetSpeed = 2.0; // Hairpin brake
+        } else if (requiredTurn > Math.PI / 4 && distToAim < 150) {
+            targetSpeed = 4.5; // Moderate braking for chicane
     }
 
     // Desired velocity vector
     const desVx = (dirX / distToAim) * targetSpeed;
     const desVy = (dirY / distToAim) * targetSpeed;
 
-    // Vector Force = (Desired Velocity - Current Velocity) - Gravity
-    // Subtracting positive gravity (0.12) pulls forceY UPWARD to counteract downward sink
-    const GRAVITY = 0.12;
+        // Counteract standard Amiga gravity (0.010 per tick) to maintain altitude
+        const GRAVITY = 0.010;
     const forceX = desVx - v.vx;
     const forceY = (desVy - v.vy) - GRAVITY;
 
-    // Snappier 30-tick lookahead window to prevent premature false-positive braking
-    const glideTicks = Math.min(30, Math.floor(currentSpeed * 4) + 10);
-    const isGlidePathSafe = currentSpeed < 1.2 || !predictGlideCollision(t, v, glideTicks, room);
+        let desiredAngle = Math.atan2(forceY, forceX);
+        (bot as any).lastDesiredAngle = desiredAngle;
 
-    // HYSTERESIS / RETRO-BRAKE STATE LOCKING
-    if (!isGlidePathSafe && currentSpeed > 1.2) {
-        (bot as any).emergencyBrakeTimer = 8; // Short 8-tick pulse to shed speed without freezing
-    } else if ((bot as any).emergencyBrakeTimer > 0) {
-        (bot as any).emergencyBrakeTimer--;
+        // F1 Trail Braking: If overcooked into a hairpin, rotate 180 and fire retro thrusters
+        let needsRetroBrake = false;
+        if (requiredTurn > Math.PI / 1.5 && currentSpeed > 5.0 && distToAim < 200) {
+            desiredAngle = Math.atan2(-v.vy, -v.vx);
+            needsRetroBrake = true;
     }
 
-    const isBraking = ((bot as any).emergencyBrakeTimer || 0) > 0;
-
-    let desiredAngle: number;
-    if (isBraking && currentSpeed > 0.5) {
-        // RETRO-BRAKE: Point opposite to velocity vector to kill dangerous momentum/fall
-        desiredAngle = Math.atan2(-v.vy, -v.vx);
-    } else {
-        desiredAngle = Math.atan2(forceY, forceX);
-    }
-
-    (bot as any).lastDesiredAngle = desiredAngle;
     const angleDiff = applyAngularControl(p, t, v, desiredAngle);
 
-    // DYNAMIC THROTTLE MANAGEMENT
-    const thrustDirY = Math.sin(t.angle); // In screen space: > 0 is pointing DOWNWARDS, < 0 is UPWARDS
-
-    if (!isBraking) {
-        // Safe line: Keep throttle open if nose is reasonably aligned with force vector
-        if (angleDiff < 1.2) p.inputs.up = true;
-    } else {
-        // Unsafe / Emergency Braking:
-        // 1. Never fire thrusters if facing downwards while falling
-        const isPushingDownWhileFalling = v.vy > 0.5 && thrustDirY > 0.1;
-        
-        // 2. EMERGENCY LIFT: If falling fast (vy > 2.0) and nose has ANY upward tilt (thrustDirY < -0.1),
-        // fire thruster IMMEDIATELY to arrest descent—do not wait for perfect retro-angle alignment!
-        const hasUpwardThrust = thrustDirY < -0.1 && v.vy > 2.0;
-        const thrustCone = hasUpwardThrust ? 1.4 : (thrustDirY < 0.2 ? 0.9 : 0.4);
-
-        if (angleDiff < thrustCone && !isPushingDownWhileFalling) {
+        // Keep throttle pinned if facing roughly the right way.
+        const thrustCone = needsRetroBrake ? 0.4 : 0.8;
+        if (angleDiff < thrustCone) {
             p.inputs.up = true;
-        }
     }
 
     // BLACK-BOX FLIGHT RECORDER (Ring buffer of last 60 ticks)
@@ -320,226 +254,16 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
         facingDeg: Number((t.angle * 180 / Math.PI).toFixed(1)),
         desiredDeg: Number((desiredAngle * 180 / Math.PI).toFixed(1)),
         thrust: Boolean(p.inputs.up),
-        safe: isGlidePathSafe
+            safe: true // Obsolete flag removed from AI logic, left for telemetry compat
     });
     if (rec.length > 60) rec.shift();
-}
-// ----------------------------------------------------------------------------
-// Reused Core Math/Physics Helpers
-// ----------------------------------------------------------------------------
-
-function applyAngularControl(p: import('../core/types').Player, t: import('../core/ecs').Transform, v: import('../core/ecs').Velocity, desiredAngle: number): number {
-    const diff = getAngleDiff(desiredAngle, t.angle);
-    const Kp = 0.20; // Increased Proportional gain for snappier racing turns
-    const Kd = 1.2;  // Increased Derivative gain to prevent oversteer wobbles
-    const angVel = (p as any).angleStep || (p as any).angularVelocity || (v as any).angularVelocity || 0;
-    const desiredAngVel = diff * Kp;
-    const torque = desiredAngVel - angVel * Kd;
-
-    if (torque < -0.001) p.inputs.left = true;
-    else if (torque > 0.001) p.inputs.right = true;
-
-    return Math.abs(diff);
-}
-
-function predictGlideCollision(t: {x: number, y: number}, v: {vx: number, vy: number}, ticks: number, room: Room): boolean {
-    const GRAVITY = 0.12;
-    let prevX = t.x;
-    let prevY = t.y;
-    const step = 5;
-    for (let k = step; k <= ticks; k += step) {
-        const curX = t.x + v.vx * k;
-        const curY = t.y + v.vy * k + 0.5 * GRAVITY * k * k;
-        if (!hasClearPath({ x: prevX, y: prevY }, { x: curX, y: curY }, room.level)) {
-            return true;
-        }
-        prevX = curX;
-        prevY = curY;
-    }
-    return false;
-}
-
-function getAngleDiff(target: number, current: number): number {
-    let diff = target - current;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-    return diff;
-}
-
-function hasClearPath(p1: {x: number, y: number}, p2: {x: number, y: number}, level: import('../core/types').LevelData): boolean {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const margin = 18; // Reduced to 18px to fit cleanly through narrow corridors without triggering alerts
-
-    if (raycastEnvironment(p1, p2, level)) return false;
-    if (raycastEnvironment({x: p1.x + nx * margin, y: p1.y + ny * margin}, {x: p2.x + nx * margin, y: p2.y + ny * margin}, level)) return false;
-    if (raycastEnvironment({x: p1.x - nx * margin, y: p1.y - ny * margin}, {x: p2.x - nx * margin, y: p2.y - ny * margin}, level)) return false;
-
-    return true;
-}
-
-function prunePath(rawPath: {x: number, y: number}[], room: Room, botPos?: {x: number, y: number}): {x: number, y: number}[] {
-    if (rawPath.length === 0) return [];
-    if (rawPath.length <= 2) return [...rawPath];
-
-    let startIdx = 0;
-    if (botPos) {
-        for (let i = Math.min(rawPath.length - 1, 8); i >= 0; i--) {
-            const nodePos = { x: rawPath[i].x * 32 + 16, y: rawPath[i].y * 32 + 16 };
-            if (hasClearPath(botPos, nodePos, room.level)) {
-                startIdx = i;
-                break;
-            }
-        }
-    }
-
-    const pruned: {x: number, y: number}[] = [rawPath[startIdx]];
-    let current = startIdx;
-
-    while (current < rawPath.length - 1) {
-        let next = rawPath.length - 1;
-        while (next > current + 1) {
-            const p1 = { x: rawPath[current].x * 32 + 16, y: rawPath[current].y * 32 + 16 };
-            const p2 = { x: rawPath[next].x * 32 + 16, y: rawPath[next].y * 32 + 16 };
-            if (hasClearPath(p1, p2, room.level)) {
-                break;
-            }
-            next--;
-        }
-        pruned.push(rawPath[next]);
-        current = next;
-    }
-    return pruned;
-}
-
-function calculatePathToGate(map: number[][], sx: number, sy: number, gate: CheckpointGate): {x: number, y: number}[] {
-    if (!map) return [];
-    
-    const startX = Math.floor(sx / 32);
-    const startY = Math.floor(sy / 32);
-
-    if (!map[startY] || map[startY][startX] === undefined) return [];
-
-    const gateTileSet = new Set(gate.tiles.map(t => `${t.x},${t.y}`));
-
-    const open: {x: number, y: number, f: number, g: number}[] = [];
-    const closed = new Set<string>();
-    const cameFrom = new Map<string, {x: number, y: number}>();
-
-    open.push({x: startX, y: startY, f: 0, g: 0});
-
-    let iterations = 0;
-    let closestNode = {x: startX, y: startY};
-    let minHeuristic = Infinity;
-
-    while (open.length > 0 && iterations < 500) {
-        iterations++;
-        open.sort((a, b) => a.f - b.f);
-        const current = open.shift()!;
-        const currentKey = `${current.x},${current.y}`;
-
-        if (gateTileSet.has(currentKey)) {
-            closestNode = current;
-            break;
-        }
-
-        closed.add(currentKey);
-
-        const neighbors = [
-            {x: current.x + 1, y: current.y}, {x: current.x - 1, y: current.y},
-            {x: current.x, y: current.y + 1}, {x: current.x, y: current.y - 1},
-            {x: current.x + 1, y: current.y + 1}, {x: current.x - 1, y: current.y - 1},
-            {x: current.x + 1, y: current.y - 1}, {x: current.x - 1, y: current.y + 1}
-        ];
-
-        for (const n of neighbors) {
-            if (n.y < 0 || n.y >= map.length || n.x < 0 || n.x >= map[0].length) continue;
-            
-            const tileId = map[n.y][n.x];
-            if (TILE_DICTIONARY[tileId]?.solid) continue;
-
-            const nKey = `${n.x},${n.y}`;
-            if (closed.has(nKey)) continue;
-
-            let wallPenalty = 0;
-            for (let dy = -2; dy <= 2; dy++) {
-                for (let dx = -2; dx <= 2; dx++) {
-                    if (map[n.y + dy]?.[n.x + dx] && TILE_DICTIONARY[map[n.y + dy][n.x + dx]]?.solid) {
-                        const distSq = dx * dx + dy * dy;
-                        wallPenalty += distSq <= 2 ? 8 : 3;
-                    }
-                }
-            }
-
-            const g = current.g + 1;
-            
-            let h = Infinity;
-            for (const gt of gate.tiles) {
-                const dist = Math.abs(n.x - gt.x) + Math.abs(n.y - gt.y);
-                if (dist < h) h = dist;
-            }
-            const f = g + h + wallPenalty;
-
-            if (h < minHeuristic) {
-                minHeuristic = h;
-                closestNode = n;
-            }
-
-            const existing = open.find(o => o.x === n.x && o.y === n.y);
-            if (!existing) {
-                open.push({x: n.x, y: n.y, f, g});
-                cameFrom.set(nKey, {x: current.x, y: current.y});
-            } else if (g < existing.g) {
-                existing.g = g;
-                existing.f = f;
-                cameFrom.set(nKey, {x: current.x, y: current.y});
-            }
-        }
-    }
-
-    const path = [];
-    let currStr = `${closestNode.x},${closestNode.y}`;
-    while (cameFrom.has(currStr)) {
-        const nodeStr = currStr.split(',');
-        path.unshift({ x: parseInt(nodeStr[0], 10), y: parseInt(nodeStr[1], 10) });
-        const parent = cameFrom.get(currStr)!;
-        currStr = `${parent.x},${parent.y}`;
-    }
-    
-    return path;
-}
-
-function findSafePadPosition(level: import('../core/types').LevelData | undefined, x: number, y: number): { x: number, y: number } {
-    if (!level || !level.rawMap) return { x, y };
-    const map = level.rawMap;
-    const mapH = map.length;
-    if (mapH === 0) return { x, y };
-    const mapW = map[0].length;
-
-    const tileX = Math.max(0, Math.min(mapW - 1, Math.floor(x / 32)));
-    const tileY = Math.max(0, Math.min(mapH - 1, Math.floor(y / 32)));
-
-    if (!TILE_DICTIONARY[map[tileY]?.[tileX]]?.solid) {
-        return { x, y };
-    }
-
-    let airY = tileY;
-    while (airY >= 0 && TILE_DICTIONARY[map[airY]?.[tileX]]?.solid) {
-        airY--;
-    }
-    const safeY = airY >= 0 ? airY * 32 + 16 : y;
-
-    return { x, y: safeY };
 }
 
 // ----------------------------------------------------------------------------
 // Crash Telemetry & ASCII Slice Logging
 // ----------------------------------------------------------------------------
 
-function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState, p: import('../core/types').Player) {
+function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState, p: import('../core/types').Player, currentTick: number) {
     const t = ecs.transforms.get(e);
     const v = ecs.velocities.get(e);
     if (!t || !v) return;
@@ -566,7 +290,7 @@ function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../co
     const rec = (bot as any).flightRecorder || [];
     const maxVy = rec.length > 0 ? Math.max(...rec.map((r: any) => r.vy)) : v.vy;
     const firstUnsafe = rec.find((r: any) => !r.safe);
-    const unsafeTicksAgo = firstUnsafe ? (racingTickCounter - firstUnsafe.tick) : 0;
+    const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
 
     console.log(`\n=== [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
     console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
@@ -584,44 +308,13 @@ function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../co
         console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Speed | Facing -> Desired | Thrust | Safe`);
         for (let i = Math.max(0, rec.length - 40); i < rec.length; i += 10) {
             const entry = rec[i];
-            const ago = racingTickCounter - entry.tick;
+            const ago = currentTick - entry.tick;
             console.log(`  -${String(ago).padStart(2, ' ')}t    | (${entry.x}, ${entry.y}) | (${entry.vx}, ${entry.vy}) | ${entry.speed}  | ${entry.facingDeg}° -> ${entry.desiredDeg}° | ${entry.thrust ? 'ON ' : 'OFF'}   | ${entry.safe ? 'YES' : 'NO '}`);
         }
         const lastEntry = rec[rec.length - 1];
-        const lastAgo = racingTickCounter - lastEntry.tick;
+        const lastAgo = currentTick - lastEntry.tick;
         console.log(`  -${String(lastAgo).padStart(2, ' ')}t    | (${lastEntry.x}, ${lastEntry.y}) | (${lastEntry.vx}, ${lastEntry.vy}) | ${lastEntry.speed}  | ${lastEntry.facingDeg}° -> ${lastEntry.desiredDeg}° | ${lastEntry.thrust ? 'ON ' : 'OFF'}   | ${lastEntry.safe ? 'YES' : 'NO '}`);
     }
 
     dumpRacingAsciiMap(room, t.x, t.y, targetCp?.center, bot.path, p.alias);
-}
-
-function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targetCenter?: {x: number, y: number}, path: {x: number, y: number}[] = [], botAlias: string = 'RACER') {
-    const map = room.level.rawMap;
-    if (!map) return;
-    const bx = Math.floor(botX / 32);
-    const by = Math.floor(botY / 32);
-    const cx = targetCenter ? Math.floor(targetCenter.x / 32) : bx;
-    const cy = targetCenter ? Math.floor(targetCenter.y / 32) : by;
-
-    const pathSet = new Set(path.map(node => `${node.x},${node.y}`));
-
-    const minX = 0; // Show the full width of the cavern
-    const maxX = map[0].length - 1;    
-    // const minX = Math.max(0, Math.min(bx, cx) - 4);
-    // const maxX = Math.min(map[0].length - 1, Math.max(bx, cx) + 4);
-    const minY = Math.max(0, Math.min(by, cy) - 4);
-    const maxY = Math.min(map.length - 1, Math.max(by, cy) + 4);
-    let ascii = `--- RACING MAP SLICE [${botAlias}] (B=Crash Site, C=Target Gate, *=Path, #=Wall) ---\n`;
-    for (let y = minY; y <= maxY; y++) {
-        let row = '';
-        for (let x = minX; x <= maxX; x++) {
-            if (x === bx && y === by) row += 'B';
-            else if (x === cx && y === cy) row += 'C';
-            else if (pathSet.has(`${x},${y}`)) row += '*';
-            else if (TILE_DICTIONARY[map[y]?.[x]]?.solid) row += '#';
-            else row += '.';
-        }
-        ascii += row + '\n';
-    }
-    console.log(ascii + '\n');
 }

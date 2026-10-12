@@ -1,0 +1,294 @@
+import { Registry, type Entity } from '../core/ecs';
+import type { Room } from '../Room';
+import { raycastEnvironment } from '../core/math';
+import { TILE_DICTIONARY } from '../core/tiles';
+import { SERVER_CONFIG } from '../core/config';
+
+export interface CheckpointGate {
+    tileId: number;
+    tiles: { x: number; y: number; px: number; py: number }[];
+    center: { x: number; y: number };
+}
+
+const cachedCheckpoints = new Map<string, CheckpointGate[]>();
+
+export function getCheckpoints(room: Room): CheckpointGate[] {
+    if (cachedCheckpoints.has(room.id)) return cachedCheckpoints.get(room.id)!;
+    
+    const cpMap = new Map<number, { x: number; y: number; px: number; py: number }[]>();
+    const map = room.level.rawMap;
+    if (map) {
+        for (let y = 0; y < map.length; y++) {
+            for (let x = 0; x < map[y].length; x++) {
+                const tileId = map[y][x];
+                if (tileId >= 0xDA && tileId <= 0xE1) {
+                    if (!cpMap.has(tileId)) cpMap.set(tileId, []);
+                    cpMap.get(tileId)!.push({ x, y, px: x * 32 + 16, py: y * 32 + 16 });
+                }
+            }
+        }
+    }
+    
+    const sortedTileIds = Array.from(cpMap.keys()).sort((a, b) => a - b);
+    const cps: CheckpointGate[] = [];
+    
+    for (let i = 0; i < 8; i++) {
+        const tileId = 0xDA + i;
+        const tiles = cpMap.get(tileId);
+        if (tiles && tiles.length > 0) {
+            const avgX = tiles.reduce((acc, t) => acc + t.px, 0) / tiles.length;
+            const avgY = tiles.reduce((acc, t) => acc + t.py, 0) / tiles.length;
+            cps[i] = { tileId, tiles, center: { x: avgX, y: avgY } };
+        }
+    }
+    
+    if (SERVER_CONFIG.debugMode) {
+        console.log(`[BOT-RACING] Level ${room.levelIndex} Gates Mapped: ${sortedTileIds.length} checkpoint lines found.`);
+    }
+    cachedCheckpoints.set(room.id, cps);
+    return cps;
+}
+
+export function findSafePadPosition(level: import('../core/types').LevelData | undefined, x: number, y: number): { x: number, y: number } {
+    if (!level || !level.rawMap) return { x, y };
+    const map = level.rawMap;
+    const mapH = map.length;
+    if (mapH === 0) return { x, y };
+    const mapW = map[0].length;
+
+    const tileX = Math.max(0, Math.min(mapW - 1, Math.floor(x / 32)));
+    const tileY = Math.max(0, Math.min(mapH - 1, Math.floor(y / 32)));
+
+    if (!TILE_DICTIONARY[map[tileY]?.[tileX]]?.solid) {
+        return { x, y };
+    }
+
+    let airY = tileY;
+    while (airY >= 0 && (TILE_DICTIONARY[map[airY]?.[tileX]]?.solid || TILE_DICTIONARY[map[airY]?.[tileX]]?.pad)) {
+        airY--;
+    }
+    const safeY = airY >= 0 ? airY * 32 + 16 : y;
+
+    return { x, y: safeY };
+}
+
+export function applyAngularControl(p: import('../core/types').Player, t: import('../core/ecs').Transform, v: import('../core/ecs').Velocity, desiredAngle: number): number {
+    const diff = getAngleDiff(desiredAngle, t.angle);
+    
+    if (p.type === 'classic') {
+        // Classic ship has instant rotation velocity, no inertia. 10 deg/tick.
+        if (diff < -0.1) p.inputs.left = true;
+        else if (diff > 0.1) p.inputs.right = true;
+        return Math.abs(diff);
+    }
+
+    const Kp = 0.20; 
+    const Kd = 1.2;  
+    const angVel = (p as any).angularVelocity || (v as any).angularVelocity || 0;
+    const desiredAngVel = diff * Kp;
+    const torque = desiredAngVel - angVel * Kd;
+
+    if (torque < -0.001) p.inputs.left = true;
+    else if (torque > 0.001) p.inputs.right = true;
+
+    return Math.abs(diff);
+}
+
+export function predictGlideCollision(t: {x: number, y: number}, v: {vx: number, vy: number}, ticks: number, room: Room): boolean {
+    const GRAVITY = 0.12;
+    let prevX = t.x;
+    let prevY = t.y;
+    const step = 5;
+    for (let k = step; k <= ticks; k += step) {
+        const curX = t.x + v.vx * k;
+        const curY = t.y + v.vy * k + 0.5 * GRAVITY * k * k;
+        if (!hasClearPath({ x: prevX, y: prevY }, { x: curX, y: curY }, room.level)) {
+            return true;
+        }
+        prevX = curX;
+        prevY = curY;
+    }
+    return false;
+}
+
+export function getAngleDiff(target: number, current: number): number {
+    let diff = target - current;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return diff;
+}
+
+export function hasClearPath(p1: {x: number, y: number}, p2: {x: number, y: number}, level: import('../core/types').LevelData): boolean {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const margin = 18; 
+
+    if (raycastEnvironment(p1, p2, level)) return false;
+    if (raycastEnvironment({x: p1.x + nx * margin, y: p1.y + ny * margin}, {x: p2.x + nx * margin, y: p2.y + ny * margin}, level)) return false;
+    if (raycastEnvironment({x: p1.x - nx * margin, y: p1.y - ny * margin}, {x: p2.x - nx * margin, y: p2.y - ny * margin}, level)) return false;
+
+    return true;
+}
+
+export function prunePath(rawPath: {x: number, y: number}[], room: Room, botPos?: {x: number, y: number}): {x: number, y: number}[] {
+    if (rawPath.length === 0) return [];
+    if (rawPath.length <= 2) return [...rawPath];
+
+    let startIdx = 0;
+    if (botPos) {
+        for (let i = Math.min(rawPath.length - 1, 8); i >= 0; i--) {
+            const nodePos = { x: rawPath[i].x * 32 + 16, y: rawPath[i].y * 32 + 16 };
+            if (hasClearPath(botPos, nodePos, room.level)) {
+                startIdx = i;
+                break;
+            }
+        }
+    }
+
+    const pruned: {x: number, y: number}[] = [rawPath[startIdx]];
+    let current = startIdx;
+
+    while (current < rawPath.length - 1) {
+        let next = rawPath.length - 1;
+        while (next > current + 1) {
+            const p1 = { x: rawPath[current].x * 32 + 16, y: rawPath[current].y * 32 + 16 };
+            const p2 = { x: rawPath[next].x * 32 + 16, y: rawPath[next].y * 32 + 16 };
+            if (hasClearPath(p1, p2, room.level)) {
+                break;
+            }
+            next--;
+        }
+        pruned.push(rawPath[next]);
+        current = next;
+    }
+    return pruned;
+}
+
+export function calculatePathToGate(map: number[][], sx: number, sy: number, gate: CheckpointGate): {x: number, y: number}[] {
+    if (!map) return [];
+    
+    const startX = Math.floor(sx / 32);
+    const startY = Math.floor(sy / 32);
+
+    if (!map[startY] || map[startY][startX] === undefined) return [];
+
+    const gateTileSet = new Set(gate.tiles.map(t => `${t.x},${t.y}`));
+
+    const open: {x: number, y: number, f: number, g: number}[] = [];
+    const closed = new Set<string>();
+    const cameFrom = new Map<string, {x: number, y: number}>();
+
+    open.push({x: startX, y: startY, f: 0, g: 0});
+
+    let iterations = 0;
+    let closestNode = {x: startX, y: startY};
+    let minHeuristic = Infinity;
+
+    while (open.length > 0 && iterations < 500) {
+        iterations++;
+        open.sort((a, b) => a.f - b.f);
+        const current = open.shift()!;
+        const currentKey = `${current.x},${current.y}`;
+
+        if (gateTileSet.has(currentKey)) {
+            closestNode = current;
+            break;
+        }
+
+        closed.add(currentKey);
+
+        const neighbors = [
+            {x: current.x + 1, y: current.y}, {x: current.x - 1, y: current.y},
+            {x: current.x, y: current.y + 1}, {x: current.x, y: current.y - 1},
+            {x: current.x + 1, y: current.y + 1}, {x: current.x - 1, y: current.y - 1},
+            {x: current.x + 1, y: current.y - 1}, {x: current.x - 1, y: current.y + 1}
+        ];
+
+        for (const n of neighbors) {
+            if (n.y < 0 || n.y >= map.length || n.x < 0 || n.x >= map[0].length) continue;
+            
+            const tileId = map[n.y][n.x];
+            if (TILE_DICTIONARY[tileId]?.solid) continue;
+
+            const nKey = `${n.x},${n.y}`;
+            if (closed.has(nKey)) continue;
+
+            let wallPenalty = 0;
+            for (let dy = -2; dy <= 2; dy++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                    if (map[n.y + dy]?.[n.x + dx] && TILE_DICTIONARY[map[n.y + dy][n.x + dx]]?.solid) {
+                        const distSq = dx * dx + dy * dy;
+                        wallPenalty += distSq <= 2 ? 8 : 3;
+                    }
+                }
+            }
+
+            const g = current.g + 1;
+            
+            let h = Infinity;
+            for (const gt of gate.tiles) {
+                const dist = Math.abs(n.x - gt.x) + Math.abs(n.y - gt.y);
+                if (dist < h) h = dist;
+            }
+            const f = g + h + wallPenalty;
+
+            if (h < minHeuristic) {
+                minHeuristic = h;
+                closestNode = n;
+            }
+
+            const existing = open.find(o => o.x === n.x && o.y === n.y);
+            if (!existing) {
+                open.push({x: n.x, y: n.y, f, g});
+                cameFrom.set(nKey, {x: current.x, y: current.y});
+            } else if (g < existing.g) {
+                existing.g = g;
+                existing.f = f;
+                cameFrom.set(nKey, {x: current.x, y: current.y});
+            }
+        }
+    }
+
+    const path = [];
+    let currStr = `${closestNode.x},${closestNode.y}`;
+    while (cameFrom.has(currStr)) {
+        const nodeStr = currStr.split(',');
+        path.unshift({ x: parseInt(nodeStr[0], 10), y: parseInt(nodeStr[1], 10) });
+        const parent = cameFrom.get(currStr)!;
+        currStr = `${parent.x},${parent.y}`;
+    }
+    
+    return path;
+}
+
+export function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targetCenter?: {x: number, y: number}, path: {x: number, y: number}[] = [], botAlias: string = 'RACER') {
+    const map = room.level.rawMap;
+    if (!map) return;
+    const bx = Math.floor(botX / 32);
+    const by = Math.floor(botY / 32);
+    const cx = targetCenter ? Math.floor(targetCenter.x / 32) : bx;
+    const cy = targetCenter ? Math.floor(targetCenter.y / 32) : by;
+
+    const pathSet = new Set(path.map(node => `${node.x},${node.y}`));
+
+    const minX = 0; 
+    const maxX = map[0].length - 1;    
+    const minY = Math.max(0, Math.min(by, cy) - 4);
+    const maxY = Math.min(map.length - 1, Math.max(by, cy) + 4);
+    let ascii = `--- RACING MAP SLICE [${botAlias}] (B=Crash Site, C=Target Gate, *=Path, #=Wall) ---\n`;
+    for (let y = minY; y <= maxY; y++) {
+        let row = '';
+        for (let x = minX; x <= maxX; x++) {
+            if (x === bx && y === by) row += 'B';
+            else if (x === cx && y === cy) row += 'C';
+            else if (pathSet.has(`${x},${y}`)) row += '*';
+            else if (TILE_DICTIONARY[map[y]?.[x]]?.solid) row += '#';
+            else row += '.';
+        }
+        ascii += row + '\n';
+    }
+    console.log(ascii + '\n');
+}
