@@ -10,13 +10,15 @@ So I decided to throw some hours at reverse engineering it and ... we have a (in
 It's awesome that a lot of old games getting a second life these days! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.
 
 
-### Server and Cheating
-I deviated pretty strongly on a few parts. One was: I did not really fancy the split-screen. I went for 
-networked instead. The server is authorative, so it should be hard(er) to cheat (why-people-why, let everyone enjoy it!).
-But, eh, anti-cheating is a billion-dollar industry so, yeah... 
+## Deviations from the original
 
-### Records
-Second big deviation, records and scores.
+### 1. No split-screen and Server-side
+I did not really fancy the split-screen. I went for networked play instead. The server is 
+supposed to be 100% authorative, so it should be hard(er) to cheat (why-people-why, let everyone 
+enjoy things!). But, eh, anti-cheating is now a big-money industry so, yeah... No guarantees. 
+
+### 2. Records and Scores
+Second big deviation, records and scores. It's fun to compete!
 The best part about Gravity Force to me was multi-player. I think almost everyone will agree (except Fred).
 Bummer was you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
 it was nice to give someone a punch on the arm when they were being an ass (read: won). And ... luckily I am a good winner. Anyway, I digress.  
@@ -25,8 +27,8 @@ This version of GF keeps track of all kinds of high-scores and records for both 
 
 _But obviously, multi-player is the way to go! `:D`_
 
-### Bots
-I also added _optional_ bots to every single-player discipline. I'm quite pleased with them as they're dumb enough, and not too dumb.
+### 3. Bots, bots, bots
+I also added _optional_ bots to the single-player disciplines. I'm quite pleased with them as they're dumb enough, and not too dumb.
 
 ### Gameplay Tips
 If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
@@ -40,7 +42,7 @@ original game. For instance, all enemies and turrets should move pretty much exa
 in the original game. There is documentation on some of the funky stuff in the `doc` dir.
 
 ### Not really a port
-It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I think would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
+It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
 
 **Some _deliberate_ and _blatant_ tweaks**  
 
