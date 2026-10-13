@@ -216,6 +216,13 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
 			const tileId = map[n.y][n.x];
 			if (TILE_DICTIONARY[tileId]?.solid) continue;
 
+            // PREVENT DIAGONAL CORNER CUTTING THROUGH WALLS
+            if (n.x !== current.x && n.y !== current.y) {
+                if (TILE_DICTIONARY[map[current.y]?.[n.x]]?.solid || TILE_DICTIONARY[map[n.y]?.[current.x]]?.solid) {
+                    continue;
+                }
+            }
+
 			const nKey = `${n.x},${n.y}`;
 			if (closed.has(nKey)) continue;
 
