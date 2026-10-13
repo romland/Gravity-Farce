@@ -42,7 +42,7 @@ export class Room {
     }
 
     tick(isPaused: boolean = false) {
-        if (this.ecs.players.size === 0) return;
+        if (this.activeClientIds.size === 0) return;
 
         if (!isPaused) {
             this.globalWaveTimer++;
@@ -121,6 +121,11 @@ export class Room {
             this.ecs.destroy(e);
         }
         // Note: Room deletion when empty is now handled by the parent index.ts
+        if (this.activeClientIds.size === 0) {
+            for (const [botE] of Array.from(this.ecs.bots.entries())) {
+                this.ecs.destroy(botE);
+            }
+        }
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {

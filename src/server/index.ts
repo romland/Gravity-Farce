@@ -77,6 +77,10 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
             };
             playerSessionStats.set(id, stats);
             room.removePlayer(id);
+            if (room.activeClientIds.size === 0) {
+                room.tracker.finishAndSave();
+                rooms.delete(room.levelIndex);
+            }
             break;
         }
     }
