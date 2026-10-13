@@ -158,36 +158,25 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     }
     bot.pathTimer--;
 
-    // 3. Landing Sequence Override
-    const isLandingPhase = (targetType === 'base' || targetType === 'cargo' || targetType === 'end') && distToTarget < 120 && hasClearPath({x: t.x, y: t.y}, targetObj, room.level);
+    bot.state = 'seek_cargo';
+    let isLandingFinal = false;
 
-    if (isLandingPhase) {
-        bot.state = 'land_cargo';
+    // 3. Landing Approach Injection
+    if ((targetType === 'base' || targetType === 'cargo' || targetType === 'end') && distToTarget < 200 && hasClearPath({x: t.x, y: t.y}, {x: targetObj.x, y: targetObj.y - 20}, room.level)) {
         const dx = targetObj.x - t.x;
-        const angleDiff = applyAngularControl(p, t, v, -Math.PI / 2);
-        
-        if (angleDiff < 0.3) {
-            if (dx < -10) p.inputs.left = true;
-            if (dx > 10) p.inputs.right = true;
-            
-            if (v.vy > 1.8) { // MAX_SAFE_LANDING_VY is 2.0 for classic
-                p.inputs.up = true;
-            } else if (distToTarget < 30 && v.vy > 0.5) {
-                p.inputs.up = true; 
-            } else if (t.y > targetObj.y - 10) {
-                p.inputs.up = true; // Maintain altitude if we dropped below target
-            }
-        } else {
-            p.inputs.up = v.vy > 1.5; 
-        }
+        const dy = targetObj.y - t.y;
 
+        if (dy > 70 || Math.abs(dx) > 30) {
+            bot.state = 'land_approach';
+            targetObj = { x: targetObj.x, y: targetObj.y - 70 }; // Override aim point to hover above
+        } else {
+            bot.state = 'land_final';
+            isLandingFinal = true;
+        }
         if (bot.path.length > 0) bot.path = [];
-        return;
     }
 
     // 4. Standard Navigation
-    bot.state = 'seek_cargo';
-    
     while (bot.path && bot.path.length > 1) {
         let wx0 = bot.path[0].x * 32 + 16;
         let wy0 = bot.path[0].y * 32 + 16;
@@ -219,7 +208,12 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     const dirY = aimY - t.y;
     const distToAim = Math.hypot(dirX, dirY) || 1;
 
-    const targetSpeed = 4.0; // Deliberate speed for precision flying
+    let targetSpeed = 4.0; // Deliberate speed for precision flying
+    if (bot.state === 'land_approach') {
+        // Brake smoothly as we align horizontally to prevent pendulum overshoots
+        targetSpeed = Math.min(2.5, Math.max(0.5, Math.abs(targetObj.x - t.x) * 0.05));
+    }
+    if (bot.state === 'land_final') targetSpeed = 0.5;
     
     // Hostile clearing
     const hostiles = Array.from(ecs.turrets.entries()).concat(Array.from(ecs.flyingEnemies.entries()) as any);
@@ -243,17 +237,41 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
 
     let forceAngle = Math.atan2(forceY, forceX);
     
+    let isRetrograde = false;
     // Anticipate walls along our trajectory to prevent blind crashes
-    if (currentSpeed > 1.5 && predictGlideCollision(t, v, 45, room)) {
-        forceAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
-        p.inputs.up = true;
+    if (!isLandingFinal && currentSpeed > 1.5) {
+		const ticksToAim = Math.floor(distToAim / currentSpeed);
+		const checkTicks = Math.min(40, Math.max(5, ticksToAim - 8));
+		if (predictGlideCollision(t, v, checkTicks, room)) {
+			forceAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
+			isRetrograde = true;
+		}
+    }
+
+    if (isLandingFinal) {
+        forceAngle = -Math.PI / 2; // Force upright
+        const dx = targetObj.x - t.x;
+        if (dx < -4) forceAngle -= 0.12; // Gentle left tilt
+        if (dx > 4) forceAngle += 0.12;  // Gentle right tilt
     }
 
     const reqForce = Math.hypot(forceX, forceY);
     const angleDiff = applyAngularControl(p, t, v, forceAngle);
-    const thrustCone = 0.8;
+    const thrustCone = isRetrograde ? 0.6 : (isLandingFinal ? 0.3 : 0.8);
 
-    if (angleDiff < thrustCone && reqForce > 0.1) {
+    if (isRetrograde) {
+        if (angleDiff < thrustCone) {
+            p.inputs.up = true;
+        }
+    } else if (isLandingFinal) {
+        if (angleDiff < thrustCone) {
+            if (v.vy > 1.5) p.inputs.up = true;
+            else if (targetObj.y - t.y < 15 && v.vy > 0.4) p.inputs.up = true;
+            else if (Math.abs(targetObj.x - t.x) > 3 && v.vy > 0.3) p.inputs.up = true;
+        } else {
+            if (v.vy > 1.8) p.inputs.up = true; // Emergency catch
+        }
+    } else if (angleDiff < thrustCone && reqForce > 0.1) {
         p.inputs.up = true;
     }
 

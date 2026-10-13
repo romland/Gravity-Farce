@@ -96,7 +96,7 @@ export function applyAngularControl(p: import('../core/types').Player, t: import
 }
 
 export function predictGlideCollision(t: { x: number, y: number }, v: { vx: number, vy: number }, ticks: number, room: Room): boolean {
-	const GRAVITY = 0.12;
+	const GRAVITY = SERVER_CONFIG.useClassicPhysics ? 0.010 : 0.015;
 	let prevX = t.x;
 	let prevY = t.y;
 	const step = 5;
