@@ -1,3 +1,5 @@
+import os from 'os';
+
 export class ServerProfiler {
     private tickTimes: number[] = [];
     private tickStart: number = 0;
@@ -35,5 +37,16 @@ export class ServerProfiler {
         const intervalSec = this.reportIntervalMs / 1000;
 
         console.log(`[PERF] ${intervalSec}s Tick (ms) - Min: ${min.toFixed(2)} | Med: ${median.toFixed(2)} | Avg: ${avg.toFixed(2)} | Max: ${max.toFixed(2)} | Budget used: ${budgetPct.toFixed(1)}%`);
+        this.logSystemStats();
+    }
+
+    private logSystemStats() {
+        const mem = process.memoryUsage();
+        const freeMem = os.freemem() / (1024 * 1024);
+        const totalMem = os.totalmem() / (1024 * 1024);
+        const heapUsed = mem.heapUsed / (1024 * 1024);
+        const load = os.loadavg();
+
+        console.log(`[SYS]  Heap: ${heapUsed.toFixed(1)}MB | OS Free: ${freeMem.toFixed(1)}MB / ${totalMem.toFixed(1)}MB | Load (1/5/15m): ${load[0].toFixed(2)}, ${load[1].toFixed(2)}, ${load[2].toFixed(2)}`);
     }
 }
