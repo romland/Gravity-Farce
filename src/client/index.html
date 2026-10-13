@@ -161,7 +161,7 @@
         const ctx = canvas.getContext('2d');
         const hud = document.getElementById('hud');
         
-        // Enforce Competitive Fixed Viewport
+        // Enforce Fixed Viewport
         const VIEW_W = 1600;
         const VIEW_H = 900;
         canvas.width = VIEW_W;
@@ -578,8 +578,8 @@
             ctx.stroke();
             
             ctx.shadowBlur = 0;
-            
-        if (p.inputs && p.inputs.up && p.fuel > 0) {
+
+            if (p.inputs && p.inputs.up && p.fuel > 0) {
                 ctx.fillStyle = '#4facfe';
                 ctx.beginPath();
                 ctx.moveTo(-8, 0); 
@@ -1061,21 +1061,21 @@
             }
 
             // Render Personal Checkpoint Pulsing Light
-        if (myServerPlayer && raceLights.length > 0) {
-            let rState = myServerPlayer.race ? myServerPlayer.race.state : 0;
-            let rNext = myServerPlayer.race ? myServerPlayer.race.nextCheckpoint : 1;
-            if (rState < 2) {
-                let targetLight = 0x3A + rNext;
-                let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
-                ctx.save();
-                ctx.fillStyle = `rgba(46, 204, 113, ${pulse * 0.8})`;
-                ctx.shadowColor = '#2ecc71';
-                ctx.shadowBlur = 15;
-                for (let l of raceLights) {
-                    if (l.id === targetLight) ctx.fillRect(l.x, l.y, 32, 32);
+            if (myServerPlayer && raceLights.length > 0) {
+                let rState = myServerPlayer.race ? myServerPlayer.race.state : 0;
+                let rNext = myServerPlayer.race ? myServerPlayer.race.nextCheckpoint : 1;
+                if (rState < 2) {
+                    let targetLight = 0x3A + rNext;
+                    let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
+                    ctx.save();
+                    ctx.fillStyle = `rgba(46, 204, 113, ${pulse * 0.8})`;
+                    ctx.shadowColor = '#2ecc71';
+                    ctx.shadowBlur = 15;
+                    for (let l of raceLights) {
+                        if (l.id === targetLight) ctx.fillRect(l.x, l.y, 32, 32);
+                    }
+                    ctx.restore();
                 }
-                ctx.restore();
-            }
             }
 
             // Render Multiplayer Leaderboard Overlay
@@ -1095,7 +1095,7 @@
                     let m = Math.floor(diff / 60000).toString().padStart(2, '0');
                     let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
                     let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
-                let label = r.id === myId ? "YOU" : (serverState.players[r.id]?.alias || r.id.substring(0,4));
+                    let label = r.id === myId ? "YOU" : (serverState.players[r.id]?.alias || r.id.substring(0,4));
                     ctx.fillStyle = r.id === myId ? '#2ecc71' : '#fff';
                     ctx.textAlign = 'left';
                     ctx.fillText(`${idx+1}. ${label}`, VIEW_W/2 - 120, 125 + idx * 30);
