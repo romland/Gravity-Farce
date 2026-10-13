@@ -120,6 +120,7 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x75: { id: 0x75, description: "horizontal thinner upper rock", solid: true, known: true },
     0x76: { id: 0x76, description: "right side rock", solid: true, known: true },
     0x77: { id: 0x77, description: "Teal decorative boxes/barrels", solid: true, known: true },
+    0x78: { id: 0x78, description: "Teal decorative boxes/barrels", solid: true, known: true },
     0x79: { id: 0x79, description: "Teal decorative boxes/barrels", solid: true, known: true },
     0x7A: { id: 0x7A, description: "Teal decorative boxes/barrels", solid: true, known: true },
     0x7B: { id: 0x7B, description: "Teal decorative boxes/barrels", solid: true, known: true },
