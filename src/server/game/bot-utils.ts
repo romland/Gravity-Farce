@@ -572,8 +572,11 @@ export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: numb
 				row += 'E';
 			} else if (pathSet.has(`${x},${y}`)) {
 				row += '*';
-			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0x15) {
-				row += '=';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0x15 || TILE_DICTIONARY[map[y]?.[x]]?.id === 0x29) {
+				row += '—';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id >= 0xD1 && TILE_DICTIONARY[map[y]?.[x]]?.id <= 0xD8) {
+				// pickup stuff
+				row += '•';
 			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0xE2) {
 				// player 1 start
 				row += '1';
