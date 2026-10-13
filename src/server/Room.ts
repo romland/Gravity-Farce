@@ -124,7 +124,8 @@ export class Room {
     }
 
     trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
-        if (!this.activeClientIds.has(id)) return;
+        const isBot = id.includes('BOT_') || id.includes('RACER_') || id.includes('MBOT_');
+        if (!this.activeClientIds.has(id) && !isBot) return;
         let chosenX: number | null = null;
         let chosenY: number | null = null;
 
@@ -163,9 +164,11 @@ export class Room {
 
         if (chosenX !== null) {
             let spawnStats = stats ? { ...stats } : undefined;
+            let oldBotState: any = undefined;
             const existing = this.ecs.getPlayerEntity(id);
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
+                oldBotState = this.ecs.bots.get(existing);
                 if (oldP) {
                     spawnStats = { score: oldP.score, race: oldP.race, uuid: oldP.uuid, alias: oldP.alias, joinedAt: oldP.joinedAt, shotsFired: oldP.shotsFired, lives: oldP.lives }; // Keep score, race, identity, level timer, shots, and lives
                 }
@@ -177,6 +180,12 @@ export class Room {
 
             const playerEntity = this.ecs.getPlayerEntity(id);
             if (playerEntity !== undefined) {
+                if (oldBotState) {
+                    oldBotState.state = 'takeoff';
+                    oldBotState.stateTimer = 20;
+                    oldBotState.path = [];
+                    this.ecs.bots.set(playerEntity, oldBotState);
+                }
                 const p = this.ecs.players.get(playerEntity);
                 if (p) {
                     p.isLanded = true;
@@ -227,6 +236,15 @@ export class Room {
          for (const [e] of Array.from(this.ecs.powerups.entries())) {
              this.ecs.destroy(e);
          }
+        for (const [e] of Array.from(this.ecs.bots.entries())) {
+            this.ecs.destroy(e);
+        }
+        for (const [e] of Array.from(this.ecs.bullets.entries())) {
+            this.ecs.destroy(e);
+        }
+        for (const [e] of Array.from(this.ecs.homingMissiles.entries())) {
+            this.ecs.destroy(e);
+        }
         this.spawnEntities();
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
     }    

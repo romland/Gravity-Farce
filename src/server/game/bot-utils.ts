@@ -11,10 +11,10 @@ export interface CheckpointGate {
 	center: { x: number; y: number };
 }
 
-const cachedCheckpoints = new Map<string, CheckpointGate[]>();
+const cachedCheckpoints = new Map<number, CheckpointGate[]>();
 
 export function getCheckpoints(room: Room): CheckpointGate[] {
-	if (cachedCheckpoints.has(room.id)) return cachedCheckpoints.get(room.id)!;
+	if (cachedCheckpoints.has(room.levelIndex)) return cachedCheckpoints.get(room.levelIndex)!;
 
 	const cpMap = new Map<number, { x: number; y: number; px: number; py: number }[]>();
 	const map = room.level.rawMap;
@@ -46,7 +46,7 @@ export function getCheckpoints(room: Room): CheckpointGate[] {
 	if (SERVER_CONFIG.debugMode) {
 		console.log(`[BOT-RACING] Level ${room.levelIndex} Gates Mapped: ${sortedTileIds.length} checkpoint lines found.`);
 	}
-	cachedCheckpoints.set(room.id, cps);
+	cachedCheckpoints.set(room.levelIndex, cps);
 	return cps;
 }
 
