@@ -2,6 +2,7 @@ import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { spawnClassicPlayer } from './player-classic';
 import { SERVER_CONFIG } from '../core/config';
+import { TILE_DICTIONARY } from '../core/tiles';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, findSafePadPosition, logDogfightCrash, predictGlideCollision } from './bot-utils';
 
 const BOT_UUID_PREFIX = 'MBOT_';
@@ -151,6 +152,15 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     const distToTarget = Math.hypot(targetObj.x - t.x, targetObj.y - t.y);
 
     // 2. Pathfinding
+    if (bot.path && bot.path.length > 0) {
+        const nextX = bot.path[0].x * 32 + 16;
+        const nextY = bot.path[0].y * 32 + 16;
+        if (!hasClearPath({x: t.x, y: t.y}, {x: nextX, y: nextY}, room.level)) {
+            bot.pathTimer = 0; // Force recalculation if we drifted behind a wall!
+            bot.path = [];
+        }
+    }
+
     if (bot.pathTimer <= 0 || bot.path.length === 0) {
         const rawPath = calculatePath(room.level.rawMap!, t.x, t.y, targetObj.x, targetObj.y);
         bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
@@ -199,8 +209,19 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     let aimX = targetObj.x;
     let aimY = targetObj.y;
     if (bot.path && bot.path.length > 0) {
-        aimX = bot.path[0].x * 32 + 16;
-        aimY = bot.path[0].y * 32 + 16;
+        let nextWp = bot.path[0];
+        let wpX = nextWp.x * 32 + 16;
+        let wpY = nextWp.y * 32 + 16;
+        const map = room.level.rawMap;
+        if (map && map[nextWp.y]) {
+            // Apex smoothing: push waypoints away from hard corners
+            if (map[nextWp.y]?.[nextWp.x - 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x - 1]]?.solid) wpX += 14;
+            if (map[nextWp.y]?.[nextWp.x + 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x + 1]]?.solid) wpX -= 14;
+            if (map[nextWp.y - 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y - 1][nextWp.x]]?.solid) wpY += 14;
+            if (map[nextWp.y + 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y + 1][nextWp.x]]?.solid) wpY -= 14;
+        }
+        aimX = wpX;
+        aimY = wpY;
     }
 
     const currentSpeed = Math.hypot(v.vx, v.vy);
@@ -208,7 +229,25 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     const dirY = aimY - t.y;
     const distToAim = Math.hypot(dirX, dirY) || 1;
 
-    let targetSpeed = 4.0; // Deliberate speed for precision flying
+    const botMoveAngle = currentSpeed > 1.0 ? Math.atan2(v.vy, v.vx) : t.angle;
+    let trajectorySeverity = 0;
+    if (currentSpeed > 1.5) {
+        const pathAngle = Math.atan2(dirY, dirX);
+        const driftDiff = Math.abs(getAngleDiff(pathAngle, botMoveAngle)) / Math.PI;
+        trajectorySeverity = Math.min(1.0, Math.max(0, driftDiff - 0.1) * 2.0);
+    }
+
+    let pathSeverity = 0;
+    if (bot.path && bot.path.length >= 2) {
+        let prevAngle = Math.atan2((bot.path[0].y * 32 + 16) - t.y, (bot.path[0].x * 32 + 16) - t.x);
+        const segAngle = Math.atan2((bot.path[1].y * 32 + 16) - (bot.path[0].y * 32 + 16), (bot.path[1].x * 32 + 16) - (bot.path[0].x * 32 + 16));
+        const turnDiff = Math.abs(getAngleDiff(segAngle, prevAngle));
+        if (turnDiff > 0.3) pathSeverity = Math.min(1.0, (turnDiff / Math.PI) * 1.5);
+    }
+
+    const clampedSeverity = Math.min(1.0, Math.max(trajectorySeverity, pathSeverity));
+    let targetSpeed = 4.5 * (1.0 - clampedSeverity); // Dynamic cruise speed
+
     if (bot.state === 'land_approach') {
         // Brake smoothly as we align horizontally to prevent pendulum overshoots
         targetSpeed = Math.min(2.5, Math.max(0.5, Math.abs(targetObj.x - t.x) * 0.05));
