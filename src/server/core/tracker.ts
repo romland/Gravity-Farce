@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Worker } from 'worker_threads';
 
 export type TrackEventType = 
     | { type: 'death'; x: number; y: number }
@@ -38,13 +39,47 @@ export interface LogEntry {
         pingSummary?: { min: number; max: number; avg: number; med: number };
         _pingSamples?: number[]; // Internal tracking, removed before save
     }>;
+    replayData?: any;
 }
+
+const REPLAY_WORKER_CODE = `
+const { parentPort } = require('worker_threads');
+const fs = require('fs');
+const path = require('path');
+const zlib = require('zlib');
+
+parentPort.on('message', (msg) => {
+    try {
+        const { entry, useGzip } = msg;
+        const dir = path.resolve(process.cwd(), 'data/replays');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        const ext = useGzip ? '.gfr' : '.json';
+        const filepath = path.join(dir, entry.gameUuid + ext);
+        
+        let outData;
+        if (useGzip) {
+            outData = zlib.gzipSync(JSON.stringify(entry));
+        } else {
+            outData = JSON.stringify(entry, null, 2);
+        }
+        fs.writeFileSync(filepath, outData);
+        parentPort.postMessage({ success: true, uuid: entry.gameUuid });
+    } catch (e) {
+        parentPort.postMessage({ success: false, error: e.message });
+    }
+});
+`;
+
+const replayWorker = new Worker(REPLAY_WORKER_CODE, { eval: true });
 
 export class GameTracker {
     public uuid: string;
     private entry: LogEntry;
     private isActive: boolean = true;
     public isCompleted: boolean = false;
+    public hasHighscore: boolean = false;
     
     constructor(levelIndex: number, category: string, mode: 'SP' | 'MP', physicsHash: string, isDebug: boolean) {
         this.uuid = crypto.randomUUID();
@@ -60,7 +95,8 @@ export class GameTracker {
             durationMs: 0,
             highscores: [],
             events: [],
-            playerStats: {}
+            playerStats: {},
+            replayData: { seed: Date.now(), initialCargoCount: 0, frames: [] }
         };
         this.logEvent(undefined, { type: 'game_start', levelIndex, category });
     }
@@ -91,6 +127,7 @@ export class GameTracker {
         if (!this.isActive || !this.entry.playerStats[playerId]) return;
         const { uuid, alias } = this.entry.playerStats[playerId];
         this.entry.highscores.push({ playerId, uuid, alias, metric, value, isNewPb });
+        if (isNewPb) this.hasHighscore = true;
     }
 
     public updatePlayerFuelConsumed(playerId: string, consumed: number) {
@@ -109,6 +146,10 @@ export class GameTracker {
         if (this.isActive && this.entry.playerStats[playerId]?._pingSamples) {
             this.entry.playerStats[playerId]._pingSamples!.push(ping);
         }
+    }
+
+    public logReplayFrame(frameData: any) {
+        if (this.isActive) this.entry.replayData.frames.push(frameData);
     }
 
     public finishAndSave() {
@@ -141,5 +182,9 @@ export class GameTracker {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         
         fs.appendFileSync(logPath, JSON.stringify(this.entry) + '\n');
+
+        if (this.hasHighscore) {
+            replayWorker.postMessage({ entry: this.entry, useGzip: !this.entry.isDebug });
+        }
     }
 }

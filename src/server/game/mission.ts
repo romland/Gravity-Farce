@@ -45,7 +45,7 @@ export function sysMission(ecs: Registry, room: Room) {
             room.tracker.isCompleted = true;
             room.tracker.finishAndSave();
             ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
-            setTimeout(() => room.transitionPlayer(p.id), 3000);
+            if (!room.isReplayMode) setTimeout(() => room.transitionPlayer(p.id), 3000);
         }
     }
 }
@@ -61,9 +61,13 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     const mode = room.ecs.players.size > 1 ? 'MP' : 'SP';
     const physicsHash = getActivePhysicsHash();
     
-    const rFast = recordDB.submitRecord('sp_fastest', room.levelIndex, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score });
-    const rSneak = recordDB.submitRecord('sp_sneakiest', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken });
-    const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.consumed || 0), secondaryValue: timeTaken });
+    if (room.isReplayMode) {
+        return buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias);
+    }
+
+    const rFast = recordDB.submitRecord('sp_fastest', room.levelIndex, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: p.score, metadata: { replayId: room.tracker.uuid } });
+    const rSneak = recordDB.submitRecord('sp_sneakiest', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: p.score, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid } });
+    const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.consumed || 0), secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid } });
 
     if (rFast.rank !== -1) room.tracker.logHighscore(playerId, 'sp_fastest', timeTaken, rFast.isNewPb);
     if (rSneak.rank !== -1) room.tracker.logHighscore(playerId, 'sp_sneakiest', p.score, rSneak.isNewPb);
@@ -81,8 +85,8 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     const completionPct = totalEnemies === 0 ? 100 : Math.round(((totalEnemies - enemiesLeft) / totalEnemies) * 100);
 
     if (enemiesLeft === 0) {
-        rClear = recordDB.submitRecord('sp_cleared', room.levelIndex, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken });
-        rSharpshooter = recordDB.submitRecord('sp_sharpshooter', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: w?.shotsFired || 0, secondaryValue: timeTaken });
+        rClear = recordDB.submitRecord('sp_cleared', room.levelIndex, mode, physicsHash, 'asc', { playerId: p.uuid, alias: p.alias, value: timeTaken, metadata: { replayId: room.tracker.uuid } });
+        rSharpshooter = recordDB.submitRecord('sp_sharpshooter', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: w?.shotsFired || 0, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid } });
         if (rClear.rank !== -1) room.tracker.logHighscore(playerId, 'sp_cleared', timeTaken, rClear.isNewPb);
         if (rSharpshooter.rank !== -1) room.tracker.logHighscore(playerId, 'sp_sharpshooter', w?.shotsFired || 0, rSharpshooter.isNewPb);
     }

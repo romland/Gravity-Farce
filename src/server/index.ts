@@ -16,6 +16,10 @@ import { spawnRacingBot } from './game/bot-racing';
 import { spawnMissionBot } from './game/bot-mission';
 import { logRacingCrash } from './game/bot-utils';
 import { logDogfightCrash } from './game/bot-utils';
+import fs from 'fs';
+import path from 'path';
+import zlib from 'zlib';
+import { createPRNG } from './core/math';
 
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
@@ -40,6 +44,7 @@ app.use(express.static('./src/client'));
 const rooms = new Map<number, Room>();
 
 let isServerPaused = false;
+let nextReplayRoomId = -1;
 
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
 const playerRooms = new Map<string, number>();
@@ -115,17 +120,28 @@ function handleTransition(id: string) {
             const p = oldRoom.ecs.players.get(e)!;
             const f = oldRoom.ecs.fuelTanks.get(e);
             const w = oldRoom.ecs.weaponMounts.get(e);
-            const timeTaken = Date.now() - p.joinedAt;
+                const timeTaken = Math.round((oldRoom.globalWaveTimer - p.joinedAtTick) * (1000 / SERVER_CONFIG.tickRate));
             
             if (oldRoom.category === 'mission') {
                 const boards = evaluateMissionEnd(oldRoom, id, timeTaken);
-                if (boards) oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
+                    if (boards) {
+                        if (oldRoom.isReplayMode) {
+                            for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
+                        } else {
+                            oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
+                        }
+                    }
             } else {
-                const summary = [
-                    { rankLabel: 'TIME', alias: 'DURATION', displayValue: timeTaken + 'ms', isMe: true, isNewPb: false },
-                    { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false }
-                ];
-                oldRoom.emitToPlayer(p.id, 'show_leaderboard', [{ title: 'MATCH SUMMARY', entries: summary }], false);
+                    if (oldRoom.isReplayMode) {
+                        const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), p.uuid, p.alias);
+                        for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
+                    } else {
+                        const summary = [
+                            { rankLabel: 'TIME', alias: 'DURATION', displayValue: timeTaken + 'ms', isMe: true, isNewPb: false },
+                            { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false }
+                        ];
+                        oldRoom.emitToPlayer(p.id, 'show_leaderboard', [{ title: 'MATCH SUMMARY', entries: summary }], false);
+                    }
             }
 
             playerSessionStats.set(id, {
@@ -283,6 +299,69 @@ io.on('connection', (socket) => {
                     }
                 }
             }
+        }
+    });
+
+    const startReplay = (replayId: string) => {
+        try {
+            const dir = path.resolve(process.cwd(), 'data/replays');
+            let dataRaw;
+            if (fs.existsSync(path.join(dir, `${replayId}.json`))) {
+                dataRaw = fs.readFileSync(path.join(dir, `${replayId}.json`), 'utf-8');
+            } else if (fs.existsSync(path.join(dir, `${replayId}.gfr`))) {
+                const zipped = fs.readFileSync(path.join(dir, `${replayId}.gfr`));
+                dataRaw = zlib.gunzipSync(zipped).toString('utf-8');
+            } else {
+                return;
+            }
+            const replay = JSON.parse(dataRaw);
+            socket.emit('hide_leaderboard');
+            
+            const rId = nextReplayRoomId--;
+            const newRoom = new Room(replay.levelIndex, getLevelData(replay.levelIndex), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier);
+            newRoom.isReplayMode = true;
+            (newRoom.tracker as any).isActive = false;
+            newRoom.seed = replay.replayData.seed;
+            newRoom.prng = createPRNG(newRoom.seed);
+            newRoom.replayFrames = replay.replayData.frames;
+            
+            for (const [pid, pstat] of Object.entries(replay.playerStats)) {
+                 newRoom.addPlayer(pid, (pstat as any).shipType || 'classic', pstat as any);
+            }
+            rooms.set(rId, newRoom);
+            
+            const oldRoomIdx = playerRooms.get(socket.id);
+            if (oldRoomIdx !== undefined) {
+                 const oldR = rooms.get(oldRoomIdx);
+                 if (oldR) oldR.removePlayer(socket.id);
+                 socket.leave(`level_${oldRoomIdx}`);
+            }
+            socket.join(`level_${rId}`);
+            playerRooms.set(socket.id, rId);
+            socket.emit('initLevel', newRoom.level);
+            socket.emit('levelIndex', newRoom.levelIndex);
+            newRoom.activeClientIds.add(socket.id);
+        } catch(e) { console.error("Replay load failed", e); }
+    };
+
+    socket.on('watch_replay', startReplay);
+
+    socket.on('watch_latest_replay', () => {
+        try {
+            const dir = path.resolve(process.cwd(), 'data/replays');
+            if (!fs.existsSync(dir)) return;
+            const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') || f.endsWith('.gfr'));
+            if (files.length === 0) return;
+            files.sort((a, b) => fs.statSync(path.join(dir, b)).mtimeMs - fs.statSync(path.join(dir, a)).mtimeMs);
+            const latest = files[0].replace(/\.(json|gfr)$/, '');
+            startReplay(latest);
+        } catch(e) { console.error(e); }
+    });
+
+    socket.on('leave_replay', () => {
+        const rId = playerRooms.get(socket.id);
+        if (rId !== undefined && rId < 0) {
+            handleTransitionToLevel(socket.id, 0, false);
         }
     });
 

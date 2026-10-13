@@ -193,6 +193,7 @@
         let lastHudHTML = "";
         let myPing = 0;
         let raceLights = [];
+        let spectateTargetId = null;
 
         const inputs = { up: false, left: false, right: false, shoot: false };
         
@@ -217,6 +218,15 @@
         window.addEventListener('keydown', (e) => {
             if (document.activeElement.tagName === 'INPUT') return;
             
+            if (e.code === 'Escape') {
+                socket.emit('leave_replay');
+                return;
+            }
+            if (e.code === 'KeyR') {
+                socket.emit('watch_latest_replay');
+                return;
+            }
+
             if (debugMode) {
                 if (e.code === 'KeyP') { socket.emit('debug_action', 'pause'); return; }
                 if (e.code === 'KeyC') { freecam = !freecam; return; }
@@ -279,6 +289,12 @@
             socket.emit('pong', serverTime);
         });
         
+        socket.on('hide_leaderboard', () => {
+            const modal = document.getElementById('leaderboard-modal');
+            if (modal) modal.style.display = 'none';
+            spectateTargetId = null;
+        });
+
         let tileDictionary = {};
         socket.on('initTiles', (dict) => { 
             tileDictionary = dict; 
@@ -404,7 +420,13 @@
             // Clean up disconnected ghost ships
             for (let id in renderState.players) {
                 if (!serverState.players[id]) {
-                    delete renderState.players[id];
+                    if (!renderState.players[id].missingFrames) renderState.players[id].missingFrames = 0;
+                    renderState.players[id].missingFrames++;
+                    if (renderState.players[id].missingFrames > 30) {
+                        delete renderState.players[id];
+                    }
+                } else {
+                    renderState.players[id].missingFrames = 0;
                 }
             }
         });
@@ -462,7 +484,8 @@
                         let bg = e.isCurrentRun ? 'background:rgba(46,204,113,0.15); font-weight:bold;' : '';
                         let styleStr = (col || bg) ? `style="${col} ${bg}"` : '';
                         let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
-                        panesHtml += `<tr ${styleStr}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
+                    let replayBtn = e.replayId ? ` <a href="#" onclick="socket.emit('watch_replay', '${e.replayId}'); return false;" style="color:#e74c3c; font-size:9px; vertical-align:middle; text-decoration:none; border:1px solid #e74c3c; padding:2px 4px; border-radius:4px; margin-left:6px;">[DEBUG: REPLAY]</a>` : '';
+                    panesHtml += `<tr ${styleStr}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}${replayBtn}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
                     });
                     panesHtml += `</table></div></div>`;
                     boardIndex++;
@@ -873,6 +896,15 @@
             }
 
             let myServerPlayer = serverState.players[myId];
+            let myPlayer = renderState.players[myId];
+            
+            if (!myPlayer) {
+                if (!spectateTargetId || !renderState.players[spectateTargetId]) {
+                    spectateTargetId = Object.keys(renderState.players)[0];
+                }
+                myPlayer = renderState.players[spectateTargetId];
+                myServerPlayer = serverState.players[spectateTargetId];
+            }
 
             if (freecam) {
                 const camSpeed = 15;
@@ -881,12 +913,11 @@
                 if (camKeys.left) camera.x -= camSpeed;
                 if (camKeys.right) camera.x += camSpeed;
             } else {
-                let myPlayer = renderState.players[myId];
                 if (myPlayer && myServerPlayer) {
                     let raceUI = '';
                     if (myServerPlayer.race && myServerPlayer.race.state > 0) {
                         let r = myServerPlayer.race;
-                        let diff = (r.state === 2 && r.finishTime) ? r.finishTime - r.startTime : Date.now() - r.startTime;
+                        let diff = (r.state === 2 && r.finishTime) ? r.finishTime - r.startTime : serverState.serverTimeMs - r.startTime;
                         let m = Math.floor(diff / 60000).toString().padStart(2, '0');
                         let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
                         let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');

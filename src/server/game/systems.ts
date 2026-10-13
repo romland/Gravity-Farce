@@ -4,6 +4,8 @@ import { Server } from 'socket.io';
 import { sysTanks } from './tank-ai';
 import { sysFlyingEnemies } from './flying-ai';
 import { sysBotAI } from './bot-dogfighting';
+import type { Room } from '../Room';
+import { SERVER_CONFIG } from '../core/config';
 
 // Maybe in the future an option would be extracting weapons into a data-driven pattern and make a `game/weapons.ts` but ah...
 export function sysWeapons(ecs: Registry) {
@@ -120,7 +122,7 @@ export function sysWeapons(ecs: Registry) {
     }
 }
 
-export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
+export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
     const VIEW_W = 1600;
     const VIEW_H = 900;
     const CULL_MARGIN = 400; 
@@ -128,11 +130,18 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
     const totalMapCargo = Array.from(ecs.cargos.values()).filter(c => c.active).length;
     const totalCargoRemaining = totalMapCargo + Array.from(ecs.cargoBays.values()).reduce((sum, inv) => sum + inv.stack.length, 0);
     
-    for (const [e, p] of ecs.players.entries()) {
-        if (ecs.bots.has(e)) continue; // Do not build or emit network states for AI bots!
+    const safeClientIds = (room && typeof room === 'object' && room.activeClientIds) ? room.activeClientIds : [];
+    for (const clientId of safeClientIds) {
+        let e = ecs.getPlayerEntity(clientId);
+        let t = e !== undefined ? ecs.transforms.get(e) : null;
 
-        const t = ecs.transforms.get(e)!;
+        if (!t) {
+            const firstPlayerEnt = Array.from(ecs.players.keys())[0];
+            t = firstPlayerEnt !== undefined ? ecs.transforms.get(firstPlayerEnt)! : { x: 0, y: 0, angle: 0 };
+        }
+
         const state = { 
+            serverTimeMs: Math.round(room.globalWaveTimer * (1000 / SERVER_CONFIG.tickRate)),
             players: {} as any, 
             turrets: [] as any, 
             bullets: [] as any,
@@ -204,6 +213,6 @@ export function sysNetworkSync(ecs: Registry, levelIndex: number, io: Server) {
             }
         }
 
-        io.to(p.id).emit('state', state);
+        io.to(clientId).emit('state', state);
     }
 }

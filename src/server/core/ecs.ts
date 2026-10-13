@@ -48,6 +48,7 @@ export interface Player {
     isLanded: boolean;
     score: number;
     joinedAt: number;
+    joinedAtTick: number;
     spawnX: number;
     spawnY: number;
     advancing?: boolean;

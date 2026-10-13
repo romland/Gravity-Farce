@@ -114,9 +114,9 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
 
     if (p.lives <= 0) {
         // Record arcade score before reset
-        if (room && p.score > 0 && !ecs.bots.has(e)) {
+        if (room && p.score > 0 && !ecs.bots.has(e) && !room.isReplayMode) {
             const mode = room.ecs.players.size > 1 ? 'MP' : 'SP';
-            const rScore = recordDB.submitRecord('arcade_score', 0, mode, getActivePhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score });
+            const rScore = recordDB.submitRecord('arcade_score', 0, mode, getActivePhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score, metadata: { replayId: room.tracker.uuid } });
             if (rScore.rank !== -1) room.tracker.logHighscore(p.id, 'arcade_score', p.score, rScore.isNewPb);
         }
         

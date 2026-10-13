@@ -33,15 +33,19 @@ export class Room {
     public prng: () => number;
     public category: LevelCategory;
     public tracker: GameTracker;
+    public isReplayMode: boolean = false;
+    private lastInputMasks = new Map<string, number>();
+    public replayFrames: any[] = [];
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void, public isLethalRacing: boolean = false, public raceBumpModifier: number = 0.4) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
         this.category = getLevelCategory(levelIndex);
-        this.seed = Date.now(); // To be loaded from replay header later
+        this.seed = Date.now();
         this.prng = createPRNG(this.seed);
         this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
+        this.tracker['entry'].replayData.seed = this.seed;
         this.spawnEntities();
         this.printLevelStats();
     }
@@ -50,6 +54,41 @@ export class Room {
         if (this.activeClientIds.size === 0) return;
 
         if (!isPaused) {
+            if (!this.isReplayMode) {
+                const frameInputs: Record<string, number> = {};
+                for (const [e, p] of this.ecs.players.entries()) {
+                    let mask = 0;
+                    if (p.inputs.up) mask |= 1;
+                    if (p.inputs.left) mask |= 2;
+                    if (p.inputs.right) mask |= 4;
+                    if (p.inputs.shoot) mask |= 8;
+                    if (this.lastInputMasks.get(p.id) !== mask) {
+                        frameInputs[p.id] = mask;
+                        this.lastInputMasks.set(p.id, mask);
+                    }
+                }
+                if (Object.keys(frameInputs).length > 0) {
+                    this.tracker.logReplayFrame({ t: this.globalWaveTimer, i: frameInputs });
+                }
+            } else {
+                const frame = this.replayFrames.find(f => f.t === this.globalWaveTimer);
+                if (frame && frame.i) {
+                    for (const [pid, mask] of Object.entries(frame.i)) {
+                        const e = this.ecs.getPlayerEntity(pid);
+                        if (e !== undefined) {
+                            const p = this.ecs.players.get(e)!;
+                            p.inputs.up = ((mask as number) & 1) !== 0;
+                            p.inputs.left = ((mask as number) & 2) !== 0;
+                            p.inputs.right = ((mask as number) & 4) !== 0;
+                            p.inputs.shoot = ((mask as number) & 8) !== 0;
+                            if (p.inputs.shoot) {
+                                const w = this.ecs.weaponMounts.get(e);
+                                if (w) w.shootLatch = true;
+                            }
+                        }
+                    }
+                }
+            }
             this.globalWaveTimer++;
             for (const [e, p] of this.ecs.players.entries()) {
                 if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
@@ -71,7 +110,7 @@ export class Room {
             sysBullets(this.ecs, this);
         }
 
-        sysNetworkSync(this.ecs, this.levelIndex, this.io);
+            sysNetworkSync(this.ecs, this, this.io);
         
         this.ecs.events = [];
     }
@@ -111,7 +150,7 @@ export class Room {
         if (this.activeClientIds.size > 1) {
             this.tracker['entry'].mode = 'MP';
         }
-        this.trySpawnPlayer(id, type, stats);
+        this.trySpawnPlayer(id, type, { ...stats, joinedAtTick: this.globalWaveTimer });
         this.tracker.initPlayer(id, stats?.uuid || id, stats?.alias || 'UNK');
     }
 
@@ -228,6 +267,11 @@ export class Room {
     resetLevel() {
         this.tracker.finishAndSave();
         this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
+        this.seed = Date.now();
+        this.prng = createPRNG(this.seed);
+        this.tracker['entry'].replayData.seed = this.seed;
+        this.globalWaveTimer = 0;
+        this.lastInputMasks.clear();
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }

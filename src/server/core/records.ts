@@ -296,23 +296,23 @@ export function buildLeaderboardContext(
         
         results.push({
             rankLabel: `#${i+1}`, alias: displayAlias, displayValue: formatFn(rec),
-            isMe, isNewPb: isThisNewPb, isCurrentRun
+            isMe, isNewPb: isThisNewPb, isCurrentRun, replayId: rec.metadata?.replayId
         });
     }
     
     if (pIdx >= topN) {
         if (pIdx > topN) {
-            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false, isCurrentRun: false });
+            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false, isCurrentRun: false, replayId: undefined });
         }
         if (pIdx - 1 >= topN) {
             const rec = recordsCopy[pIdx-1];
-            results.push({ rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false });
+            results.push({ rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: rec.metadata?.replayId });
         }
         const recMe = recordsCopy[pIdx];
-        results.push({ rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true });
+        results.push({ rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true, replayId: recMe.metadata?.replayId });
         if (pIdx + 1 < recordsCopy.length) {
             const recNext = recordsCopy[pIdx+1];
-            results.push({ rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false });
+            results.push({ rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: recNext.metadata?.replayId });
         }
     }
 
@@ -322,7 +322,7 @@ export function buildLeaderboardContext(
             rankLabel: `#${idx + 1}`,
             alias: '---',
             displayValue: '--------',
-            isMe: false, isNewPb: false, isCurrentRun: false
+            isMe: false, isNewPb: false, isCurrentRun: false, replayId: undefined
         });
     }
 

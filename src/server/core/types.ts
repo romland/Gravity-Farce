@@ -29,6 +29,7 @@ export interface PlayerStats {
     uuid?: string;
     alias?: string;
     joinedAt?: number;
+    joinedAtTick?: number;
     shipType?: 'classic' | 'modern';
     ip?: string;
     lives?: number;

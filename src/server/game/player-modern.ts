@@ -19,6 +19,7 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         uuid: stats?.uuid ?? id,
         alias: stats?.alias ?? 'UNK',
         joinedAt: stats?.joinedAt ?? Date.now(),
+        joinedAtTick: stats?.joinedAtTick ?? 0,
         isDead: false,
         inputs: { up: false, left: false, right: false, shoot: false },
         respawnRequest: false,
