@@ -272,7 +272,7 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
 	return path;
 }
 
-export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState, p: import('../core/types').Player, currentTick: number) {
+export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState, p: import('../core/types').Player, currentTick: number, isCrash: boolean = true) {
 	const t = ecs.transforms.get(e);
 	const v = ecs.velocities.get(e);
 	if (!t || !v) return;
@@ -301,7 +301,7 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 	const firstUnsafe = rec.find((r: any) => !r.safe);
 	const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
 
-	console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
+    console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING ${isCrash ? 'CRASH ' : ''}TELEMETRY] ${p.alias} ${isCrash ? 'crashed' : 'dumped state'} at tile (${bx}, ${by}) ===`);
 	console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
 	console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
 	console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
@@ -474,11 +474,29 @@ export function generateRoamPath(map: number[][], sx: number, sy: number): { x: 
 export function resolveTargetEntity(ecs: Registry, targetId: string | undefined): Entity | undefined {
 	if (!targetId) return undefined;
 	const playerEnt = ecs.getPlayerEntity(targetId);
-	if (playerEnt !== undefined) return playerEnt;
+    if (playerEnt !== undefined) {
+        if (ecs.players.get(playerEnt)!.isDead) return undefined;
+        return playerEnt;
+    }
 
-    if (targetId.startsWith('turret_')) return parseInt(targetId.replace('turret_', ''), 10);
-    if (targetId.startsWith('tank_')) return parseInt(targetId.replace('tank_', ''), 10);
-    if (targetId.startsWith('flying_')) return parseInt(targetId.replace('flying_', ''), 10);
+    if (targetId.startsWith('turret_')) {
+        const e = parseInt(targetId.replace('turret_', ''), 10);
+        const t = ecs.turrets.get(e);
+        if (t && t.active && t.hp > 0) return e;
+        return undefined;
+    }
+    if (targetId.startsWith('tank_')) {
+        const e = parseInt(targetId.replace('tank_', ''), 10);
+        const t = ecs.tanks.get(e);
+        if (t && t.active && t.hp > 0) return e;
+        return undefined;
+    }
+    if (targetId.startsWith('flying_')) {
+        const e = parseInt(targetId.replace('flying_', ''), 10);
+        const f = ecs.flyingEnemies.get(e);
+        if (f && f.active && (f.hp > 0 || f.hp === -1)) return e;
+        return undefined;
+    }
 
 	return undefined;
 }
@@ -573,7 +591,7 @@ export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: numb
 	console.log(ascii);
 }
 
-export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any, p: any, tick: number) {
+export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any, p: any, tick: number, isCrash: boolean = true) {
     const t = ecs.transforms.get(e);
     const v = ecs.velocities.get(e);
     if (!t || !v) return;
@@ -581,7 +599,7 @@ export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any,
     const tx = Math.floor(t.x / 32);
     const ty = Math.floor(t.y / 32);
     
-    console.log(`\n=== [${new Date().toISOString()}] [BOT-COMBAT CRASH TELEMETRY] ${p.alias} crashed at tile (${tx}, ${ty}) ===`);
+    console.log(`\n=== [${new Date().toISOString()}] [BOT-COMBAT ${isCrash ? 'CRASH ' : ''}TELEMETRY] ${p.alias} ${isCrash ? 'crashed' : 'dumped state'} at tile (${tx}, ${ty}) ===`);
     
     if (bot.targetId) {
         console.log(`- Target ID        : ${bot.targetId}`);

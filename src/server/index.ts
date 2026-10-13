@@ -13,6 +13,8 @@ import { SERVER_CONFIG } from './core/config';
 import { buildRaceLeaderboards } from './game/racing';
 import { spawnDogfightBot } from './game/bot-dogfighting';
 import { spawnRacingBot } from './game/bot-racing';
+import { logRacingCrash } from './game/bot-utils';
+import { logDogfightCrash } from './game/bot-utils';
 
 const app = express();
 app.use(express.json()); // Required for JSON POST parsing
@@ -253,6 +255,23 @@ io.on('connection', (socket) => {
                             spawnRacingBot(room.ecs, sx, sy, botAlias, room.level);
                         } else {
                             spawnDogfightBot(room.ecs, sx, sy, botAlias, room.level);
+                        }
+                    }
+                }
+            }
+        } else if (action === 'dump_bots') {
+            const roomIndex = playerRooms.get(socket.id);
+            if (roomIndex !== undefined) {
+                const room = rooms.get(roomIndex);
+                if (room) {
+                    for (const [e, bot] of room.ecs.bots.entries()) {
+                        const p = room.ecs.players.get(e);
+                        if (p && !p.isDead) {
+                            if (room.category === 'race') {
+                                logRacingCrash(room.ecs, room, e, bot, p, room.globalWaveTimer, false);
+                            } else {
+                                logDogfightCrash(room.ecs, room, e, bot, p, room.globalWaveTimer, false);
+                            }
                         }
                     }
                 }

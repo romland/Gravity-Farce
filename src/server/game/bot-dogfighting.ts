@@ -187,6 +187,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     }
 
     const targetEntity = resolveTargetEntity(ecs, bot.targetId);
+    if (bot.targetId && targetEntity === undefined) bot.targetId = undefined;
     const targetT = targetEntity !== undefined ? getEntityPos(ecs, targetEntity) : undefined;
     const targetV = targetEntity !== undefined ? getEntityVel(ecs, targetEntity) : undefined;
 
@@ -245,7 +246,10 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
                 }
             }
 
-            if (stitchedPath && stitchedPath.length > 0) {
+            if (!targetT) {
+                bot.state = 'roam';
+                bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
+            } else if (stitchedPath && stitchedPath.length > 0) {
                 bot.state = 'attack';
                 bot.path = [...stitchedPath];
             } else {
@@ -318,7 +322,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
                 }
                 aimX = wpX;
                 aimY = wpY;
-            } else {
+            } else if (targetT) {
                 aimX = targetT.x;
                 aimY = targetT.y;
             }
@@ -335,13 +339,13 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
     const turnTime = 36;
     const brakingAccel = 0.05;
-    const stoppingDist = ((currentSpeed * currentSpeed) / (2 * brakingAccel)) + (currentSpeed * turnTime);
+    const stoppingDist = ((currentSpeed * currentSpeed) / (2 * brakingAccel)) + (currentSpeed * turnTime) + 40;
 
     let isEmergency = false;
     let repelX = 0;
     let repelY = 0;
 
-    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim);
+    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim, bot);
     if (tactics.friendlyInLineOfFire) {
         p.inputs.shoot = false;
     }
@@ -365,18 +369,18 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     }
 
     let wallSeverity = isBlockedPocket ? 1.0 : 0.0;
-    const glideTicks = Math.min(45, Math.ceil(stoppingDist / (currentSpeed || 1)));
+    const glideTicks = Math.min(120, Math.ceil(stoppingDist / (currentSpeed || 1)));
 
-    if (currentSpeed > 2.0 && !isBlockedPocket) {
+    if (currentSpeed > 1.0 && !isBlockedPocket) {
         let pX = t.x; let pY = t.y;
         const len = currentSpeed || 1;
         const nx = -v.vy / len;
         const ny = v.vx / len;
-        const margin = 14;
+        const margin = 16;
 
         for (let k = 5; k <= glideTicks; k += 5) {
             const cX = t.x + v.vx * k;
-            const cY = t.y + v.vy * k + 0.5 * 0.015 * k * k; // Modern ship gravity
+            const cY = t.y + v.vy * k + 0.5 * 0.010 * k * k; // Classic ship gravity
             if (raycastEnvironment({ x: pX, y: pY }, { x: cX, y: cY }, room.level) ||
                 raycastEnvironment({ x: pX + nx * margin, y: pY + ny * margin }, { x: cX + nx * margin, y: cY + ny * margin }, room.level) ||
                 raycastEnvironment({ x: pX - nx * margin, y: pY - ny * margin }, { x: cX - nx * margin, y: cY - ny * margin }, room.level)) {
@@ -403,7 +407,27 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         trajectorySeverity = Math.min(1.0, Math.max(0, driftDiff - 0.1) * 2.0);
     }
 
-    const clampedSeverity = Math.min(1.0, Math.max(trajectorySeverity, wallSeverity));
+    let pathSeverity = 0;
+    if (bot.path && bot.path.length >= 2 && !hasLOS) {
+        let prevAngle = Math.atan2((bot.path[0].y * 32 + 16) - t.y, (bot.path[0].x * 32 + 16) - t.x);
+        let accumDist = Math.hypot((bot.path[0].x * 32 + 16) - t.x, (bot.path[0].y * 32 + 16) - t.y);
+        const LOOKAHEAD_CURVE = 300;
+        
+        for (let i = 0; i < Math.min(bot.path.length - 1, 5); i++) {
+            const segAngle = Math.atan2(bot.path[i+1].y - bot.path[i].y, bot.path[i+1].x - bot.path[i].x);
+            const turnDiff = Math.abs(getAngleDiff(segAngle, prevAngle));
+            if (turnDiff > 0.3) {
+                const discount = Math.max(0, 1.0 - (accumDist / LOOKAHEAD_CURVE));
+                const severity = Math.min(1.0, (turnDiff / Math.PI) * 1.6) * discount;
+                if (severity > pathSeverity) pathSeverity = severity;
+            }
+            accumDist += Math.hypot(bot.path[i+1].x - bot.path[i].x, bot.path[i+1].y - bot.path[i].y) * 32;
+            if (accumDist > LOOKAHEAD_CURVE) break;
+            prevAngle = segAngle;
+        }
+    }
+
+    const clampedSeverity = Math.min(1.0, Math.max(trajectorySeverity, wallSeverity, pathSeverity));
 
     const maxCruise = 6.0 * tactics.throttleMultiplier;
     let targetSpeed = maxCruise * (1.0 - clampedSeverity);
@@ -417,7 +441,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const desVy = (dirY / distToAim) * targetSpeed;
 
     const forceX = desVx - v.vx + repelX;
-    const forceY = desVy - v.vy - 0.015 + repelY; // Modern gravity is 0.015
+    const forceY = desVy - v.vy - 0.010 + repelY; // Classic gravity is 0.010
 
     let forceAngle = Math.atan2(forceY, forceX);
 
@@ -435,7 +459,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const angleDiff = applyAngularControl(p, t, v, forceAngle);
     const reqForce = Math.hypot(forceX, forceY);
 
-    const thrustCone = (wallSeverity >= 1.0 || isEmergency) ? 2.0 : (reqForce > 4.0 ? 1.4 : (reqForce > 1.5 ? 0.9 : 0.4));
+    const thrustCone = (wallSeverity >= 1.0 || isEmergency) ? 0.6 : (reqForce > 4.0 ? 1.0 : (reqForce > 1.5 ? 0.7 : 0.4));
 
     if (angleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0)) {
         p.inputs.up = true;
@@ -479,7 +503,7 @@ interface TacticalSensors {
     throttleMultiplier: number;
 }
 
-function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../core/ecs').Transform, myV: import('../core/ecs').Velocity, noseAngle: number, targetDist: number): TacticalSensors {
+function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../core/ecs').Transform, myV: import('../core/ecs').Velocity, noseAngle: number, targetDist: number, bot: import('../core/types').BotState): TacticalSensors {
     const tactics: TacticalSensors = { friendlyInLineOfFire: false, repelX: 0, repelY: 0, isEmergency: false, throttleMultiplier: 1.0 };
 
     // 1. SQUADMATES (Friendly Fire & Clumping Avoidance)
@@ -526,31 +550,29 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
     }
 
     // 3. MAP ENEMIES (Patrols / Flying Hazards) -> Anticipate and Wait
-    const checkMapEnemy = (ee: Entity, width: number, height: number) => {
+    const checkMapEnemy = (ee: Entity, width: number, height: number, type: string) => {
+        if (bot.targetId === `${type}_${ee}`) return; // Don't yield to our target!
+
         const et = ecs.transforms.get(ee);
-        const ev = ecs.velocities.get(ee) || { vx: 0, vy: 0, angularVelocity: 0 };
         if (!et) return;
         
         const radius = Math.max(width, height) / 2;
-        const distToEnemy = Math.max(0, Math.hypot(et.x - myT.x, et.y - myT.y) - radius);
+        const distToEnemy = Math.hypot(et.x - myT.x, et.y - myT.y);
+        const avoidDist = radius + 70;
         
-        if (distToEnemy < 350) {
-            const myFutureX = myT.x + myV.vx * 40;
-            const myFutureY = myT.y + myV.vy * 40;
-            const enFutureX = et.x + ev.vx * 40;
-            const enFutureY = et.y + ev.vy * 40;
-            const futureDist = Math.max(0, Math.hypot(myFutureX - enFutureX, myFutureY - enFutureY) - radius);
-            if (futureDist < 60 && distToEnemy > 60) {
-                tactics.throttleMultiplier = 0.0;
-            }
+        if (distToEnemy < avoidDist && distToEnemy > 1) {
+            const push = Math.pow((avoidDist - distToEnemy) / avoidDist, 2) * 6.0;
+            tactics.repelX -= ((et.x - myT.x) / distToEnemy) * push;
+            tactics.repelY -= ((et.y - myT.y) / distToEnemy) * push;
+            tactics.isEmergency = true;
         }
     };
 
     for (const [ee, tank] of ecs.tanks.entries()) {
-        if (tank.active) checkMapEnemy(ee, tank.width, tank.height);
+        if (tank.active) checkMapEnemy(ee, tank.width, tank.height, 'tank');
     }
     for (const [ee, flying] of ecs.flyingEnemies.entries()) {
-        if (flying.active) checkMapEnemy(ee, flying.width, flying.height);
+        if (flying.active) checkMapEnemy(ee, flying.width, flying.height, 'flying');
     }
 
     // 4. INCOMING BULLETS (Evasion)
