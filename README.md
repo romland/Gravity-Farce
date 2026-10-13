@@ -25,6 +25,9 @@ This version of GF keeps track of all kinds of high-scores and records for both 
 
 _But obviously, multi-player is the way to go! `:D`_
 
+### Bots
+I also added _optional_ bots to every single-player discipline. I'm quite pleased with them as they're dumb enough, and not too dumb.
+
 ### Gameplay Tips
 If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
 
