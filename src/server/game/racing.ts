@@ -48,19 +48,23 @@ export function sysRacing(ecs: Registry, room: Room) {
                 // Multiplayer = More than 1 player in the room
                 const mode = ecs.players.size > 1 ? 'MP' : 'SP';
                 const physicsHash = getActivePhysicsHash();
+                const isBot = ecs.bots.has(pe);
 
                 // Save Fastest Individual Lap
-                const rLap = recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
-                    playerId: p.uuid,
-                    alias: p.alias,
-                    value: lapTime,
-                    metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps }
-                });
-                if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
+                let rLap = { rank: -1, isNewPb: false, timestamp: 0 };
+                if (!isBot) {
+                    rLap = recordDB.submitRecord('fastest_lap', room.levelIndex, mode, physicsHash, 'asc', {
+                        playerId: p.uuid,
+                        alias: p.alias,
+                        value: lapTime,
+                        metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps }
+                    });
+                    if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
+                }
 
                 // Flying Lap (Lap 2+)
                 let rFlying = null;
-                if (p.race.currentLap > 1) {
+                if (p.race.currentLap > 1 && !isBot) {
                     rFlying = recordDB.submitRecord('flying_lap', room.levelIndex, mode, physicsHash, 'asc', {
                         playerId: p.uuid, alias: p.alias, value: lapTime, metadata: { ship: p.type, lapNum: p.race.currentLap }
                     });
@@ -77,13 +81,16 @@ export function sysRacing(ecs: Registry, room: Room) {
                         
                         room.tracker.logEvent(p.id, { type: 'race_completed', totalTime: now - p.race.startTime, lapTimes: [...p.race.lapTimes] });
                     
-                    const rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
-                        playerId: p.uuid,
-                        alias: p.alias,
-                        value: now - p.race.startTime,
-                        metadata: { ship: p.type, laps: p.race.totalLaps }
-                    });
-                    if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
+                    let rRace = { rank: -1, isNewPb: false, timestamp: 0 };
+                    if (!isBot) {
+                        rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
+                            playerId: p.uuid,
+                            alias: p.alias,
+                            value: now - p.race.startTime,
+                            metadata: { ship: p.type, laps: p.race.totalLaps }
+                        });
+                        if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
+                    }
                     room.tracker.isCompleted = true;
                     
                     // If this is SP, or if all MP players have finished, close the log instantly

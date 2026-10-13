@@ -53,6 +53,7 @@ export function sysMission(ecs: Registry, room: Room) {
 export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: number) {
     const e = room.ecs.getPlayerEntity(playerId);
     if (e === undefined) return null;
+    if (room.ecs.bots.has(e)) return null;
     const p = room.ecs.players.get(e)!;
     const f = room.ecs.fuelTanks.get(e);
     const w = room.ecs.weaponMounts.get(e);

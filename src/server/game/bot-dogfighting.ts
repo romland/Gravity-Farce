@@ -2,7 +2,7 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { raycastEnvironment } from '../core/math';
-import { spawnModernPlayer } from './player-modern';
+import { spawnClassicPlayer } from './player-classic';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, findSafePadPosition, logDogfightCrash } from './bot-utils';
@@ -22,7 +22,7 @@ let globalTickCounter = 0;
 export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
     const safePos = findSafePadPosition(level, x, y, alias);
     const botId = BOT_UUID_PREFIX + alias;
-    const e = spawnModernPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'modern' });
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: 1 });
 
     // Ensure initial physics state is upright and resting cleanly on pad
     const t = ecs.transforms.get(e);
@@ -77,13 +77,17 @@ export function sysBotAI(ecs: Registry, room: Room) {
 
     const hostiles: { id: string, e: Entity, isHuman: boolean }[] = humans.map(([e, p]) => ({ id: p.id, e, isHuman: true }));
 
-    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
-    if (mapEnemiesMap) {
-        for (const [ee, en] of mapEnemiesMap.entries()) {
-            if (en.isDead || en.health <= 0) continue;
-            const id = en.id || en.uuid || `npc_${ee}`;
-            hostiles.push({ id, e: ee as Entity, isHuman: false });
-        }
+    for (const [ee, turret] of ecs.turrets.entries()) {
+        if (!turret.active || turret.hp <= 0) continue;
+        hostiles.push({ id: `turret_${ee}`, e: ee, isHuman: false });
+    }
+    for (const [ee, tank] of ecs.tanks.entries()) {
+        if (!tank.active || tank.hp <= 0) continue;
+        hostiles.push({ id: `tank_${ee}`, e: ee, isHuman: false });
+    }
+    for (const [ee, flying] of ecs.flyingEnemies.entries()) {
+        if (!flying.active || flying.hp <= 0) continue;
+        hostiles.push({ id: `flying_${ee}`, e: ee, isHuman: false });
     }
 
     assignSquadRoles(activeBots, hostiles, ecs);
@@ -522,33 +526,31 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
     }
 
     // 3. MAP ENEMIES (Patrols / Flying Hazards) -> Anticipate and Wait
-    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).hazards || (ecs as any).mapEntities;
-    if (mapEnemiesMap) {
-        for (const [ee, enemyData] of mapEnemiesMap.entries()) {
-            const et = ecs.transforms.get(ee);
-            const ev = ecs.velocities.get(ee);
-            if (!et || !ev) continue;
-
-            const distToEnemy = Math.hypot(et.x - myT.x, et.y - myT.y);
-
-            // Radar range for anticipating patrol routes
-            if (distToEnemy < 350) {
-                // Predict where both entities will be 40 frames (~0.6s) from now
-                const myFutureX = myT.x + myV.vx * 40;
-                const myFutureY = myT.y + myV.vy * 40;
-
-                const enFutureX = et.x + ev.vx * 40;
-                const enFutureY = et.y + ev.vy * 40;
-
-                const futureDist = Math.hypot(myFutureX - enFutureX, myFutureY - enFutureY);
-
-                // If trajectories cross (future distance is very tight), yield!
-                if (futureDist < 60 && distToEnemy > 60) {
-                    // Cut cruise speed to 0. The bot will automatically fire reverse thrusters to brake and hover, letting the enemy pass.
-                    tactics.throttleMultiplier = 0.0;
-                }
+    const checkMapEnemy = (ee: Entity, width: number, height: number) => {
+        const et = ecs.transforms.get(ee);
+        const ev = ecs.velocities.get(ee) || { vx: 0, vy: 0, angularVelocity: 0 };
+        if (!et) return;
+        
+        const radius = Math.max(width, height) / 2;
+        const distToEnemy = Math.max(0, Math.hypot(et.x - myT.x, et.y - myT.y) - radius);
+        
+        if (distToEnemy < 350) {
+            const myFutureX = myT.x + myV.vx * 40;
+            const myFutureY = myT.y + myV.vy * 40;
+            const enFutureX = et.x + ev.vx * 40;
+            const enFutureY = et.y + ev.vy * 40;
+            const futureDist = Math.max(0, Math.hypot(myFutureX - enFutureX, myFutureY - enFutureY) - radius);
+            if (futureDist < 60 && distToEnemy > 60) {
+                tactics.throttleMultiplier = 0.0;
             }
         }
+    };
+
+    for (const [ee, tank] of ecs.tanks.entries()) {
+        if (tank.active) checkMapEnemy(ee, tank.width, tank.height);
+    }
+    for (const [ee, flying] of ecs.flyingEnemies.entries()) {
+        if (flying.active) checkMapEnemy(ee, flying.width, flying.height);
     }
 
     // 4. INCOMING BULLETS (Evasion)

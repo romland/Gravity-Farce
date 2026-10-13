@@ -476,21 +476,19 @@ export function resolveTargetEntity(ecs: Registry, targetId: string | undefined)
 	const playerEnt = ecs.getPlayerEntity(targetId);
 	if (playerEnt !== undefined) return playerEnt;
 
-	const enemyMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
-	if (enemyMap) {
-		for (const [ee, en] of enemyMap.entries()) {
-			if (en.id === targetId || en.uuid === targetId || `npc_${ee}` === targetId) return ee;
-		}
-	}
+    if (targetId.startsWith('turret_')) return parseInt(targetId.replace('turret_', ''), 10);
+    if (targetId.startsWith('tank_')) return parseInt(targetId.replace('tank_', ''), 10);
+    if (targetId.startsWith('flying_')) return parseInt(targetId.replace('flying_', ''), 10);
+
 	return undefined;
 }
 
 export function getEntityPos(ecs: Registry, e: Entity) {
-	return ecs.transforms.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+    return ecs.transforms.get(e);
 }
 
 export function getEntityVel(ecs: Registry, e: Entity) {
-	return ecs.velocities.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+    return ecs.velocities.get(e) || { vx: 0, vy: 0, angularVelocity: 0 };
 }
 
 export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: number, targetX: number, targetY: number, path: {x: number, y: number}[], botAlias: string) {
@@ -504,14 +502,37 @@ export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: numb
 	const pathSet = new Set(path.map(p => `${p.x},${p.y}`));
 
     const enemyPositions = new Set<string>();
-    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
-    if (mapEnemiesMap) {
-        for (const [ee, en] of mapEnemiesMap.entries()) {
-            if (en.isDead || en.health <= 0) continue;
-            const et = ecs.transforms.get(ee);
-            if (et) {
-                enemyPositions.add(`${Math.floor(et.x / 32)},${Math.floor(et.y / 32)}`);
-            }
+    for (const [ee, turret] of ecs.turrets.entries()) {
+        if (!turret.active || turret.hp <= 0) continue;
+        const et = ecs.transforms.get(ee);
+        if (et) {
+            const minX = Math.floor((et.x - turret.width / 2) / 32);
+            const maxX = Math.floor((et.x + turret.width / 2) / 32);
+            const minY = Math.floor((et.y - turret.height / 2) / 32);
+            const maxY = Math.floor((et.y + turret.height / 2) / 32);
+            for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) enemyPositions.add(`${x},${y}`);
+        }
+    }
+    for (const [ee, tank] of ecs.tanks.entries()) {
+        if (!tank.active || tank.hp <= 0) continue;
+        const et = ecs.transforms.get(ee);
+        if (et) {
+            const minX = Math.floor((et.x - tank.width / 2) / 32);
+            const maxX = Math.floor((et.x + tank.width / 2) / 32);
+            const minY = Math.floor((et.y - tank.height / 2) / 32);
+            const maxY = Math.floor((et.y + tank.height / 2) / 32);
+            for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) enemyPositions.add(`${x},${y}`);
+        }
+    }
+    for (const [ee, flying] of ecs.flyingEnemies.entries()) {
+        if (!flying.active || flying.hp <= 0) continue;
+        const et = ecs.transforms.get(ee);
+        if (et) {
+            const minX = Math.floor((et.x - flying.width / 2) / 32);
+            const maxX = Math.floor((et.x + flying.width / 2) / 32);
+            const minY = Math.floor((et.y - flying.height / 2) / 32);
+            const maxY = Math.floor((et.y + flying.height / 2) / 32);
+            for (let x = minX; x <= maxX; x++) for (let y = minY; y <= maxY; y++) enemyPositions.add(`${x},${y}`);
         }
     }
 
@@ -564,6 +585,17 @@ export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any,
     
     if (bot.targetId) {
         console.log(`- Target ID        : ${bot.targetId}`);
+        const targetE = resolveTargetEntity(ecs, bot.targetId);
+        if (targetE !== undefined) {
+            let w = 32, h = 32;
+            const turret = ecs.turrets.get(targetE);
+            const tank = ecs.tanks.get(targetE);
+            const flying = ecs.flyingEnemies.get(targetE);
+            if (turret) { w = turret.width; h = turret.height; }
+            else if (tank) { w = tank.width; h = tank.height; }
+            else if (flying) { w = flying.width; h = flying.height; }
+            console.log(`- Target Size      : ${w}x${h} px`);
+        }
     }
     
     console.log(`- Impact Speed     : ${Math.hypot(v.vx, v.vy).toFixed(2)} px/tick (Vx: ${v.vx.toFixed(2)}, Vy: ${v.vy.toFixed(2)})`);
