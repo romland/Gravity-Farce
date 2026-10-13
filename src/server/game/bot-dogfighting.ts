@@ -5,7 +5,7 @@ import { raycastEnvironment } from '../core/math';
 import { spawnModernPlayer } from './player-modern';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
-import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, dumpAsciiMap, findSafePadPosition, logDogfightCrash } from './bot-utils';
+import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, findSafePadPosition, logDogfightCrash } from './bot-utils';
 
 // Bot Constants
 const PREDICTION_FRAMES = 15;

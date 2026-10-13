@@ -493,7 +493,7 @@ export function getEntityVel(ecs: Registry, e: Entity) {
 	return ecs.velocities.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
 }
 
-export function dumpAsciiMap(room: Room, botX: number, botY: number, targetX: number, targetY: number, path: { x: number, y: number }[], botAlias: string) {
+export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: number, targetX: number, targetY: number, path: {x: number, y: number}[], botAlias: string) {
 	const map = room.level.rawMap;
 	if (!map) return;
 	const bx = Math.floor(botX / 32);
@@ -503,20 +503,49 @@ export function dumpAsciiMap(room: Room, botX: number, botY: number, targetX: nu
 
 	const pathSet = new Set(path.map(p => `${p.x},${p.y}`));
 
-	const minX = Math.max(0, Math.min(bx, tx) - 4);
-	const maxX = Math.min(map[0].length - 1, Math.max(bx, tx) + 4);
-	const minY = Math.max(0, Math.min(by, ty) - 4);
-	const maxY = Math.min(map.length - 1, Math.max(by, ty) + 4);
+    const enemyPositions = new Set<string>();
+    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
+    if (mapEnemiesMap) {
+        for (const [ee, en] of mapEnemiesMap.entries()) {
+            if (en.isDead || en.health <= 0) continue;
+            const et = ecs.transforms.get(ee);
+            if (et) {
+                enemyPositions.add(`${Math.floor(et.x / 32)},${Math.floor(et.y / 32)}`);
+            }
+        }
+    }
 
-	let ascii = `\n--- MAP SLICE [${botAlias}] (B=Bot, T=Target, *=Path, #=Wall) ---\n`;
+    // const minX = Math.max(0, Math.min(bx, tx) - 8);
+    // const maxX = Math.min(map[0].length - 1, Math.max(bx, tx) + 8);
+	const minX = 0;
+	const maxX = map[0].length - 1;
+    const minY = Math.max(0, Math.min(by, ty) - 6);
+    const maxY = Math.min(map.length - 1, Math.max(by, ty) + 6);
+
+    let ascii = `\n--- MAP SLICE [${botAlias}] (B=Bot, T=Target, E=Enemy, *=Path, #=Wall) ---\n`;
 	for (let y = minY; y <= maxY; y++) {
 		let row = '';
 		for (let x = minX; x <= maxX; x++) {
 			if (x === bx && y === by) row += 'B';
-			else if (x === tx && y === ty) row += 'T';
-			else if (pathSet.has(`${x},${y}`)) row += '*';
-			else if (TILE_DICTIONARY[map[y]?.[x]]?.solid) row += '#';
-			else row += '.';
+            else if (x === tx && y === ty && (bx !== tx || by !== ty)) {
+				row += 'T';
+			} else if (enemyPositions.has(`${x},${y}`)) {
+				row += 'E';
+			} else if (pathSet.has(`${x},${y}`)) {
+				row += '*';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0x15) {
+				row += '=';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0xE2) {
+				// player 1 start
+				row += '1';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0xE3) {
+				// player 2 start
+				row += '2';
+			} else if (TILE_DICTIONARY[map[y]?.[x]]?.solid) {
+				row += '#';
+			} else {
+				row += ' ';
+			}
 		}
 		ascii += row + '\n';
 	}
@@ -576,11 +605,11 @@ export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any,
         const targetE = resolveTargetEntity(ecs, bot.targetId);
         const targetT = targetE !== undefined ? getEntityPos(ecs, targetE) : undefined;
         if (targetT) {
-            dumpAsciiMap(room, t.x, t.y, targetT.x, targetT.y, bot.path || [], p.alias);
+            dumpAsciiMap(ecs, room, t.x, t.y, targetT.x, targetT.y, bot.path || [], p.alias);
         } else {
-            dumpAsciiMap(room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
+            dumpAsciiMap(ecs, room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
         }
     } else {
-        dumpAsciiMap(room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
+        dumpAsciiMap(ecs, room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
     }
 }
