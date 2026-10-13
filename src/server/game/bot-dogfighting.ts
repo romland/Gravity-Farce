@@ -531,7 +531,6 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
             const push = Math.pow((70 - distToFriend) / 70, 2) * 4.0;
             tactics.repelX -= ((pt.x - myT.x) / distToFriend) * push;
             tactics.repelY -= ((pt.y - myT.y) / distToFriend) * push;
-            tactics.isEmergency = true;
         }
     }
 
@@ -545,7 +544,6 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
             const push = Math.pow((90 - distToHuman) / 90, 2) * 5.0; // Push back from target to maintain shooting distance
             tactics.repelX -= ((ht.x - myT.x) / distToHuman) * push;
             tactics.repelY -= ((ht.y - myT.y) / distToHuman) * push;
-            tactics.isEmergency = true;
         }
     }
 
@@ -564,7 +562,6 @@ function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../c
             const push = Math.pow((avoidDist - distToEnemy) / avoidDist, 2) * 6.0;
             tactics.repelX -= ((et.x - myT.x) / distToEnemy) * push;
             tactics.repelY -= ((et.y - myT.y) / distToEnemy) * push;
-            tactics.isEmergency = true;
         }
     };
 
