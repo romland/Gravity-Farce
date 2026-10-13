@@ -36,10 +36,10 @@ export interface PlayerStats {
 
 export interface BotState {
     active: boolean;
-    role: 'pursuit' | 'intercept' | 'flank-high';
+    role: 'pursuit' | 'intercept' | 'flank-high' | 'racer' | 'mission';
     targetId?: string;
     reactionTimer: number;
-    state: 'takeoff' | 'evade' | 'attack';
+    state: 'takeoff' | 'evade' | 'attack' | 'roam' | 'seek_cargo' | 'return_base' | 'land_cargo' | 'land_base' | 'race';
     stateTimer: number;
     path: { x: number, y: number }[];
     pathTimer: number;

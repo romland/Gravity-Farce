@@ -13,6 +13,7 @@ import { SERVER_CONFIG } from './core/config';
 import { buildRaceLeaderboards } from './game/racing';
 import { spawnDogfightBot } from './game/bot-dogfighting';
 import { spawnRacingBot } from './game/bot-racing';
+import { spawnMissionBot } from './game/bot-mission';
 import { logRacingCrash } from './game/bot-utils';
 import { logDogfightCrash } from './game/bot-utils';
 
@@ -253,6 +254,8 @@ io.on('connection', (socket) => {
                         const botAlias = `B${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
                         if (room.category === 'race') {
                             spawnRacingBot(room.ecs, sx, sy, botAlias, room.level);
+                        } else if (room.category === 'mission') {
+                            spawnMissionBot(room.ecs, sx, sy, botAlias, room.level);
                         } else {
                             spawnDogfightBot(room.ecs, sx, sy, botAlias, room.level);
                         }
