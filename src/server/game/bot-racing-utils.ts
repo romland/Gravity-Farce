@@ -190,7 +190,7 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
 	let closestNode = { x: startX, y: startY };
 	let minHeuristic = Infinity;
 
-	while (open.length > 0 && iterations < 500) {
+    while (open.length > 0 && iterations < 4000) {
 		iterations++;
 		open.sort((a, b) => a.f - b.f);
 		const current = open.shift()!;
