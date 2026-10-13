@@ -37,7 +37,7 @@ const FLYING_ENEMY_TEMPLATES: Record<number, FlyingEnemySpecs> = {
     0xEF: { hp: 25, scoreValue: 80,  canShoot: false, spawnsDebris: true,  width: 192, height: 128, bulletSpeed: 0.0, rotates: false }
 };
 
-export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number): Entity {
+export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: number, debugId: number, prng: () => number = Math.random): Entity {
     const specs = FLYING_ENEMY_TEMPLATES[type] || FLYING_ENEMY_TEMPLATES[0xE4];
 
     // Level loader passes x,y as the center of the 32x32 spawn tile.
@@ -59,7 +59,7 @@ export function spawnFlyingEnemy(ecs: Registry, x: number, y: number, type: numb
         height: specs.height,
         startX: x,
         startY: y,
-        fireTimer: 120 + Math.floor(Math.random() * 60),
+        fireTimer: 120 + Math.floor(prng() * 60),
         burstRemaining: 0,
         damageHistory: {}
     });
@@ -143,7 +143,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
 
         // 1. Firing Loop (Bit 1 / 0x02 Capability Check)
         if (enemy.canShoot && --enemy.fireTimer <= 0) {
-            const angle = Math.random() * Math.PI * 2;
+            const angle = room.prng() * Math.PI * 2;
             const bulletSpeed = specs.bulletSpeed * 2.0; // Scaled to modern TILE_SIZE
             const vx = Math.cos(angle) * bulletSpeed;
             const vy = Math.sin(angle) * bulletSpeed;
@@ -153,12 +153,12 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
 
             if (enemy.burstRemaining > 0) {
                 enemy.burstRemaining = 0;
-                enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
-            } else if (Math.random() < 0.35) {
+                enemy.fireTimer = 150 + Math.floor(room.prng() * 90);
+            } else if (room.prng() < 0.35) {
                 enemy.burstRemaining = 1;
-                enemy.fireTimer = 8 + Math.floor(Math.random() * 5);
+                enemy.fireTimer = 8 + Math.floor(room.prng() * 5);
             } else {
-                enemy.fireTimer = 150 + Math.floor(Math.random() * 90);
+                enemy.fireTimer = 150 + Math.floor(room.prng() * 90);
             }
         }
 

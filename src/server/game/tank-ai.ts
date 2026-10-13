@@ -64,7 +64,7 @@ export function sysTanks(ecs: Registry, room: Room) {
             
             if (evaluateAI) {
                 // $0003181C is seeded via add.w 0xdff006 (VHPOSR) every frame, creating pseudo-RNG.
-                const checkRight = Math.random() < 0.5;
+                const checkRight = room.prng() < 0.5;
                 
                 if (checkRight) {
                     if (isPathNode(room.level.rawMap, tileX + 1, tileY)) {
@@ -89,11 +89,11 @@ export function sysTanks(ecs: Registry, room: Room) {
         // "Sprinkler" Firing Trigger & Trajectory
         // The Amiga evaluates a chaotic global byte ($0003181E) built from player/scroll coords.
         // It fires only when this byte == 0 (chance of 1/256 per frame).
-        if (Math.random() < 0.0039) {
+        if (room.prng() < 0.0039) {
             // The firing angle is calculated by taking another chaotic byte ($0003181D),
             // shifting right by 3 (range 0-31), and adding 36.
             // In a 72-index circle, indices 36 to 67 form an arc from Left (36), to Up (54), to Up-Right (67).
-            const amigaIndex = 36 + Math.floor(Math.random() * 32);
+            const amigaIndex = 36 + Math.floor(room.prng() * 32);
             const angle = (amigaIndex / 72) * (Math.PI * 2);
             
             // Fixed-point magnitude #0x03E8 (1000) scaled to modern view (2.0)

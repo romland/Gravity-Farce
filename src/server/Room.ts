@@ -19,6 +19,7 @@ import { getLevelCategory, type LevelCategory } from './levels';
 import { TILE_DICTIONARY } from './core/tiles';
 import { GameTracker } from './core/tracker';
 import { SERVER_CONFIG } from './core/config';
+import { createPRNG } from './core/math';
 import { getActivePhysicsHash } from './core/records';
 
 export class Room {
@@ -28,6 +29,8 @@ export class Room {
     private debugEnemyCounter = 0;
     public globalWaveTimer = 0;
     public activeClientIds = new Set<string>();
+    public seed: number;
+    public prng: () => number;
     public category: LevelCategory;
     public tracker: GameTracker;
 
@@ -36,6 +39,8 @@ export class Room {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
         this.category = getLevelCategory(levelIndex);
+        this.seed = Date.now(); // To be loaded from replay header later
+        this.prng = createPRNG(this.seed);
         this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         this.spawnEntities();
         this.printLevelStats();
@@ -87,7 +92,7 @@ export class Room {
             }
             if (ent.type === 'flying_enemy') {
                 this.debugEnemyCounter++;
-                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter);
+                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter, this.prng);
             }
              if (ent.type === 'cargo') {
                  spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
@@ -162,7 +167,7 @@ export class Room {
             chosenY = freeSpots[0].y;
         } else if (candidateSpots.length > 1) {
             // If all spots are blocked on a multi-spawn map, force a spawn instead of queuing
-            const spot = candidateSpots[Math.floor(Math.random() * candidateSpots.length)];
+            const spot = candidateSpots[Math.floor(this.prng() * candidateSpots.length)];
             chosenX = spot.x;
             chosenY = spot.y;
         }
