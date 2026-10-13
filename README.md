@@ -4,10 +4,10 @@
 ### But `Gravity Force` by Stephan Wenzler was simply the best.  
 <img width="300px" src="./.github/gf2026.jpg" align="right">
 
-It was on the backlog for 30-35 years but I now finally got around to finding out **why** it was awesome.  
-So I decided to throw some hours at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
+...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
+So, some hours (more than I will admit) thrown at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
 
-It's awesome that a lot of old games getting a second life these days! That said, to manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.
+It's awesome to see that a lot of old games are getting a second life these days! To manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. It's very much a labour of love. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.
 
 
 ## Deviations from the original
