@@ -1,7 +1,7 @@
 # Gravity Farce
 
 #### **There are many gravity games, a bunch of copy-cats and some predecessors.**  
-### But `Gravity Force` by Stephan Wenzler was simply the best.  
+### But `Gravity-Force` by Stephan Wenzler was simply the best.  
 <img width="300px" src="./.github/gf2026.jpg" align="right">
 
 ...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
@@ -19,7 +19,7 @@ enjoy things!). But, eh, anti-cheat is now a big-money industry so, yeah... No g
 
 ### 2. Records, Rankings and Scores
 Second big deviation, rankings. It's fun to be best!  
-To me, the best part about Gravity Force was multi-player. I think almost everyone will agree (except Fred).
+To me, the best part about Gravity-Force was multi-player. I think almost everyone will agree (except Fred).
 The bummer was that you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
 it was nice to give someone a punch on the arm when they were being an ass (read: won). And ... luckily I am a good winner. Anyway, I digress.  
 
@@ -64,7 +64,7 @@ Luckily, if you're old enough to remember Amiga fondly, you have no hair any mor
 
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.  
-There was replay functionality at least partially implemented in the original Gravity Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
+There was replay functionality at least partially implemented in the original Gravity-Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
 
 ### Disclaimer
 I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 

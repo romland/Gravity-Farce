@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity-Farce</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Press Start 2P', monospace;
+            color: #fff;
+        }
+
+        /* Starry background effect * /
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: #000;
+            z-index: -1;
+            background-image: 
+                radial-gradient(1px 1px at 20px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 50px 160px, #ddd, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 90px 40px, #fff, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 130px 80px, #fff, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 160px 120px, #ddd, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 200px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 250px 100px, #fff, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 300px 50px, #fff, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 350px 150px, #eee, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 400px 80px, #fff, rgba(0,0,0,0));
+            background-repeat: repeat;
+            background-size: 400px 200px;
+        }
+        */
+
+        .game-container {
+            width: 95%;
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #000;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #333;
+        }
+
+        /* Glowing text effect for title */
+        .title-text {
+            /* Text gradient */
+            background: linear-gradient(to bottom, #ffffff 0%, #87ceeb 45%, #1e528e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            /* Retro outline and glow */
+            -webkit-text-stroke: 2px #5798db;
+            filter: drop-shadow(0 0 8px rgba(87, 152, 219, 0.7));
+            
+            text-align: center;
+            font-size: clamp(1.8rem, 5vw, 3rem);
+            margin-top: 30px;
+            margin-bottom: 25px;
+            letter-spacing: 2px;
+        }
+
+        /* Main UI Panel */
+        .main-panel {
+            background-color: #4a4a4a;
+            border-top: 6px solid #6b6b6b;
+            border-left: 6px solid #6b6b6b;
+            border-right: 6px solid #333;
+            border-bottom: 6px solid #333;
+            padding: 20px;
+        }
+
+        .retro-btn {
+            background-color: #555;
+            color: #ccc;
+            border-top: 4px solid #777;
+            border-left: 4px solid #777;
+            border-bottom: 4px solid #333;
+            border-right: 4px solid #333;
+            padding: 15px 20px;
+            font-size: 1rem;
+            width: 100%;
+            text-align: left;
+            margin-bottom: 15px;
+            cursor: pointer;
+            font-family: inherit;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Default button text gradient */
+        .retro-btn span {
+            background: linear-gradient(to bottom, #eeeeee 0%, #888888 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .retro-btn:active {
+            border-top: 4px solid #333;
+            border-left: 4px solid #333;
+            border-bottom: 4px solid #777;
+            border-right: 4px solid #777;
+        }
+
+        .retro-btn.active {
+            background-color: #008b8b; /* Cyan background */
+            color: #fff;
+            border-top: 4px solid #00b3b3;
+            border-left: 4px solid #00b3b3;
+            border-bottom: 4px solid #005959;
+            border-right: 4px solid #005959;
+        }
+
+        /* Active button text gradient */
+        .retro-btn.active span {
+            background: linear-gradient(to bottom, #ffffff 0%, #00ffff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Right panel styling */
+        .right-panel {
+            flex-grow: 1;
+            background-color: #555;
+            border-top: 4px solid #777;
+            border-left: 4px solid #777;
+            border-bottom: 4px solid #333;
+            border-right: 4px solid #333;
+            padding: 10px;
+            position: relative;
+        }
+
+        /* Recessed screen area */
+        .screen-area {
+            background-color: #000;
+            border-top: 4px solid #333;
+            border-left: 4px solid #333;
+            border-bottom: 4px solid #777;
+            border-right: 4px solid #777;
+            padding: 15px;
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        .hi-score-title {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #555;
+            padding: 0 10px;
+        }
+
+        /* Hi-score title gradient */
+        .hi-score-title span {
+            background: linear-gradient(to bottom, #ffffff 0%, #aaaaaa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .text-cyan { color: #00ffff; }
+        .text-pink { color: #ff00ff; }
+        .text-gray-light { color: #888; }
+        .text-gray-label { color: #777; }
+        .text-copyright { color: #00a8a8; }
+
+        .gradient-text-cyan {
+            background: linear-gradient(to bottom, #00ffff 20%, #0055ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+
+        .gradient-text-pink {
+            background: linear-gradient(to bottom, #ff55ff 20%, #8800aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="stars"></div>
+
+    <div class="game-container">
+        <!-- Title -->
+        <h1 class="title-text">GRAVITY-FORCE</h1>
+
+        <!-- Main Gray Panel -->
+        <div class="main-panel flex flex-col md:flex-row gap-6">
+            
+            <!-- Left Column: Menu Options -->
+            <div class="w-full md:w-1/2 flex flex-col">
+                <div class="mb-4 text-gray-label text-sm tracking-wider">BY STEPHAN WENZLER</div>
+                
+                <button class="retro-btn active">
+                    <span>MISSION</span>
+                </button>
+                
+                <button class="retro-btn">
+                    <span>RACE</span>
+                    <span>9</span>
+                </button>
+                
+                <button class="retro-btn">
+                    <span>2 PILOTS RACE</span>
+                    <span>0</span>
+                </button>
+                
+                <button class="retro-btn">
+                    <span>DOGFIGHT</span>
+                    <span>0</span>
+                </button>
+            </div>
+
+            <!-- Right Column: Hi-Scores -->
+            <div class="w-full md:w-1/2 flex flex-col justify-between mt-4 md:mt-0">
+                
+                <div class="right-panel md:mt-6 mt-4">
+                    <div class="hi-score-title">HI-SCORES</div>
+                    <div class="flex mt-2">
+                        
+                        <!-- Rank Numbers Outside the screen -->
+                        <div class="flex flex-col mr-3 text-right w-6 pt-[19px] text-[0.8rem] leading-[1.6] gradient-text-pink">
+                            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                            <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                        </div>
+                        
+                        <!-- High Scores Screen Area -->
+                        <div class="screen-area flex-grow">
+                            <div class="flex flex-col tracking-widest gradient-text-cyan">
+                                <span>000390</span>
+                                <span>000340</span>
+                                <span>000030</span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                                <span>000000 <span class="text-teal-900 text-xs tracking-tight">........</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <div class="text-gray-light text-xs mb-2">COURSE 9 RECORD</div>
+                    <div class="bg-black border-t-4 border-l-4 border-gray-800 border-b-4 border-r-4 border-gray-400 p-2 gradient-text-cyan text-sm">
+                        04:16:70 FRI
+                    </div>
+                </div>
+
+                <div class="mt-6 text-right text-xs gradient-text-cyan">
+                    &copy; 1989 BY KINGSOFT
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>

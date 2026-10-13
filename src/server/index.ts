@@ -29,10 +29,10 @@ const io = new Server(server);
 app.post('/api/auth', (req, res) => {
     if (playerSessionStats.size >= SERVER_CONFIG.maxPlayers) {
         return res.json({ success: false, message: `SERVER AT CAPACITY (${SERVER_CONFIG.maxPlayers}/${SERVER_CONFIG.maxPlayers})` });
-    }    
+    }
     const { alias, uuid } = req.body || {};
     res.json(authDB.validateOrClaim(alias || '', uuid || '', SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval));
-   
+
 });
 
 app.get('/api/auth/random', (req, res) => {
@@ -60,10 +60,10 @@ function getOrCreateRoom(index: number): Room {
 function handleTransitionToLevel(id: string, targetLevel: number, forceReset: boolean = false) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
-    
+
     const pLevel = playerRooms.get(id) ?? 0;
     let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0, shipType: 'classic' };
-	let pType: 'classic'|'modern' = stats.shipType || 'classic';
+    let pType: 'classic' | 'modern' = stats.shipType || 'classic';
 
     for (const room of rooms.values()) {
         const e = room.ecs.getPlayerEntity(id);
@@ -72,7 +72,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
             pType = p.type;
             stats = {
                 score: p.score,
-                    doubleShotAmmo: 0,
+                doubleShotAmmo: 0,
                 uuid: p.uuid,
                 alias: p.alias,
                 shipType: p.type,
@@ -91,14 +91,14 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     }
 
     socket.leave(`level_${pLevel}`);
-    
+
     const newRoom = getOrCreateRoom(targetLevel);
     if (forceReset && newRoom.ecs.players.size === 0) {
         newRoom.resetLevel();
     }
     socket.join(`level_${targetLevel}`);
     playerRooms.set(id, targetLevel);
-    
+
     socket.emit('initLevel', newRoom.level);
     socket.emit('levelIndex', newRoom.levelIndex);
     newRoom.addPlayer(id, pType, stats);
@@ -113,35 +113,35 @@ function handleTransition(id: string) {
             break;
         }
     }
-    
+
     if (oldRoom) {
         const e = oldRoom.ecs.getPlayerEntity(id);
         if (e !== undefined) {
             const p = oldRoom.ecs.players.get(e)!;
             const f = oldRoom.ecs.fuelTanks.get(e);
             const w = oldRoom.ecs.weaponMounts.get(e);
-                const timeTaken = Math.round((oldRoom.globalWaveTimer - p.joinedAtTick) * (1000 / SERVER_CONFIG.tickRate));
-            
+            const timeTaken = Math.round((oldRoom.globalWaveTimer - p.joinedAtTick) * (1000 / SERVER_CONFIG.tickRate));
+
             if (oldRoom.category === 'mission') {
                 const boards = evaluateMissionEnd(oldRoom, id, timeTaken);
-                    if (boards) {
-                        if (oldRoom.isReplayMode) {
-                            for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
-                        } else {
-                            oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
-                        }
-                    }
-            } else {
+                if (boards) {
                     if (oldRoom.isReplayMode) {
-                        const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), p.uuid, p.alias);
                         for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
                     } else {
-                        const summary = [
-                            { rankLabel: 'TIME', alias: 'DURATION', displayValue: timeTaken + 'ms', isMe: true, isNewPb: false },
-                            { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false }
-                        ];
-                        oldRoom.emitToPlayer(p.id, 'show_leaderboard', [{ title: 'MATCH SUMMARY', entries: summary }], false);
+                        oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
                     }
+                }
+            } else {
+                if (oldRoom.isReplayMode) {
+                    const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), p.uuid, p.alias);
+                    for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
+                } else {
+                    const summary = [
+                        { rankLabel: 'TIME', alias: 'DURATION', displayValue: timeTaken + 'ms', isMe: true, isNewPb: false },
+                        { rankLabel: 'SCORE', alias: 'POINTS', displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false }
+                    ];
+                    oldRoom.emitToPlayer(p.id, 'show_leaderboard', [{ title: 'MATCH SUMMARY', entries: summary }], false);
+                }
             }
 
             playerSessionStats.set(id, {
@@ -195,22 +195,22 @@ io.on('connection', (socket) => {
     const stats: PlayerStats = {
         score: 0,
         uuid: uuid,
-		alias: alias,
-		shipType: useClassicPhysics ? 'classic' : 'modern',
+        alias: alias,
+        shipType: useClassicPhysics ? 'classic' : 'modern',
         ip: ip,
         lives: SERVER_CONFIG.defaultLives
     };
     playerSessionStats.set(socket.id, stats);
 
     const room = getOrCreateRoom(0);
-    
+
     socket.join('level_0');
     playerRooms.set(socket.id, 0);
     socket.emit('serverConfig', SERVER_CONFIG);
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     socket.emit('levelIndex', room.levelIndex);
-	room.addPlayer(socket.id, stats.shipType || 'classic', stats);
+    room.addPlayer(socket.id, stats.shipType || 'classic', stats);
 
     socket.on('debug_action', (action: string, payload) => {
         if (!SERVER_CONFIG.debugMode) {
@@ -237,11 +237,11 @@ io.on('connection', (socket) => {
                         const w = room.ecs.weaponMounts.get(e);
 
                         if (w) {
-                            if(action.endsWith("-0xD6")) {
+                            if (action.endsWith("-0xD6")) {
                                 w.activeModeId = 0xD6; // Double Shot
-                            } else if(action.endsWith("-0xD7")) {
+                            } else if (action.endsWith("-0xD7")) {
                                 w.activeModeId = 0xD7; // Triple Shot
-                            } else if(action.endsWith("-0xD8")) {
+                            } else if (action.endsWith("-0xD8")) {
                                 w.activeModeId = 0xD8; // Rear Shot
                             }
                             w.charges = 999;
@@ -260,14 +260,14 @@ io.on('connection', (socket) => {
                 const room = rooms.get(roomIndex);
                 if (room) {
                     // Find Player 2 landing pad entity in map level
-                    const p2Spawn = room.level.entities.find(e => 
-                        (e.type === 'spawn' || e.type === 'player_spawn' || e.type === 0xE3) && 
+                    const p2Spawn = room.level.entities.find(e =>
+                        (e.type === 'spawn' || e.type === 'player_spawn' || e.type === 0xE3) &&
                         (e.props?.player === 2 || (e as any).player === 2)
                     ) || room.level.entities.find(e => e.type === 'spawn' || e.type === 0xE3 || e.type === 0xE2);
 
                     if (p2Spawn) {
                         // Spread multiple bots along Player 2's pad width (X axis), NEVER change Y
-                        const xOffset = (Math.random() * 32 - 16); 
+                        const xOffset = (Math.random() * 32 - 16);
                         const sx = p2Spawn.x + xOffset;
                         const sy = p2Spawn.y; // Exact Y position of Player 2's pad platform
 
@@ -316,7 +316,7 @@ io.on('connection', (socket) => {
             }
             const replay = JSON.parse(dataRaw);
             socket.emit('hide_leaderboard');
-            
+
             const rId = nextReplayRoomId--;
             const newRoom = new Room(replay.levelIndex, getLevelData(replay.levelIndex), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier);
             newRoom.isReplayMode = true;
@@ -324,24 +324,24 @@ io.on('connection', (socket) => {
             newRoom.seed = replay.replayData.seed;
             newRoom.prng = createPRNG(newRoom.seed);
             newRoom.replayFrames = replay.replayData.frames;
-            
+
             for (const [pid, pstat] of Object.entries(replay.playerStats)) {
-                 newRoom.addPlayer(pid, (pstat as any).shipType || 'classic', pstat as any);
+                newRoom.addPlayer(pid, (pstat as any).shipType || 'classic', pstat as any);
             }
             rooms.set(rId, newRoom);
-            
+
             const oldRoomIdx = playerRooms.get(socket.id);
             if (oldRoomIdx !== undefined) {
-                 const oldR = rooms.get(oldRoomIdx);
-                 if (oldR) oldR.removePlayer(socket.id);
-                 socket.leave(`level_${oldRoomIdx}`);
+                const oldR = rooms.get(oldRoomIdx);
+                if (oldR) oldR.removePlayer(socket.id);
+                socket.leave(`level_${oldRoomIdx}`);
             }
             socket.join(`level_${rId}`);
             playerRooms.set(socket.id, rId);
             socket.emit('initLevel', newRoom.level);
             socket.emit('levelIndex', newRoom.levelIndex);
             newRoom.activeClientIds.add(socket.id);
-        } catch(e) { console.error("Replay load failed", e); }
+        } catch (e) { console.error("Replay load failed", e); }
     };
 
     socket.on('watch_replay', startReplay);
@@ -355,7 +355,7 @@ io.on('connection', (socket) => {
             files.sort((a, b) => fs.statSync(path.join(dir, b)).mtimeMs - fs.statSync(path.join(dir, a)).mtimeMs);
             const latest = files[0].replace(/\.(json|gfr)$/, '');
             startReplay(latest);
-        } catch(e) { console.error(e); }
+        } catch (e) { console.error(e); }
     });
 
     socket.on('leave_replay', () => {
@@ -375,7 +375,7 @@ io.on('connection', (socket) => {
     socket.on('input', (rawInputs) => {
         const roomIndex = playerRooms.get(socket.id);
         if (roomIndex === undefined) return;
-        
+
         const room = rooms.get(roomIndex);
         if (!room) return;
 
@@ -422,7 +422,7 @@ io.on('connection', (socket) => {
         const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
         const mode = (room && room.activeClientIds.size > 1) ? 'MP' : 'SP';
         const physicsHash = getActivePhysicsHash();
-        
+
         let boards;
         if (room && room.category === 'race') {
             boards = buildRaceLeaderboards(pLevel, mode, physicsHash, uuid, alias);

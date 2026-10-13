@@ -110,8 +110,8 @@ export class Room {
             sysBullets(this.ecs, this);
         }
 
-            sysNetworkSync(this.ecs, this, this.io);
-        
+        sysNetworkSync(this.ecs, this, this.io);
+
         this.ecs.events = [];
     }
 
@@ -133,12 +133,12 @@ export class Room {
                 this.debugEnemyCounter++;
                 spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter, this.prng);
             }
-             if (ent.type === 'cargo') {
-                 spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
-             }
-             if (ent.type === 'powerup') {
-                 spawnPowerup(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD6);
-             }
+            if (ent.type === 'cargo') {
+                spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
+            }
+            if (ent.type === 'powerup') {
+                spawnPowerup(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD6);
+            }
         });
     }
 
@@ -146,7 +146,7 @@ export class Room {
         this.activeClientIds.add(id);
         if (this.ecs.players.size === 0) {
             this.resetLevel();
-        }        
+        }
         if (this.activeClientIds.size > 1) {
             this.tracker['entry'].mode = 'MP';
         }
@@ -223,7 +223,7 @@ export class Room {
                 }
                 this.ecs.destroy(existing);
             }
-            
+
             if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
             else spawnModernPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
 
@@ -284,12 +284,12 @@ export class Room {
         for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) {
             this.ecs.destroy(e);
         }
-         for (const [e] of Array.from(this.ecs.cargos.entries())) {
-             this.ecs.destroy(e);
-         }
-         for (const [e] of Array.from(this.ecs.powerups.entries())) {
-             this.ecs.destroy(e);
-         }
+        for (const [e] of Array.from(this.ecs.cargos.entries())) {
+            this.ecs.destroy(e);
+        }
+        for (const [e] of Array.from(this.ecs.powerups.entries())) {
+            this.ecs.destroy(e);
+        }
         for (const [e] of Array.from(this.ecs.bots.entries())) {
             this.ecs.destroy(e);
         }
@@ -301,7 +301,7 @@ export class Room {
         }
         this.spawnEntities();
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
-    }    
+    }
 
     private printLevelStats() {
         if (!this.level.rawMap) return;
