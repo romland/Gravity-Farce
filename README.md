@@ -17,8 +17,8 @@ I did not really fancy the split-screen for multi-player. I went for networked p
 supposed to be 100% authorative, which means it should be hard(er) to cheat (why-people-why, let everyone 
 enjoy things!). But, eh, anti-cheat is now a big-money industry so, yeah... No guarantees. 
 
-### 2. Records and Scores
-Second big deviation, records and scores. It's fun to be best!  
+### 2. Records, Rankings and Scores
+Second big deviation, rankings. It's fun to be best!  
 To me, the best part about Gravity Force was multi-player. I think almost everyone will agree (except Fred).
 The bummer was that you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
 it was nice to give someone a punch on the arm when they were being an ass (read: won). And ... luckily I am a good winner. Anyway, I digress.  
@@ -63,7 +63,8 @@ Track-loaders and DMA getting screwed up by breakpoints: ah. Almost comforting.
 Luckily, if you're old enough to remember Amiga fondly, you have no hair any more. Well, not me anyway. So, no hair lost this time around.
 
 ### The funkies
-I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
+I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.  
+There was replay functionality at least partially implemented in the original Gravity Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
 
 ### Disclaimer
 I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
