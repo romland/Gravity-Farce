@@ -58,7 +58,7 @@ Track-loaders and DMA getting screwed up by breakpoints: ah. Almost comforting.
 ...and after a few days I found out that the WinUAE debugger had `HH`.  
 ...and after that I learned I could dump all code with radare instead of sitting in the debugger.  
 ...but I had forgotten all about $dff006 ...  I could not make heads or tails out of waypoint tiles due to it. Quite a few hours were spent on getting enemy movement right due to this.  
-...and again, the enemy movements, they have screwed me over again and again. I ended up creating a simulator that generates a track they should move along instead of trying to counting frames and simulating VHPOSR for junctions in real-time. I consider myself defeated. But the simulator works really well!  
+...and again, the enemy movements, they have screwed me over again and again. I ended up creating a simulator that generates a track they should move along instead of trying real-time counting of frames and simulating VHPOSR for junctions. I consider myself defeated. But ah, the simulator works really well!  
 
 Luckily, if you're old enough to remember Amiga fondly, you have no hair any more. Well, not me anyway. So, no hair lost this time around.
 
