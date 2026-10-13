@@ -3,7 +3,7 @@ import type { Room } from '../Room';
 import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
-
+import { getTurretSpecByTile } from './turret-defs';
 
 export interface CheckpointGate {
 	tileId: number;

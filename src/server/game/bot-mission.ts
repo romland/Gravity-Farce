@@ -4,6 +4,7 @@ import { spawnClassicPlayer } from './player-classic';
 import { SERVER_CONFIG } from '../core/config';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, findSafePadPosition, logDogfightCrash, predictGlideCollision } from './bot-utils';
+import { evaluateTacticalSensors } from './bot-sensors';
 
 const BOT_UUID_PREFIX = 'MBOT_';
 let globalTickCounter = 0;
@@ -254,28 +255,24 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     }
     if (bot.state === 'land_final') targetSpeed = 0.5;
     
-    // Hostile clearing
-    const hostiles = Array.from(ecs.turrets.entries()).concat(Array.from(ecs.flyingEnemies.entries()) as any);
-    for(const [ee, ent] of hostiles) {
-        if (!(ent as any).active) continue;
-        const et = ecs.transforms.get(ee);
-        if (!et) continue;
-        const hd = Math.hypot(et.x - t.x, et.y - t.y);
-        if (hd < 350 && hasClearPath({x: t.x, y: t.y}, {x: et.x, y: et.y}, room.level)) {
-            const angleToH = Math.atan2(et.y - t.y, et.x - t.x);
-            if (Math.abs(getAngleDiff(t.angle, angleToH)) < 0.3) {
-                p.inputs.shoot = (globalTickCounter % 4 !== 0);
-            }
-        }
-    }
+
+    let isEmergency = false;
+    let repelX = 0;
+    let repelY = 0;
+
+    const tactics = evaluateTacticalSensors(ecs, e, t, v, bot);
+    if (tactics.isEmergency) isEmergency = true;
+    repelX += tactics.repelX;
+    repelY += tactics.repelY;
 
     const desVx = (dirX / distToAim) * targetSpeed;
     const desVy = (dirY / distToAim) * targetSpeed;
     const weightGravity = 0.010 * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
-    const forceX = desVx - v.vx;
-    const forceY = desVy - v.vy - weightGravity; // Compensate for dynamic cargo weight!
+    const forceX = desVx - v.vx + repelX;
+    const forceY = desVy - v.vy - weightGravity + repelY; // Compensate for dynamic cargo weight!
 
-    let forceAngle = Math.atan2(forceY, forceX);
+    const aimForceAngle = Math.atan2(forceY, forceX);
+    let steerAngle = aimForceAngle;
     
     let isRetrograde = false;
     // Anticipate walls along our trajectory to prevent blind crashes
@@ -283,20 +280,45 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
 		const ticksToAim = Math.floor(distToAim / currentSpeed);
 		const checkTicks = Math.min(40, Math.max(5, ticksToAim - 8));
         if (predictGlideCollision(t, v, checkTicks, room, currentWeight)) {
-			forceAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
+            steerAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
 			isRetrograde = true;
 		}
     }
 
     if (isLandingFinal) {
-        forceAngle = -Math.PI / 2; // Force upright
+        steerAngle = -Math.PI / 2; // Force upright
         const dx = targetObj.x - t.x;
-        if (dx < -4) forceAngle -= 0.12; // Gentle left tilt
-        if (dx > 4) forceAngle += 0.12;  // Gentle right tilt
+        if (dx < -4) steerAngle -= 0.12; // Gentle left tilt
+        if (dx > 4) steerAngle += 0.12;  // Gentle right tilt
+    }
+
+    // Hostile clearing & Turret aiming
+    const hostiles = Array.from(ecs.turrets.entries()).concat(Array.from(ecs.flyingEnemies.entries()) as any).concat(Array.from(ecs.tanks.entries()) as any);
+    for(const [ee, ent] of hostiles) {
+        if (!(ent as any).active || (ent as any).hp <= 0) continue;
+        const et = ecs.transforms.get(ee);
+        if (!et) continue;
+        const hd = Math.hypot(et.x - t.x, et.y - t.y);
+        if (hd < 350 && hasClearPath({x: t.x, y: t.y}, {x: et.x, y: et.y}, room.level)) {
+            const angleToH = Math.atan2(et.y - t.y, et.x - t.x);
+            
+            // If we are relatively safe and not trying to land, override steering to aim at the target
+            if (!isRetrograde && !isEmergency && !isLandingFinal && Math.hypot(repelX, repelY) < 1.0) {
+                steerAngle = angleToH;
+            }
+
+            // Shoot if our nose is generally pointed at them!
+            if (Math.abs(getAngleDiff(t.angle, angleToH)) < 0.3) {
+                p.inputs.shoot = (globalTickCounter % 4 !== 0);
+            }
+        }
     }
 
     const reqForce = Math.hypot(forceX, forceY);
-    const angleDiff = applyAngularControl(p, t, v, forceAngle);
+    const angleDiff = applyAngularControl(p, t, v, steerAngle);
+    
+    // Decouple thrust decisions from steering so we don't accidentally thrust into a turret while aiming at it
+    const thrustAngleDiff = (isLandingFinal || isRetrograde || isEmergency) ? angleDiff : Math.abs(getAngleDiff(aimForceAngle, t.angle));
     const thrustCone = isRetrograde ? 0.6 : (isLandingFinal ? 0.3 : 0.8);
 
     if (isRetrograde) {
@@ -311,7 +333,7 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
         } else {
             if (v.vy > 1.8) p.inputs.up = true; // Emergency catch
         }
-    } else if (angleDiff < thrustCone && reqForce > 0.1) {
+    } else if (thrustAngleDiff < thrustCone && (reqForce > 0.1 || isEmergency)) {
         p.inputs.up = true;
     }
 
@@ -324,9 +346,9 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
         vx: Number(v.vx.toFixed(2)), vy: Number(v.vy.toFixed(2)),
         speed: Number(currentSpeed.toFixed(2)),
         facingDeg: Number((t.angle * 180 / Math.PI).toFixed(1)),
-        desiredDeg: Number((forceAngle * 180 / Math.PI).toFixed(1)),
+        desiredDeg: Number((steerAngle * 180 / Math.PI).toFixed(1)),
         thrust: Boolean(p.inputs.up),
-        safe: true,
+        safe: !isEmergency,
         targetSpeed: Number(targetSpeed.toFixed(2)),
         pathOffset: 0,
         distToAim: Math.round(distToAim)
