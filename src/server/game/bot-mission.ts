@@ -232,8 +232,9 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
 
     const desVx = (dirX / distToAim) * targetSpeed;
     const desVy = (dirY / distToAim) * targetSpeed;
+    const weightGravity = 0.010 * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
     const forceX = desVx - v.vx;
-    const forceY = desVy - v.vy - 0.010; // Classic gravity compensation
+    const forceY = desVy - v.vy - weightGravity; // Compensate for dynamic cargo weight!
 
     let forceAngle = Math.atan2(forceY, forceX);
     
@@ -242,7 +243,7 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     if (!isLandingFinal && currentSpeed > 1.5) {
 		const ticksToAim = Math.floor(distToAim / currentSpeed);
 		const checkTicks = Math.min(40, Math.max(5, ticksToAim - 8));
-		if (predictGlideCollision(t, v, checkTicks, room)) {
+        if (predictGlideCollision(t, v, checkTicks, room, currentWeight)) {
 			forceAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
 			isRetrograde = true;
 		}

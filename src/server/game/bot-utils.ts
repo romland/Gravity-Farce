@@ -95,14 +95,15 @@ export function applyAngularControl(p: import('../core/types').Player, t: import
 	return Math.abs(diff);
 }
 
-export function predictGlideCollision(t: { x: number, y: number }, v: { vx: number, vy: number }, ticks: number, room: Room): boolean {
-	const GRAVITY = SERVER_CONFIG.useClassicPhysics ? 0.010 : 0.015;
+export function predictGlideCollision(t: { x: number, y: number }, v: { vx: number, vy: number }, ticks: number, room: Room, weight: number = 0): boolean {
+	const baseGravity = SERVER_CONFIG.useClassicPhysics ? 0.010 : 0.015;
+	const gravity = baseGravity * (1.0 + (weight * 0.40));
 	let prevX = t.x;
 	let prevY = t.y;
 	const step = 5;
 	for (let k = step; k <= ticks; k += step) {
 		const curX = t.x + v.vx * k;
-		const curY = t.y + v.vy * k + 0.5 * GRAVITY * k * k;
+		const curY = t.y + v.vy * k + 0.5 * gravity * k * k;
 		if (!hasClearPath({ x: prevX, y: prevY }, { x: curX, y: curY }, room.level)) {
 			return true;
 		}
