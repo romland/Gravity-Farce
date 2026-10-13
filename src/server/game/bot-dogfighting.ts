@@ -444,25 +444,29 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const forceX = desVx - v.vx + repelX;
     const forceY = desVy - v.vy - 0.010 + repelY; // Classic gravity is 0.010
 
-    let forceAngle = Math.atan2(forceY, forceX);
+    const aimForceAngle = Math.atan2(forceY, forceX);
+    let steerAngle = aimForceAngle;
 
     if (wallSeverity >= 1.0 && currentSpeed > 1.5) {
-        forceAngle = Math.atan2(-v.vy, -v.vx); // Pure retrograde
+        steerAngle = Math.atan2(-v.vy, -v.vx); // Pure retrograde
     } else if (currentSpeed < 0.5 && isBlockedPocket) {
-        forceAngle = -Math.PI / 2; // Ascend if stuck hovering in a pocket
+        steerAngle = -Math.PI / 2; // Ascend if stuck hovering in a pocket
     } else if (targetT && (hasLOS || hasPredictedLOS) && distToTarget < 600 && wallSeverity < 0.5) {
         // Dogfight Aim Override: Point weapons at target if safe!
-        forceAngle = angleToPredicted;
+        steerAngle = angleToPredicted;
     }
 
-    (bot as any).lastDesiredAngle = forceAngle;
+    (bot as any).lastDesiredAngle = steerAngle;
 
-    const angleDiff = applyAngularControl(p, t, v, forceAngle);
+    const angleDiff = applyAngularControl(p, t, v, steerAngle);
     const reqForce = Math.hypot(forceX, forceY);
 
     const thrustCone = (wallSeverity >= 1.0 || isEmergency) ? 0.6 : (reqForce > 4.0 ? 1.0 : (reqForce > 1.5 ? 0.7 : 0.4));
 
-    if (angleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0)) {
+    // If we are steering to shoot, we must evaluate thrust based on our intended travel vector, not our weapon aiming vector!
+    const thrustAngleDiff = (wallSeverity >= 1.0 || isEmergency) ? angleDiff : Math.abs(getAngleDiff(aimForceAngle, t.angle));
+
+    if (thrustAngleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0)) {
         p.inputs.up = true;
     }
 
@@ -483,7 +487,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         vx: Number(v.vx.toFixed(2)), vy: Number(v.vy.toFixed(2)),
         speed: Number(currentSpeed.toFixed(2)),
         facingDeg: Number((t.angle * 180 / Math.PI).toFixed(1)),
-        desiredDeg: Number((forceAngle * 180 / Math.PI).toFixed(1)),
+        desiredDeg: Number((steerAngle * 180 / Math.PI).toFixed(1)),
         thrust: Boolean(p.inputs.up),
         safe: wallSeverity < 0.5 && !isEmergency,
         targetSpeed: Number(targetSpeed.toFixed(2)),
