@@ -13,14 +13,14 @@ It's awesome to see that a lot of old games are getting a second life these days
 ## Deviations from the original
 
 ### 1. No split-screen and Server-side
-I did not really fancy the split-screen. I went for networked play instead. The server is 
-supposed to be 100% authorative, so it should be hard(er) to cheat (why-people-why, let everyone 
-enjoy things!). But, eh, anti-cheating is now a big-money industry so, yeah... No guarantees. 
+I did not really fancy the split-screen for multi-player. I went for networked play instead. The server is 
+supposed to be 100% authorative, which means it should be hard(er) to cheat (why-people-why, let everyone 
+enjoy things!). But, eh, anti-cheat is now a big-money industry so, yeah... No guarantees. 
 
 ### 2. Records and Scores
-Second big deviation, records and scores. It's fun to compete!
-The best part about Gravity Force to me was multi-player. I think almost everyone will agree (except Fred).
-Bummer was you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
+Second big deviation, records and scores. It's fun to be best!  
+To me, the best part about Gravity Force was multi-player. I think almost everyone will agree (except Fred).
+The bummer was that you needed your mate in the same room for that sweet split-screen. There were ups and downs to this,
 it was nice to give someone a punch on the arm when they were being an ass (read: won). And ... luckily I am a good winner. Anyway, I digress.  
 
 This version of GF keeps track of all kinds of high-scores and records for both single and multiplayer globally. You don't have to snail-mail your mate your fastest time on the "8 race". You just race on the same server.  
@@ -30,25 +30,22 @@ _But obviously, multi-player is the way to go! `:D`_
 ### 3. Bots, bots, bots
 I also added _optional_ bots to the single-player disciplines. I'm quite pleased with them as they're dumb enough, and not too dumb.
 
+### 4. Bump bump
+Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies`.
+
+### Not really a port
+It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
+
+## Party like it's 1989: Play It!
+https://...
+
 ### Gameplay Tips
 If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
-
-### Party like it's 1989: Play It
-https://...
 
 ### Levels and Data
 All levels (multi- and single player) and power-ups and similar structures are ported over from the
 original game. For instance, all enemies and turrets should move pretty much exactly the same as 
 in the original game. There is documentation on some of the funky stuff in the `doc` dir.
-
-### Not really a port
-It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
-
-**Some _deliberate_ and _blatant_ tweaks**  
-
-- Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies`.
-
-I had fun creating it. And yeah, _creating things_ was always the fun part, the tools used were always rather secondary.
 
 ### Amiga
 Oh how I miss thee. I have not used any emulator or used a real Amiga in decades,
@@ -64,5 +61,19 @@ Track loaders and DMA getting screwed up by breakpoints. Ah. Almost comforting.
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
 
-### Run your own server
-... todo ...
+### Disclaimer
+I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
+used were always rather secondary.
+
+## Your own server
+... todo ...   
+You can run it on your own hardware. You need a bit of CPU since physics run on the server.
+But really, I run it on a $10 / month VPS and I think it can host quite a bunch of players without issues.
+
+### Installing server
+- grab the tar, unpack, cd gravityfarce, start screen, `node index.cjs`, ctrl+a and ctrl+d, ctrl+d. check.
+
+### Managing server
+- highscore reset
+- player caps
+- ...other server settings
