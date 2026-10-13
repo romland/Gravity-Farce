@@ -3,7 +3,7 @@ import { spawnBullet } from './combat';
 import { Server } from 'socket.io';
 import { sysTanks } from './tank-ai';
 import { sysFlyingEnemies } from './flying-ai';
-import { sysBotAI } from './bot-ai';
+import { sysBotAI } from './bot-dogfighting';
 
 // Maybe in the future an option would be extracting weapons into a data-driven pattern and make a `game/weapons.ts` but ah...
 export function sysWeapons(ecs: Registry) {

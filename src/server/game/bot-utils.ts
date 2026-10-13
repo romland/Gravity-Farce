@@ -3,9 +3,7 @@ import type { Room } from '../Room';
 import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
-import { spawnClassicPlayer } from './player-classic';
 
-export const BOT_UUID_PREFIX = 'RACER_';
 
 export interface CheckpointGate {
 	tileId: number;
@@ -190,7 +188,7 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
 	let closestNode = { x: startX, y: startY };
 	let minHeuristic = Infinity;
 
-    while (open.length > 0 && iterations < 4000) {
+	while (open.length > 0 && iterations < 4000) {
 		iterations++;
 		open.sort((a, b) => a.f - b.f);
 		const current = open.shift()!;
@@ -216,12 +214,12 @@ export function calculatePathToGate(map: number[][], sx: number, sy: number, gat
 			const tileId = map[n.y][n.x];
 			if (TILE_DICTIONARY[tileId]?.solid) continue;
 
-            // PREVENT DIAGONAL CORNER CUTTING THROUGH WALLS
-            if (n.x !== current.x && n.y !== current.y) {
-                if (TILE_DICTIONARY[map[current.y]?.[n.x]]?.solid || TILE_DICTIONARY[map[n.y]?.[current.x]]?.solid) {
-                    continue;
-                }
-            }
+			// PREVENT DIAGONAL CORNER CUTTING THROUGH WALLS
+			if (n.x !== current.x && n.y !== current.y) {
+				if (TILE_DICTIONARY[map[current.y]?.[n.x]]?.solid || TILE_DICTIONARY[map[n.y]?.[current.x]]?.solid) {
+					continue;
+				}
+			}
 
 			const nKey = `${n.x},${n.y}`;
 			if (closed.has(nKey)) continue;
@@ -303,7 +301,7 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 	const firstUnsafe = rec.find((r: any) => !r.safe);
 	const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
 
-    console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
+	console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING CRASH TELEMETRY] ${p.alias} crashed at tile (${bx}, ${by}) ===`);
 	console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
 	console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
 	console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
@@ -316,15 +314,15 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 
 	if (rec.length > 0) {
 		console.log(`- BLACK-BOX FLIGHT RECORDER (Past ${rec.length} ticks, sampled every 10 ticks):`);
-        console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Spd / Tgt | Face -> Desir | DistAim | Offset | Thr | Safe`);
-        for (let i = Math.max(0, rec.length - 240); i < rec.length; i += 10) {
+		console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Spd / Tgt | Face -> Desir | DistAim | Offset | Thr | Safe`);
+		for (let i = Math.max(0, rec.length - 240); i < rec.length; i += 10) {
 			const entry = rec[i];
 			const ago = currentTick - entry.tick;
-            console.log(`  -${String(ago).padStart(3, ' ')}t   | (${String(entry.x).padStart(3)}, ${String(entry.y).padStart(3)}) | (${String(entry.vx).padStart(5)}, ${String(entry.vy).padStart(5)}) | ${String(entry.speed).padStart(4)}/ ${String(entry.targetSpeed || 0).padStart(4)} | ${String(entry.facingDeg).padStart(5)}° -> ${String(entry.desiredDeg).padStart(5)}° | ${String(entry.distToAim || 0).padStart(7)} | ${String(entry.pathOffset || 0).padStart(6)} | ${entry.thrust ? 'ON ' : 'OFF'} | ${entry.safe ? 'YES' : 'NO '}`);
+			console.log(`  -${String(ago).padStart(3, ' ')}t   | (${String(entry.x).padStart(3)}, ${String(entry.y).padStart(3)}) | (${String(entry.vx).padStart(5)}, ${String(entry.vy).padStart(5)}) | ${String(entry.speed).padStart(4)}/ ${String(entry.targetSpeed || 0).padStart(4)} | ${String(entry.facingDeg).padStart(5)}° -> ${String(entry.desiredDeg).padStart(5)}° | ${String(entry.distToAim || 0).padStart(7)} | ${String(entry.pathOffset || 0).padStart(6)} | ${entry.thrust ? 'ON ' : 'OFF'} | ${entry.safe ? 'YES' : 'NO '}`);
 		}
 		const lastEntry = rec[rec.length - 1];
 		const lastAgo = currentTick - lastEntry.tick;
-        console.log(`  -${String(lastAgo).padStart(3, ' ')}t   | (${String(lastEntry.x).padStart(3)}, ${String(lastEntry.y).padStart(3)}) | (${String(lastEntry.vx).padStart(5)}, ${String(lastEntry.vy).padStart(5)}) | ${String(lastEntry.speed).padStart(4)}/ ${String(lastEntry.targetSpeed || 0).padStart(4)} | ${String(lastEntry.facingDeg).padStart(5)}° -> ${String(lastEntry.desiredDeg).padStart(5)}° | ${String(lastEntry.distToAim || 0).padStart(7)} | ${String(lastEntry.pathOffset || 0).padStart(6)} | ${lastEntry.thrust ? 'ON ' : 'OFF'} | ${lastEntry.safe ? 'YES' : 'NO '}`);
+		console.log(`  -${String(lastAgo).padStart(3, ' ')}t   | (${String(lastEntry.x).padStart(3)}, ${String(lastEntry.y).padStart(3)}) | (${String(lastEntry.vx).padStart(5)}, ${String(lastEntry.vy).padStart(5)}) | ${String(lastEntry.speed).padStart(4)}/ ${String(lastEntry.targetSpeed || 0).padStart(4)} | ${String(lastEntry.facingDeg).padStart(5)}° -> ${String(lastEntry.desiredDeg).padStart(5)}° | ${String(lastEntry.distToAim || 0).padStart(7)} | ${String(lastEntry.pathOffset || 0).padStart(6)} | ${lastEntry.thrust ? 'ON ' : 'OFF'} | ${lastEntry.safe ? 'YES' : 'NO '}`);
 	}
 
 	dumpRacingAsciiMap(room, t.x, t.y, targetCp?.center, bot.path, p.alias);
@@ -359,33 +357,230 @@ export function dumpRacingAsciiMap(room: Room, botX: number, botY: number, targe
 	console.log(ascii + '\n');
 }
 
-export function spawnRacingBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
-	const safePos = findSafePadPosition(level, x, y);
-	const botId = BOT_UUID_PREFIX + alias;
-	const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic' });
+export function calculatePath(map: number[][], sx: number, sy: number, tx: number, ty: number): { x: number, y: number }[] {
+	if (!map) return [];
+	const startX = Math.floor(sx / 32);
+	const startY = Math.floor(sy / 32);
+	const endX = Math.floor(tx / 32);
+	const endY = Math.floor(ty / 32);
+	if (!map[startY] || map[startY][startX] === undefined) return [];
 
-	const t = ecs.transforms.get(e);
-	if (t) t.angle = -Math.PI / 2;
+	const open: { x: number, y: number, f: number, g: number }[] = [];
+	const closed = new Set<string>();
+	const cameFrom = new Map<string, { x: number, y: number }>();
+	open.push({ x: startX, y: startY, f: 0, g: 0 });
 
-	const v = ecs.velocities.get(e);
-	if (v) { v.vx = 0; v.vy = 0; v.angularVelocity = 0; }
+	let iterations = 0;
+	let closestNode = { x: startX, y: startY };
+	let minHeuristic = Infinity;
 
-	const p = ecs.players.get(e);
-	if (p) p.isLanded = true;
+	while (open.length > 0 && iterations < 8000) {
+		iterations++;
+		open.sort((a, b) => a.f - b.f);
+		const current = open.shift()!;
+		const currentKey = `${current.x},${current.y}`;
 
-	if (SERVER_CONFIG.debugMode) {
-		console.log(`[BOT-RACING] Spawned Racing Bot "${alias}" at (${Math.round(safePos.x)}, ${Math.round(safePos.y)})`);
+		if (current.x === endX && current.y === endY) {
+			closestNode = current;
+			break;
+		}
+
+		closed.add(currentKey);
+		const neighbors = [
+			{ x: current.x + 1, y: current.y }, { x: current.x - 1, y: current.y },
+			{ x: current.x, y: current.y + 1 }, { x: current.x, y: current.y - 1 },
+			{ x: current.x + 1, y: current.y + 1 }, { x: current.x - 1, y: current.y - 1 },
+			{ x: current.x + 1, y: current.y - 1 }, { x: current.x - 1, y: current.y + 1 }
+		];
+
+		for (const n of neighbors) {
+			if (n.y < 0 || n.y >= map.length || n.x < 0 || n.x >= map[0].length) continue;
+			const tileId = map[n.y][n.x];
+			if (TILE_DICTIONARY[tileId]?.solid) continue;
+
+			// PREVENT DIAGONAL CORNER CUTTING THROUGH WALLS
+			if (n.x !== current.x && n.y !== current.y) {
+				if (TILE_DICTIONARY[map[current.y]?.[n.x]]?.solid || TILE_DICTIONARY[map[n.y]?.[current.x]]?.solid) {
+					continue;
+				}
+			}
+
+			const nKey = `${n.x},${n.y}`;
+			if (closed.has(nKey)) continue;
+
+			let wallPenalty = 0;
+			for (let dy = -2; dy <= 2; dy++) {
+				for (let dx = -2; dx <= 2; dx++) {
+					if (map[n.y + dy]?.[n.x + dx] && TILE_DICTIONARY[map[n.y + dy][n.x + dx]]?.solid) {
+						const distSq = dx * dx + dy * dy;
+						wallPenalty += distSq <= 2 ? 8 : 3;
+					}
+				}
+			}
+
+			const g = current.g + 1;
+			const h = Math.abs(n.x - endX) + Math.abs(n.y - endY);
+			const f = g + h + wallPenalty;
+
+			if (h < minHeuristic) {
+				minHeuristic = h;
+				closestNode = n;
+			}
+
+			const existing = open.find(o => o.x === n.x && o.y === n.y);
+			if (!existing) {
+				open.push({ x: n.x, y: n.y, f, g });
+				cameFrom.set(nKey, { x: current.x, y: current.y });
+			} else if (g < existing.g) {
+				existing.g = g;
+				existing.f = f;
+				cameFrom.set(nKey, { x: current.x, y: current.y });
+			}
+		}
 	}
 
-	ecs.bots.set(e, {
-		active: true,
-		role: 'racer',
-		reactionTimer: 0,
-		state: 'takeoff',
-		stateTimer: 20,
-		path: [],
-		pathTimer: 0
-	});
+	const path = [];
+	let currStr = `${closestNode.x},${closestNode.y}`;
+	while (cameFrom.has(currStr)) {
+		const nodeStr = currStr.split(',');
+		path.unshift({ x: parseInt(nodeStr[0], 10), y: parseInt(nodeStr[1], 10) });
+		const parent = cameFrom.get(currStr)!;
+		currStr = `${parent.x},${parent.y}`;
+	}
+	return path;
+}
 
-	return e;
+export function generateRoamPath(map: number[][], sx: number, sy: number): { x: number, y: number }[] {
+	if (!map) return [];
+	const startX = Math.floor(sx / 32);
+	const startY = Math.floor(sy / 32);
+
+	for (let attempt = 0; attempt < 8; attempt++) {
+		const angle = Math.random() * Math.PI * 2;
+		const radius = 12 + Math.floor(Math.random() * 10);
+		const rx = Math.max(1, Math.min(map[0].length - 2, startX + Math.round(Math.cos(angle) * radius)));
+		const ry = Math.max(1, Math.min(map.length - 2, startY + Math.round(Math.sin(angle) * radius)));
+
+		if (!TILE_DICTIONARY[map[ry]?.[rx]]?.solid) {
+			const raw = calculatePath(map, sx, sy, rx * 32 + 16, ry * 32 + 16);
+			if (raw.length > 0 && raw[raw.length - 1].x === rx && raw[raw.length - 1].y === ry) {
+				return raw;
+			}
+		}
+	}
+	return [];
+}
+
+export function resolveTargetEntity(ecs: Registry, targetId: string | undefined): Entity | undefined {
+	if (!targetId) return undefined;
+	const playerEnt = ecs.getPlayerEntity(targetId);
+	if (playerEnt !== undefined) return playerEnt;
+
+	const enemyMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
+	if (enemyMap) {
+		for (const [ee, en] of enemyMap.entries()) {
+			if (en.id === targetId || en.uuid === targetId || `npc_${ee}` === targetId) return ee;
+		}
+	}
+	return undefined;
+}
+
+export function getEntityPos(ecs: Registry, e: Entity) {
+	return ecs.transforms.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+}
+
+export function getEntityVel(ecs: Registry, e: Entity) {
+	return ecs.velocities.get(e) || (ecs as any).enemies?.get(e) || (ecs as any).turrets?.get(e) || (ecs as any).mapEntities?.get(e);
+}
+
+export function dumpAsciiMap(room: Room, botX: number, botY: number, targetX: number, targetY: number, path: { x: number, y: number }[], botAlias: string) {
+	const map = room.level.rawMap;
+	if (!map) return;
+	const bx = Math.floor(botX / 32);
+	const by = Math.floor(botY / 32);
+	const tx = Math.floor(targetX / 32);
+	const ty = Math.floor(targetY / 32);
+
+	const pathSet = new Set(path.map(p => `${p.x},${p.y}`));
+
+	const minX = Math.max(0, Math.min(bx, tx) - 4);
+	const maxX = Math.min(map[0].length - 1, Math.max(bx, tx) + 4);
+	const minY = Math.max(0, Math.min(by, ty) - 4);
+	const maxY = Math.min(map.length - 1, Math.max(by, ty) + 4);
+
+	let ascii = `\n--- MAP SLICE [${botAlias}] (B=Bot, T=Target, *=Path, #=Wall) ---\n`;
+	for (let y = minY; y <= maxY; y++) {
+		let row = '';
+		for (let x = minX; x <= maxX; x++) {
+			if (x === bx && y === by) row += 'B';
+			else if (x === tx && y === ty) row += 'T';
+			else if (pathSet.has(`${x},${y}`)) row += '*';
+			else if (TILE_DICTIONARY[map[y]?.[x]]?.solid) row += '#';
+			else row += '.';
+		}
+		ascii += row + '\n';
+	}
+	console.log(ascii);
+}
+
+export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any, p: any, tick: number) {
+    const t = ecs.transforms.get(e);
+    const v = ecs.velocities.get(e);
+    if (!t || !v) return;
+
+    const tx = Math.floor(t.x / 32);
+    const ty = Math.floor(t.y / 32);
+    
+    console.log(`\n=== [${new Date().toISOString()}] [BOT-COMBAT CRASH TELEMETRY] ${p.alias} crashed at tile (${tx}, ${ty}) ===`);
+    
+    if (bot.targetId) {
+        console.log(`- Target ID        : ${bot.targetId}`);
+    }
+    
+    console.log(`- Impact Speed     : ${Math.hypot(v.vx, v.vy).toFixed(2)} px/tick (Vx: ${v.vx.toFixed(2)}, Vy: ${v.vy.toFixed(2)})`);
+    
+    const currentSpeed = Math.hypot(v.vx, v.vy);
+    const motionAngle = currentSpeed > 0.1 ? Math.atan2(v.vy, v.vx) * 180 / Math.PI : 0;
+    const faceAngle = t.angle * 180 / Math.PI;
+    let driftAngle = Math.abs(motionAngle - faceAngle);
+    if (driftAngle > 180) driftAngle = 360 - driftAngle;
+
+    console.log(`- Trajectory vs Face : Motion: ${motionAngle.toFixed(1)}° | Facing: ${faceAngle.toFixed(1)}° | Drift Angle: ${driftAngle.toFixed(1)}°`);
+    
+    const reqForce = bot.lastDesiredAngle !== undefined ? bot.lastDesiredAngle * 180 / Math.PI : 0;
+    let alignErr = Math.abs(reqForce - faceAngle);
+    if (alignErr > 180) alignErr = 360 - alignErr;
+    console.log(`- Steering Target    : ${reqForce.toFixed(1)}° (Alignment Error: ${alignErr.toFixed(1)}°)`);
+    
+    let offset = 0;
+    if (bot.path && bot.path.length > 0) {
+        offset = Math.hypot(t.x - (bot.path[0].x * 32 + 16), t.y - (bot.path[0].y * 32 + 16));
+    }
+    console.log(`- Line Offset        : ${Math.round(offset)} px away from active path node`);
+    
+    if (bot.flightRecorder && bot.flightRecorder.length > 0) {
+        console.log(`\n- BLACK-BOX FLIGHT RECORDER (Past 240 ticks, sampled every 10 ticks):`);
+        console.log(`  T-Minus | Pos (X, Y)   | Vel (Vx, Vy)   | Spd / Tgt | Face -> Desir | DistAim | Offset | Thr | Safe`);
+        
+        const recs = bot.flightRecorder;
+        for (let i = 0; i < recs.length; i++) {
+            if (i % 10 === 0 || i === recs.length - 1) {
+                const r = recs[i];
+                const tMinus = tick - r.tick;
+                console.log(`  -${tMinus.toString().padEnd(3)}t   | (${Math.round(r.x)}, ${Math.round(r.y)}) | (${r.vx.toFixed(2).padStart(5)}, ${r.vy.toFixed(2).padStart(5)}) | ${r.speed.toFixed(2).padStart(4)}/ ${r.targetSpeed.toFixed(2).padStart(4)} | ${r.facingDeg.toFixed(0).padStart(4)}° -> ${r.desiredDeg.toFixed(1).padStart(5)}° | ${r.distToAim.toString().padStart(7)} | ${r.pathOffset.toString().padStart(6)} | ${r.thrust ? 'ON ' : 'OFF'} | ${r.safe ? 'YES' : 'NO'}`);
+            }
+        }
+    }
+    
+    if (bot.targetId) {
+        const targetE = resolveTargetEntity(ecs, bot.targetId);
+        const targetT = targetE !== undefined ? getEntityPos(ecs, targetE) : undefined;
+        if (targetT) {
+            dumpAsciiMap(room, t.x, t.y, targetT.x, targetT.y, bot.path || [], p.alias);
+        } else {
+            dumpAsciiMap(room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
+        }
+    } else {
+        dumpAsciiMap(room, t.x, t.y, t.x, t.y, bot.path || [], p.alias);
+    }
 }

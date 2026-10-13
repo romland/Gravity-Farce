@@ -7,7 +7,7 @@ import { spawnClassicPlayer, sysClassicPlayers } from './game/player-classic';
 import { sysWeapons, sysNetworkSync } from './game/systems';
 import { spawnTank, sysTanks } from './game/tank-ai';
 import { spawnFlyingEnemy, sysFlyingEnemies } from './game/flying-ai';
-import { sysBotAI } from './game/bot-ai';
+import { sysBotAI } from './game/bot-dogfighting';
 import { sysRacingBotAI } from './game/bot-racing';
 import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';

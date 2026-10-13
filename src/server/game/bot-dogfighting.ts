@@ -1,0 +1,600 @@
+// spawnDogfightBot(room.ecs, x, y, "A.I.")
+import { Registry, type Entity } from '../core/ecs';
+import type { Room } from '../Room';
+import { raycastEnvironment } from '../core/math';
+import { spawnModernPlayer } from './player-modern';
+import { TILE_DICTIONARY } from '../core/tiles';
+import { SERVER_CONFIG } from '../core/config';
+import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, dumpAsciiMap, findSafePadPosition, logDogfightCrash } from './bot-utils';
+
+// Bot Constants
+const PREDICTION_FRAMES = 15;
+const BOT_UUID_PREFIX = 'BOT_';
+
+// Shared Partial Path Cache for Target Squads
+interface SharedTargetPath {
+    path: { x: number; y: number }[];
+    tick: number;
+}
+const sharedTargetPaths = new Map<string, SharedTargetPath>();
+let globalTickCounter = 0;
+
+export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
+    const safePos = findSafePadPosition(level, x, y, alias);
+    const botId = BOT_UUID_PREFIX + alias;
+    const e = spawnModernPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'modern' });
+
+    // Ensure initial physics state is upright and resting cleanly on pad
+    const t = ecs.transforms.get(e);
+    if (t) t.angle = -Math.PI / 2;
+
+    const v = ecs.velocities.get(e);
+    if (v) { v.vx = 0; v.vy = 0; v.angularVelocity = 0; }
+
+    const p = ecs.players.get(e);
+    if (p) p.isLanded = true;
+
+    // Attach the brain
+    ecs.bots.set(e, {
+        active: true,
+        role: 'pursuit',
+        reactionTimer: 0,
+        state: 'takeoff',
+        stateTimer: 20,
+        path: [],
+        pathTimer: 0
+    });
+
+    return e;
+}
+
+export function sysBotAI(ecs: Registry, room: Room) {
+    if (room.category !== 'dogfight') return;
+    globalTickCounter++;
+
+    const bots = Array.from(ecs.bots.entries());
+    const activeBots = bots.filter(([e]) => !ecs.players.get(e)?.isDead);
+    const humans = Array.from(ecs.players.entries()).filter(([e, p]) => !p.isDead && !ecs.bots.has(e));
+
+    // Telemetry logs on crash
+    for (const [e, bot] of bots) {
+        const p = ecs.players.get(e);
+
+        // PREVENT GHOST BULLETS: Release the trigger on dead bots so corpses don't keep firing
+        if (p?.isDead && p.inputs) {
+            p.inputs = { up: false, left: false, right: false, shoot: false };
+        }
+
+        if (p?.isDead && (bot as any).wasAlive) {
+            (bot as any).wasAlive = false;
+            if (SERVER_CONFIG.debugMode) {
+                logDogfightCrash(ecs, room, e, bot, p, globalTickCounter);
+            }
+        } else if (p && !p.isDead) {
+            (bot as any).wasAlive = true;
+        }
+    }
+
+    const hostiles: { id: string, e: Entity, isHuman: boolean }[] = humans.map(([e, p]) => ({ id: p.id, e, isHuman: true }));
+
+    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).turrets || (ecs as any).mapEntities;
+    if (mapEnemiesMap) {
+        for (const [ee, en] of mapEnemiesMap.entries()) {
+            if (en.isDead || en.health <= 0) continue;
+            const id = en.id || en.uuid || `npc_${ee}`;
+            hostiles.push({ id, e: ee as Entity, isHuman: false });
+        }
+    }
+
+    assignSquadRoles(activeBots, hostiles, ecs);
+
+    for (const [e, bot] of activeBots) {
+        processBotFlight(ecs, room, e, bot);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Squad Role Assignment
+// ----------------------------------------------------------------------------
+
+function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hostiles: { id: string, e: Entity, isHuman: boolean }[], ecs: Registry) {
+    if (hostiles.length === 0) return;
+
+    const targetCounts = new Map<string, number>();
+
+    for (const [e, bot] of bots) {
+        if (bot.reactionTimer > 0) {
+            bot.reactionTimer--;
+            continue;
+        }
+
+        const myPos = ecs.transforms.get(e)!;
+        let closestHuman: string | undefined;
+        let minDist = Infinity;
+
+        for (const target of hostiles) {
+            const hPos = getEntityPos(ecs, target.e);
+            if (!hPos) continue;
+            const d = Math.hypot(hPos.x - myPos.x, hPos.y - myPos.y);
+            let adjustedDist = target.isHuman ? d : d + 300;
+
+            // TARGET STICKINESS: Keep hammering the same target until it dies instead of giving up after a 3-bullet burst
+            if (target.id === bot.targetId) {
+                adjustedDist -= 600;
+            }
+
+            if (adjustedDist < minDist) {
+                minDist = adjustedDist;
+                closestHuman = target.id;
+            }
+        }
+
+        if (closestHuman) {
+            bot.targetId = closestHuman;
+            const currentAttackers = targetCounts.get(closestHuman) || 0;
+
+            if (currentAttackers === 0) {
+                bot.role = 'pursuit';
+            } else if (currentAttackers === 1) {
+                bot.role = 'flank-high';
+            } else {
+                bot.role = 'intercept';
+            }
+
+            targetCounts.set(closestHuman, currentAttackers + 1);
+            bot.reactionTimer = 15;
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Flight Control & Navigation
+// ----------------------------------------------------------------------------
+
+function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../core/types').BotState) {
+    const p = ecs.players.get(e)!;
+    const t = ecs.transforms.get(e)!;
+    const v = ecs.velocities.get(e)!;
+
+    p.inputs = { up: false, left: false, right: false, shoot: false };
+
+    if (p.isLanded) {
+        bot.state = 'takeoff';
+        bot.stateTimer = 20;
+        p.inputs.up = true;
+        applyAngularControl(p, t, v, -Math.PI / 2);
+        return;
+    }
+
+    if (bot.state === 'takeoff') {
+        const floorHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y + 60 }, room.level);
+        const ceilingHit = raycastEnvironment({ x: t.x, y: t.y }, { x: t.x, y: t.y - 60 }, room.level);
+        const floorDist = floorHit ? floorHit.y - t.y : 999;
+        const ceilingDist = ceilingHit ? t.y - ceilingHit.y : 999;
+
+        if (ceilingDist < 45 || floorDist >= 22 || bot.stateTimer <= 0) {
+            bot.state = 'attack';
+        } else {
+            bot.stateTimer--;
+            p.inputs.up = true;
+            applyAngularControl(p, t, v, -Math.PI / 2);
+            return;
+        }
+    }
+
+    const targetEntity = resolveTargetEntity(ecs, bot.targetId);
+    const targetT = targetEntity !== undefined ? getEntityPos(ecs, targetEntity) : undefined;
+    const targetV = targetEntity !== undefined ? getEntityVel(ecs, targetEntity) : undefined;
+
+    let aimX = t.x;
+    let aimY = t.y - 100;
+    let hasLOS = false;
+    let hasPredictedLOS = false;
+    let angleToPredicted = 0;
+    let distToTarget = 9999;
+
+    if (targetT) {
+        distToTarget = Math.hypot(targetT.x - t.x, targetT.y - t.y);
+        const tVx = targetV?.vx || 0;
+        const tVy = targetV?.vy || 0;
+
+        hasLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: targetT.x, y: targetT.y }, room.level);
+
+        // 1. WEAPONS FIRING LOGIC (RESTORED!)
+        const BULLET_SPEED = 12.0;
+        const leadTicks = Math.min(35, distToTarget / BULLET_SPEED);
+        const predX = targetT.x + tVx * leadTicks;
+        const predY = targetT.y + tVy * leadTicks;
+
+        angleToPredicted = Math.atan2(predY - t.y, predX - t.x);
+        hasPredictedLOS = !raycastEnvironment({ x: t.x, y: t.y }, { x: predX, y: predY }, room.level);
+
+        const alignDiff = Math.abs(getAngleDiff(angleToPredicted, t.angle));
+        let wantsToShoot = false;
+        if (alignDiff < 0.6 && distToTarget < 800 && (hasLOS || hasPredictedLOS)) {
+            wantsToShoot = true;
+        } else if (distToTarget < 600 && hasLOS && Math.random() < 0.4) {
+            wantsToShoot = true;
+        }
+        if (wantsToShoot) {
+            p.inputs.shoot = (globalTickCounter % 4 !== 0);
+        }
+
+        // 2. PATH RECALCULATION
+        if (bot.path.length === 0 || bot.pathTimer <= 0) {
+            let stitchedPath: { x: number; y: number }[] | null = null;
+            if (bot.targetId) {
+                const cached = sharedTargetPaths.get(bot.targetId);
+                if (cached && (globalTickCounter - cached.tick < 30) && cached.path.length > 0) {
+                    let bestIndex = -1;
+                    let minDist = Infinity;
+                    for (let i = 0; i < cached.path.length; i++) {
+                        const wp = cached.path[i];
+                        const wpPx = { x: wp.x * 32 + 16, y: wp.y * 32 + 16 };
+                        const d = Math.hypot(wpPx.x - t.x, wpPx.y - t.y);
+                        if (d < minDist && hasClearPath({ x: t.x, y: t.y }, wpPx, room.level)) {
+                            minDist = d;
+                            bestIndex = i;
+                        }
+                    }
+                    if (bestIndex !== -1) stitchedPath = cached.path.slice(bestIndex);
+                }
+            }
+
+            if (stitchedPath && stitchedPath.length > 0) {
+                bot.state = 'attack';
+                bot.path = [...stitchedPath];
+            } else {
+                const rawPath = calculatePath(room.level.rawMap, t.x, t.y, targetT.x, targetT.y);
+                const targetTileX = Math.floor(targetT.x / 32);
+                const targetTileY = Math.floor(targetT.y / 32);
+                const lastNode = rawPath[rawPath.length - 1];
+                const reachedTarget = !!lastNode && lastNode.x === targetTileX && lastNode.y === targetTileY;
+
+                if (!reachedTarget && distToTarget > 250 && !hasLOS) {
+                    bot.state = 'roam';
+                    bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
+                } else {
+                    bot.state = 'attack';
+                    bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
+                }
+
+                if (bot.targetId && bot.path.length > 0 && bot.state === 'attack') {
+                    sharedTargetPaths.set(bot.targetId, { path: [...bot.path], tick: globalTickCounter });
+                }
+            }
+            bot.pathTimer = 90 + Math.floor(Math.random() * 30);
+        }
+        bot.pathTimer--;
+
+        // 3. TARGET AIMING (LOS vs Pathing)
+        if (hasLOS && distToTarget < 600) {
+            // Ignore path if we can see them and are close
+            aimX = targetT.x;
+            aimY = targetT.y;
+            if (bot.role === 'intercept') {
+                aimX += tVx * 15;
+                aimY += tVy * 15;
+            } else if (bot.role === 'flank-high') {
+                aimY -= 150;
+            }
+        } else {
+            // Waypoint popping
+            while (bot.path && bot.path.length > 1) {
+                let wx0 = bot.path[0].x * 32 + 16;
+                let wy0 = bot.path[0].y * 32 + 16;
+                let wx1 = bot.path[1].x * 32 + 16;
+                let wy1 = bot.path[1].y * 32 + 16;
+                let d0 = Math.hypot(t.x - wx0, t.y - wy0);
+                let d1 = Math.hypot(t.x - wx1, t.y - wy1);
+                if (d0 < 45 || (d1 < d0 && d0 < 180 && hasClearPath({ x: t.x, y: t.y }, { x: wx1, y: wy1 }, room.level))) {
+                    bot.path.shift();
+                } else {
+                    break;
+                }
+            }
+            if (bot.path && bot.path.length === 1) {
+                let wx0 = bot.path[0].x * 32 + 16;
+                let wy0 = bot.path[0].y * 32 + 16;
+                if (Math.hypot(t.x - wx0, t.y - wy0) < 45) {
+                    bot.path.shift();
+                }
+            }
+
+            if (bot.path && bot.path.length > 0) {
+                let nextWp = bot.path[0];
+                let wpX = nextWp.x * 32 + 16;
+                let wpY = nextWp.y * 32 + 16;
+                const map = room.level.rawMap;
+                if (map && map[nextWp.y]) {
+                    if (map[nextWp.y]?.[nextWp.x - 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x - 1]]?.solid) wpX += 14;
+                    if (map[nextWp.y]?.[nextWp.x + 1] && TILE_DICTIONARY[map[nextWp.y][nextWp.x + 1]]?.solid) wpX -= 14;
+                    if (map[nextWp.y - 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y - 1][nextWp.x]]?.solid) wpY += 14;
+                    if (map[nextWp.y + 1]?.[nextWp.x] && TILE_DICTIONARY[map[nextWp.y + 1][nextWp.x]]?.solid) wpY -= 14;
+                }
+                aimX = wpX;
+                aimY = wpY;
+            } else {
+                aimX = targetT.x;
+                aimY = targetT.y;
+            }
+        }
+    }
+
+    // 4. PHYSICS & NAVIGATION
+    const dirX = aimX - t.x;
+    const dirY = aimY - t.y;
+    const distToAim = Math.hypot(dirX, dirY) || 1;
+
+    const currentSpeed = Math.hypot(v.vx, v.vy);
+    const botMoveAngle = currentSpeed > 1.0 ? Math.atan2(v.vy, v.vx) : t.angle;
+
+    const turnTime = 36;
+    const brakingAccel = 0.05;
+    const stoppingDist = ((currentSpeed * currentSpeed) / (2 * brakingAccel)) + (currentSpeed * turnTime);
+
+    let isEmergency = false;
+    let repelX = 0;
+    let repelY = 0;
+
+    const tactics = evaluateTacticalSensors(ecs, e, t, v, t.angle, distToAim);
+    if (tactics.friendlyInLineOfFire) {
+        p.inputs.shoot = false;
+    }
+    if (tactics.isEmergency) {
+        isEmergency = true;
+        repelX += tactics.repelX;
+        repelY += tactics.repelY;
+    }
+
+    let isBlockedPocket = false;
+    if (!hasClearPath({ x: t.x, y: t.y }, { x: aimX, y: aimY }, room.level)) {
+        if (bot.path && bot.path.length > 0) {
+            let checkX = bot.path[0].x * 32 + 16;
+            let checkY = bot.path[0].y * 32 + 16;
+            if (raycastEnvironment({ x: t.x, y: t.y }, { x: checkX, y: checkY }, room.level)) {
+                isBlockedPocket = true;
+            }
+        } else {
+            isBlockedPocket = true;
+        }
+    }
+
+    let wallSeverity = isBlockedPocket ? 1.0 : 0.0;
+    const glideTicks = Math.min(45, Math.ceil(stoppingDist / (currentSpeed || 1)));
+
+    if (currentSpeed > 2.0 && !isBlockedPocket) {
+        let pX = t.x; let pY = t.y;
+        const len = currentSpeed || 1;
+        const nx = -v.vy / len;
+        const ny = v.vx / len;
+        const margin = 14;
+
+        for (let k = 5; k <= glideTicks; k += 5) {
+            const cX = t.x + v.vx * k;
+            const cY = t.y + v.vy * k + 0.5 * 0.015 * k * k; // Modern ship gravity
+            if (raycastEnvironment({ x: pX, y: pY }, { x: cX, y: cY }, room.level) ||
+                raycastEnvironment({ x: pX + nx * margin, y: pY + ny * margin }, { x: cX + nx * margin, y: cY + ny * margin }, room.level) ||
+                raycastEnvironment({ x: pX - nx * margin, y: pY - ny * margin }, { x: cX - nx * margin, y: cY - ny * margin }, room.level)) {
+                wallSeverity = 1.0;
+                break;
+            }
+            pX = cX; pY = cY;
+        }
+    }
+
+    if (wallSeverity >= 1.0 || isEmergency) {
+        (bot as any).panicTimer = 30;
+    }
+    if ((bot as any).panicTimer > 0) {
+        (bot as any).panicTimer--;
+        wallSeverity = 1.0;
+        isEmergency = true;
+    }
+
+    let trajectorySeverity = 0;
+    if (currentSpeed > 2.0) {
+        const pathAngle = Math.atan2(aimY - t.y, aimX - t.x);
+        const driftDiff = Math.abs(getAngleDiff(pathAngle, botMoveAngle)) / Math.PI;
+        trajectorySeverity = Math.min(1.0, Math.max(0, driftDiff - 0.1) * 2.0);
+    }
+
+    const clampedSeverity = Math.min(1.0, Math.max(trajectorySeverity, wallSeverity));
+
+    const maxCruise = 6.0 * tactics.throttleMultiplier;
+    let targetSpeed = maxCruise * (1.0 - clampedSeverity);
+
+    // STANDOFF BRAKES: If directly engaging (has LOS, close range)
+    if (targetT && hasLOS && distToTarget < 180) {
+        targetSpeed = distToTarget < 100 ? -2.0 : 0.0;
+    }
+
+    const desVx = (dirX / distToAim) * targetSpeed;
+    const desVy = (dirY / distToAim) * targetSpeed;
+
+    const forceX = desVx - v.vx + repelX;
+    const forceY = desVy - v.vy - 0.015 + repelY; // Modern gravity is 0.015
+
+    let forceAngle = Math.atan2(forceY, forceX);
+
+    if (wallSeverity >= 1.0 && currentSpeed > 1.5) {
+        forceAngle = Math.atan2(-v.vy, -v.vx); // Pure retrograde
+    } else if (currentSpeed < 0.5 && isBlockedPocket) {
+        forceAngle = -Math.PI / 2; // Ascend if stuck hovering in a pocket
+    } else if (targetT && (hasLOS || hasPredictedLOS) && distToTarget < 600 && wallSeverity < 0.5) {
+        // Dogfight Aim Override: Point weapons at target if safe!
+        forceAngle = angleToPredicted;
+    }
+
+    (bot as any).lastDesiredAngle = forceAngle;
+
+    const angleDiff = applyAngularControl(p, t, v, forceAngle);
+    const reqForce = Math.hypot(forceX, forceY);
+
+    const thrustCone = (wallSeverity >= 1.0 || isEmergency) ? 2.0 : (reqForce > 4.0 ? 1.4 : (reqForce > 1.5 ? 0.9 : 0.4));
+
+    if (angleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0)) {
+        p.inputs.up = true;
+    }
+
+    if (bot.path.length === 0 && distToTarget > 250 && !hasLOS) {
+        bot.pathTimer = 0;
+    }
+
+    let currentPathOffset = 0;
+    if (bot.path && bot.path.length > 0) {
+        currentPathOffset = Math.hypot(t.x - (bot.path[0].x * 32 + 16), t.y - (bot.path[0].y * 32 + 16));
+    }
+
+    if (!(bot as any).flightRecorder) (bot as any).flightRecorder = [];
+    const rec = (bot as any).flightRecorder;
+    rec.push({
+        tick: globalTickCounter,
+        x: Math.round(t.x), y: Math.round(t.y),
+        vx: Number(v.vx.toFixed(2)), vy: Number(v.vy.toFixed(2)),
+        speed: Number(currentSpeed.toFixed(2)),
+        facingDeg: Number((t.angle * 180 / Math.PI).toFixed(1)),
+        desiredDeg: Number((forceAngle * 180 / Math.PI).toFixed(1)),
+        thrust: Boolean(p.inputs.up),
+        safe: wallSeverity < 0.5 && !isEmergency,
+        targetSpeed: Number(targetSpeed.toFixed(2)),
+        pathOffset: Math.round(currentPathOffset),
+        distToAim: Math.round(distToAim)
+    });
+    if (rec.length > 240) rec.shift();
+}
+
+// Tactical Sensor Extensions
+// ----------------------------------------------------------------------------
+
+interface TacticalSensors {
+    friendlyInLineOfFire: boolean;
+    repelX: number;
+    repelY: number;
+    isEmergency: boolean;
+    throttleMultiplier: number;
+}
+
+function evaluateTacticalSensors(ecs: Registry, myEnt: Entity, myT: import('../core/ecs').Transform, myV: import('../core/ecs').Velocity, noseAngle: number, targetDist: number): TacticalSensors {
+    const tactics: TacticalSensors = { friendlyInLineOfFire: false, repelX: 0, repelY: 0, isEmergency: false, throttleMultiplier: 1.0 };
+
+    // 1. SQUADMATES (Friendly Fire & Clumping Avoidance)
+    const bots = Array.from(ecs.bots.entries());
+    for (const [otherE] of bots) {
+        if (otherE === myEnt) continue;
+        const pt = ecs.transforms.get(otherE);
+        const pp = ecs.players.get(otherE);
+        if (!pt || pp?.isDead) continue;
+
+        const distToFriend = Math.hypot(pt.x - myT.x, pt.y - myT.y);
+
+        // Friendly Fire Check: Are they in front of us, between us and the target?
+        if (distToFriend < targetDist) {
+            const angleToFriend = Math.atan2(pt.y - myT.y, pt.x - myT.x);
+            const diff = Math.abs(getAngleDiff(noseAngle, angleToFriend));
+            // 24px wide safety cylinder down the line of fire
+            if (Math.sin(diff) * distToFriend < 24) {
+                tactics.friendlyInLineOfFire = true;
+            }
+        }
+
+        // Boids-style Separation: Prevent squadmates from colliding
+        if (distToFriend < 70 && distToFriend > 1) {
+            const push = Math.pow((70 - distToFriend) / 70, 2) * 4.0;
+            tactics.repelX -= ((pt.x - myT.x) / distToFriend) * push;
+            tactics.repelY -= ((pt.y - myT.y) / distToFriend) * push;
+            tactics.isEmergency = true;
+        }
+    }
+
+    // 2. ENEMIES (Ramming Avoidance)
+    const humans = Array.from(ecs.players.entries()).filter(([e, p]) => !p.isDead && !ecs.bots.has(e));
+    for (const [he] of humans) {
+        const ht = ecs.transforms.get(he);
+        if (!ht) continue;
+        const distToHuman = Math.hypot(ht.x - myT.x, ht.y - myT.y);
+        if (distToHuman < 90 && distToHuman > 1) {
+            const push = Math.pow((90 - distToHuman) / 90, 2) * 5.0; // Push back from target to maintain shooting distance
+            tactics.repelX -= ((ht.x - myT.x) / distToHuman) * push;
+            tactics.repelY -= ((ht.y - myT.y) / distToHuman) * push;
+            tactics.isEmergency = true;
+        }
+    }
+
+    // 3. MAP ENEMIES (Patrols / Flying Hazards) -> Anticipate and Wait
+    const mapEnemiesMap = (ecs as any).enemies || (ecs as any).hazards || (ecs as any).mapEntities;
+    if (mapEnemiesMap) {
+        for (const [ee, enemyData] of mapEnemiesMap.entries()) {
+            const et = ecs.transforms.get(ee);
+            const ev = ecs.velocities.get(ee);
+            if (!et || !ev) continue;
+
+            const distToEnemy = Math.hypot(et.x - myT.x, et.y - myT.y);
+
+            // Radar range for anticipating patrol routes
+            if (distToEnemy < 350) {
+                // Predict where both entities will be 40 frames (~0.6s) from now
+                const myFutureX = myT.x + myV.vx * 40;
+                const myFutureY = myT.y + myV.vy * 40;
+
+                const enFutureX = et.x + ev.vx * 40;
+                const enFutureY = et.y + ev.vy * 40;
+
+                const futureDist = Math.hypot(myFutureX - enFutureX, myFutureY - enFutureY);
+
+                // If trajectories cross (future distance is very tight), yield!
+                if (futureDist < 60 && distToEnemy > 60) {
+                    // Cut cruise speed to 0. The bot will automatically fire reverse thrusters to brake and hover, letting the enemy pass.
+                    tactics.throttleMultiplier = 0.0;
+                }
+            }
+        }
+    }
+
+    // 4. INCOMING BULLETS (Evasion)
+    const projectilesMap = (ecs as any).bullets || (ecs as any).projectiles;
+    if (projectilesMap) {
+        const myId = (ecs.players.get(myEnt) as any)?.id || (ecs.players.get(myEnt) as any)?.uuid;
+        for (const [pe, proj] of projectilesMap.entries()) {
+            const pt = ecs.transforms.get(pe) || (proj as any); // Sometimes bullets store x/y directly
+            const pv = ecs.velocities.get(pe) || (proj as any);
+            if (!pt || !pv) continue;
+
+            // Ignore our own bullets
+            if (proj.ownerId === myId) continue;
+
+            const dx = pt.x - myT.x;
+            const dy = pt.y - myT.y;
+            const distToBullet = Math.hypot(dx, dy);
+
+            if (distToBullet < 250) { // Radar range for bullets
+                // Relative velocity (is it approaching?)
+                const relativeVx = pv.vx - myV.vx;
+                const relativeVy = pv.vy - myV.vy;
+                const dotProduct = (dx * relativeVx + dy * relativeVy);
+
+                // dotProduct < 0 means it's actively closing distance
+                if (dotProduct < 0) {
+                    const timeToImpact = -dotProduct / (relativeVx * relativeVx + relativeVy * relativeVy);
+                    if (timeToImpact > 0 && timeToImpact < 20) { // Will hit in < 20 frames
+                        const projX = pt.x + pv.vx * timeToImpact;
+                        const projY = pt.y + pv.vy * timeToImpact;
+                        const myProjX = myT.x + myV.vx * timeToImpact;
+                        const myProjY = myT.y + myV.vy * timeToImpact;
+
+                        const missDist = Math.hypot(projX - myProjX, projY - myProjY);
+                        if (missDist < 35) { // Collision imminent!
+                            // EVADE perpendicular to the bullet's travel vector
+                            const evadeAngle = Math.atan2(pv.vy, pv.vx) + (Math.PI / 2);
+                            tactics.repelX += Math.cos(evadeAngle) * 8.0;
+                            tactics.repelY += Math.sin(evadeAngle) * 8.0;
+                            tactics.isEmergency = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return tactics;
+}

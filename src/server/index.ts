@@ -11,7 +11,7 @@ import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
 import { buildRaceLeaderboards } from './game/racing';
-import { spawnDogfightBot } from './game/bot-ai';
+import { spawnDogfightBot } from './game/bot-dogfighting';
 import { spawnRacingBot } from './game/bot-racing';
 
 const app = express();
