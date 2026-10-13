@@ -45,18 +45,22 @@ If using keyboard: fire bullets with one hand, control ship with the other (e.g.
 ### Levels and Data
 All levels (multi- and single player) and power-ups and similar structures are ported over from the
 original game. For instance, all enemies and turrets should move pretty much exactly the same as 
-in the original game. There is documentation on some of the funky stuff in the `doc` dir.
+in the original game. This is also why there is no map editor. There is documentation on some of
+the funky stuff in the `doc` dir.
 
 ### Amiga
-Oh how I miss thee. I have not used any emulator or used a real Amiga in decades,
-and what really surprised me was that while digging around in the disassembled 68k code
+Oh how awesome you were. I have not used any emulator or a real Amiga in decades,
+and what really surprised me was that while digging around in the 68k code
 I realized how much of the Amiga hardware and 68k was still SO familiar. Decades!
 Even small annoyances like memory R/W breakpoints that never hit felt like a good friend. 
-Track loaders and DMA getting screwed up by breakpoints. Ah. Almost comforting.  
+Track-loaders and DMA getting screwed up by breakpoints: ah. Almost comforting.  
 
-...and after a few days I found out that WinUAE had `HH`.  
+...and after a few days I found out that the WinUAE debugger had `HH`.  
 ...and after that I learned I could dump all code with radare instead of sitting in the debugger.  
-...but I had forgotten all about $dff006 ...  I could not make heads or tails out of waypoint tiles due to it. Quite a few hours were spent on getting enemy movement right due to this. Luckily, if you're old enough to remember Amiga fondly, you have no hair any more. Well, not me anyway. So, no hair lost this time.
+...but I had forgotten all about $dff006 ...  I could not make heads or tails out of waypoint tiles due to it. Quite a few hours were spent on getting enemy movement right due to this.  
+...and again, the enemy movements, they have screwed me over again and again. I ended up creating a simulator that generates a track they should move along instead of trying to counting frames and simulating VHPOSR for junctions in real-time. I consider myself defeated. But the simulator works really well!  
+
+Luckily, if you're old enough to remember Amiga fondly, you have no hair any more. Well, not me anyway. So, no hair lost this time around.
 
 ### The funkies
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.
