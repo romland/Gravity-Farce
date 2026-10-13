@@ -93,7 +93,8 @@ export function evaluateTacticalSensors(
 
     // 3. MAP ENEMIES & HUMANS (Ram Avoidance & Turret Arcs)
     const checkMapEnemy = (ee: Entity, width: number, height: number, type: string) => {
-        if (bot.targetId === `${type}_${ee}` || bot.targetId === String(ee)) return; // Don't yield to our target
+        const entTargetId = type === 'human' ? ecs.players.get(ee)?.id : `${type}_${ee}`;
+        if (bot.targetId === entTargetId || bot.targetId === String(ee)) return; // Don't yield to our target
 
         const et = ecs.transforms.get(ee);
         if (!et) return;

@@ -5,11 +5,13 @@ import { raycastEnvironment } from '../core/math';
 import { spawnClassicPlayer } from './player-classic';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
-import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, findSafePadPosition, logDogfightCrash } from './bot-utils';
+import { 
+    applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, 
+    generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, findSafePadPosition, 
+    logDogfightCrash, predictGlideCollision } from './bot-utils';
 import { evaluateTacticalSensors } from './bot-sensors';
 
 // Bot Constants
-const PREDICTION_FRAMES = 15;
 const BOT_UUID_PREFIX = 'BOT_';
 
 // Shared Partial Path Cache for Target Squads
@@ -370,25 +372,14 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     }
 
     let wallSeverity = isBlockedPocket ? 1.0 : 0.0;
-    const glideTicks = Math.min(120, Math.ceil(stoppingDist / (currentSpeed || 1)));
+    let isRetrograde = false;
 
-    if (currentSpeed > 1.0 && !isBlockedPocket) {
-        let pX = t.x; let pY = t.y;
-        const len = currentSpeed || 1;
-        const nx = -v.vy / len;
-        const ny = v.vx / len;
-        const margin = 16;
-
-        for (let k = 5; k <= glideTicks; k += 5) {
-            const cX = t.x + v.vx * k;
-            const cY = t.y + v.vy * k + 0.5 * 0.010 * k * k; // Classic ship gravity
-            if (raycastEnvironment({ x: pX, y: pY }, { x: cX, y: cY }, room.level) ||
-                raycastEnvironment({ x: pX + nx * margin, y: pY + ny * margin }, { x: cX + nx * margin, y: cY + ny * margin }, room.level) ||
-                raycastEnvironment({ x: pX - nx * margin, y: pY - ny * margin }, { x: cX - nx * margin, y: cY - ny * margin }, room.level)) {
-                wallSeverity = 1.0;
-                break;
-            }
-            pX = cX; pY = cY;
+    if (currentSpeed > 0.2 && !isBlockedPocket) {
+        const ticksToAim = Math.floor(distToAim / Math.max(0.1, currentSpeed));
+        const checkTicks = Math.min(45, Math.max(10, ticksToAim - 8));
+        if (predictGlideCollision(t, v, checkTicks, room, 0)) {
+            isRetrograde = true;
+            wallSeverity = 1.0;
         }
     }
 
@@ -433,9 +424,15 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
     const maxCruise = 6.0 * tactics.throttleMultiplier;
     let targetSpeed = maxCruise * (1.0 - clampedSeverity);
 
-    // STANDOFF BRAKES: If directly engaging (has LOS, close range)
-    if (targetT && hasLOS && distToTarget < 180) {
-        targetSpeed = distToTarget < 100 ? -2.0 : 0.0;
+    // KITING & STANDOFF BRAKES: Maintain optimal firing distance when we have LOS
+    if (targetT && (hasLOS || hasPredictedLOS)) {
+        if (distToTarget < 250) {
+            targetSpeed = -2.5; // Danger close: aggressive backpedal
+        } else if (distToTarget < 450) {
+            targetSpeed = 0.0; // Sweet spot: kill relative velocity, hover and blast
+        } else if (distToTarget < 700) {
+            targetSpeed = 3.0; // Coast in slowly to maintain range
+        }
     }
 
     const desVx = (dirX / distToAim) * targetSpeed;
@@ -446,27 +443,34 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
     const aimForceAngle = Math.atan2(forceY, forceX);
     let steerAngle = aimForceAngle;
+    const reqForce = Math.hypot(forceX, forceY);
 
-    if (wallSeverity >= 1.0 && currentSpeed > 1.5) {
+    if (isRetrograde) {
         steerAngle = Math.atan2(-v.vy, -v.vx); // Pure retrograde
     } else if (currentSpeed < 0.5 && isBlockedPocket) {
         steerAngle = -Math.PI / 2; // Ascend if stuck hovering in a pocket
-    } else if (targetT && (hasLOS || hasPredictedLOS) && distToTarget < 600 && wallSeverity < 0.5) {
+    } else if (targetT && (hasLOS || hasPredictedLOS) && distToTarget < 700 && wallSeverity < 0.5 && !isEmergency) {
         // Dogfight Aim Override: Point weapons at target if safe!
-        steerAngle = angleToPredicted;
+        // If we desperately need to fight gravity or brake (reqForce > 1.2), we must abandon shooting to recover flight control
+        if (reqForce < 1.2 || Math.abs(getAngleDiff(aimForceAngle, angleToPredicted)) < 0.8) {
+            steerAngle = angleToPredicted;
+        }
     }
 
     (bot as any).lastDesiredAngle = steerAngle;
 
     const angleDiff = applyAngularControl(p, t, v, steerAngle);
-    const reqForce = Math.hypot(forceX, forceY);
 
-    const thrustCone = (wallSeverity >= 1.0 || isEmergency) ? 0.6 : (reqForce > 4.0 ? 1.0 : (reqForce > 1.5 ? 0.7 : 0.4));
+    let thrustCone = 0.4;
+    if (isRetrograde) thrustCone = 1.5;
+    else if (wallSeverity >= 1.0 || isEmergency) thrustCone = 1.0;
+    else if (reqForce > 4.0) thrustCone = 1.0;
+    else if (reqForce > 1.5) thrustCone = 0.7;
 
     // If we are steering to shoot, we must evaluate thrust based on our intended travel vector, not our weapon aiming vector!
-    const thrustAngleDiff = (wallSeverity >= 1.0 || isEmergency) ? angleDiff : Math.abs(getAngleDiff(aimForceAngle, t.angle));
+    const thrustAngleDiff = (wallSeverity >= 1.0 || isEmergency || isRetrograde) ? angleDiff : Math.abs(getAngleDiff(aimForceAngle, t.angle));
 
-    if (thrustAngleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0)) {
+    if (thrustAngleDiff < thrustCone && (reqForce > 0.05 || wallSeverity >= 1.0 || isRetrograde)) {
         p.inputs.up = true;
     }
 

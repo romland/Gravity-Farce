@@ -276,9 +276,9 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     
     let isRetrograde = false;
     // Anticipate walls along our trajectory to prevent blind crashes
-    if (!isLandingFinal && currentSpeed > 1.5) {
-		const ticksToAim = Math.floor(distToAim / currentSpeed);
-		const checkTicks = Math.min(40, Math.max(5, ticksToAim - 8));
+    if (!isLandingFinal && currentSpeed > 0.2) {
+        const ticksToAim = Math.floor(distToAim / Math.max(0.1, currentSpeed));
+        const checkTicks = Math.min(45, Math.max(10, ticksToAim - 8));
         if (predictGlideCollision(t, v, checkTicks, room, currentWeight)) {
             steerAngle = Math.atan2(-v.vy, -v.vx); // Retrograde burn if heading towards a wall
 			isRetrograde = true;
@@ -319,7 +319,11 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     
     // Decouple thrust decisions from steering so we don't accidentally thrust into a turret while aiming at it
     const thrustAngleDiff = (isLandingFinal || isRetrograde || isEmergency) ? angleDiff : Math.abs(getAngleDiff(aimForceAngle, t.angle));
-    const thrustCone = isRetrograde ? 0.6 : (isLandingFinal ? 0.3 : 0.8);
+    
+    let thrustCone = 0.8;
+    if (isRetrograde) thrustCone = 1.5;
+    else if (isLandingFinal) thrustCone = 0.3;
+    else if (isEmergency) thrustCone = 1.0;
 
     if (isRetrograde) {
         if (angleDiff < thrustCone) {
