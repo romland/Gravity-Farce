@@ -318,6 +318,7 @@
             if (window.gfRenderer) {
                 window.gfRenderer.rock.buildLevelCache(level);
                 window.gfRenderer.flora.initLevel(level);
+                if (window.gfRenderer.details) window.gfRenderer.details.initLevel(level);
             }
             
             raceLights = [];
@@ -401,13 +402,26 @@
             if (state.events) {
                 for (let ev of state.events) {
                     if (ev.type === 'poof') {
-                        spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 5, 10);
+                        const handled = window.gfRenderer?.details?.onBulletImpact(
+                            ev.x, ev.y, level, window.gfRenderer.rock, window.gfRenderer.flora
+                        );
+                        if (!handled) {
+                            spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 5, 10);
+                        }
                     } else if (ev.type === 'turret_explosion') {
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffaa00', 40, 50);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
+                        window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 160, 1.0);
+                        window.gfRenderer?.details?.onExplosion(
+                            ev.x, ev.y, 0, 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 0.85
+                        );
                     } else if (ev.type === 'large_explosion') {
                         spawnLargeExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0);
+                        window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 200, 1.0);
+                        window.gfRenderer?.details?.onExplosion(
+                            ev.x, ev.y, ev.vx || 0, ev.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
+                        );
                     } else if (ev.type === 'sound') {
                         playTurretSound(ev.soundId);
                     } else if (ev.type === 'floating_text') {
@@ -424,6 +438,10 @@
                 } else if (!r.isDead && s.isDead) {
                     // Trigger explosion the moment the server says a ship died
                     spawnLargeExplosion(s.x, s.y, s.vx, s.vy);
+                    window.gfRenderer?.flora?.triggerShock(s.x, s.y, 200, 1.0);
+                    window.gfRenderer?.details?.onExplosion(
+                        s.x, s.y, r.vx || s.vx || 0, r.vy || s.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
+                    );
 
                     // Force reset local inputs so we don't hold thrust/fire while dead
                     if (id === myId) {
@@ -969,7 +987,7 @@
             if (window.gfRenderer) {
                 window.gfRenderer.rock.drawRecessed(ctx, camera, VIEW_W, VIEW_H, level);
                 window.gfRenderer.rock.draw(ctx, camera, VIEW_W, VIEW_H);
-                window.gfRenderer.prefabs.draw(ctx, level, timeSec);
+                window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
             }
 
             if (serverState.cargos) {
@@ -1051,9 +1069,25 @@
             }
             updateAndDrawParticles(ctx);
 
+            if (window.gfRenderer && window.gfRenderer.details) {
+                window.gfRenderer.details.updateAndDraw(
+                    ctx,
+                    camera,
+                    VIEW_W,
+                    VIEW_H,
+                    level,
+                    renderState.players,
+                    serverState.turrets,
+                    serverState.bullets,
+                    timeSec,
+                    window.gfRenderer.rock,
+                    window.gfRenderer.flora
+                );
+            }
+
             // Layer +1: Foreground Interactive Flora Canopy (Renders above ships, enemies & bullets for dogfight cover!)
             if (window.gfRenderer) {
-                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level);
+                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
                 window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, camera, VIEW_W, VIEW_H, level, timeSec, renderState.players);
             }
 
@@ -1216,12 +1250,14 @@
         import { RockLayer } from './renderer/RockLayer.js';
         import { PrefabLayer } from './renderer/PrefabLayer.js';
         import { FloraLayer } from './renderer/FloraLayer.js';
+        import { MicroDetailsLayer } from './renderer/MicroDetailsLayer.js';
 
         window.gfRenderer = {
             parallax: new ParallaxLayer(1600, 900),
             rock: new RockLayer(),
             prefabs: new PrefabLayer(),
-            flora: new FloraLayer()
+            flora: new FloraLayer(),
+            details: new MicroDetailsLayer()
         };
     </script>
 </body>

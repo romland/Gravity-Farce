@@ -6,6 +6,8 @@ export class FloraLayer {
         this.drips = [];
         this.fireflies = [];
         this.spores = [];
+        this.ripples = [];
+        this.leafConfetti = [];
         this.builtForLevel = null;
         this.lastTimeSec = 0;
     }
@@ -23,11 +25,15 @@ export class FloraLayer {
             charred: false,
             burnOriginT: 0.5,
             burnMinT: 0.5,
-            burnMaxT: 0.5
+            burnMaxT: 0.5,
+            shyness: 0,
+            shredCooldown: 0
         }));
         this.drips = [];
         this.fireflies = [];
         this.spores = [];
+        this.ripples = [];
+        this.leafConfetti = [];
 
         // Seed interactive bioluminescent spore-fireflies around glowing flora
         if (RENDER_CONFIG.flora.firefliesEnabled !== false) {
@@ -85,8 +91,39 @@ export class FloraLayer {
         return t >= a.burnMinT && t <= a.burnMaxT;
     }
 
-    updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level) {
+    triggerShock(x, y, radius = 85, amount = 0.85) {
+        for (const a of this.anchors) {
+            if (a.kind !== 'GLOW_SHROOM' && a.kind !== 'CAVE_FLOWER') continue;
+            const d = Math.hypot(a.x - x, (a.y - a.length * 0.5) - y);
+            if (d < radius) {
+                const factor = (1 - d / radius) * amount;
+                a.shyness = Math.min(1.0, (a.shyness || 0) + factor);
+            }
+        }
+    }
+
+    charInRadius(x, y, radius = 68) {
+        for (const a of this.anchors) {
+            if (a.kind === 'DRIP_EMITTER' || a.charred) continue;
+            const dirY = a.kind === 'VINE' ? 1 : -1;
+            const midY = a.y + dirY * a.length * 0.5;
+            const d = Math.hypot(a.x - x, midY - y);
+            if (d < radius) {
+                if (d < radius * 0.55) {
+                    a.burning = false;
+                    a.charred = true;
+                    a.burnMinT = 0.0;
+                    a.burnMaxT = 1.0;
+                } else if (!a.burning) {
+                    this.igniteAnchor(a.idx, 0.5);
+                }
+            }
+        }
+    }
+
+    updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level, bullets) {
         const cfg = RENDER_CONFIG.flora;
+        const dCfg = RENDER_CONFIG.details || {};
         if (!cfg.enabled) return;
         if (level && this.builtForLevel !== level) {
             this.initLevel(level);
@@ -97,6 +134,7 @@ export class FloraLayer {
         this.lastTimeSec = timeSec;
 
         const shipList = Object.values(players).filter(p => !p.isDead);
+        const bulletList = Array.isArray(bullets) ? bullets : [];
 
         ctx.save();
         for (const a of this.anchors) {
@@ -105,6 +143,11 @@ export class FloraLayer {
                     this.drips.push({ x: a.x, y: a.y + 4, vy: 1.5, life: 110 });
                 }
                 continue;
+            }
+
+            if (a.shredCooldown > 0) a.shredCooldown--;
+            if (a.shyness > 0) {
+                a.shyness = Math.max(0, a.shyness - (dCfg.shyRecoveryRate ?? 0.015));
             }
 
             // Interactive Ship-Wash & Thruster Blast Physics
@@ -135,6 +178,15 @@ export class FloraLayer {
                     }
                 }
 
+                // Proximity Shyness when a ship roars past at high speed
+                if (dCfg.enabled !== false && dCfg.shyFloraEnabled !== false && (a.kind === 'GLOW_SHROOM' || a.kind === 'CAVE_FLOWER')) {
+                    const shipSpd = Math.hypot(s.vx || 0, s.vy || 0);
+                    const shyRad = dCfg.shyShipRadius ?? 95;
+                    if (dist < shyRad && (shipSpd > (dCfg.shySpeedThreshold ?? 4.2) || isThrusting)) {
+                        a.shyness = Math.min(1.0, a.shyness + (1 - dist / shyRad) * 0.18);
+                    }
+                }
+
                 // Check if ship butt exhaust plume directly hits the flora to ignite it
                 if (cfg.burnEnabled !== false && isThrusting && !a.burning && !a.charred && a.length > 0) {
                     const backX = -Math.cos(s.angle);
@@ -157,6 +209,42 @@ export class FloraLayer {
                             hitByThruster = true;
                             contactT = Math.max(0.05, Math.min(0.95, Math.abs(cy - a.y) / a.length));
                             break;
+                        }
+                    }
+                }
+            }
+
+            // Bullet Wake Disturbance & Foliage Shredding (Leaf Confetti)
+            if (dCfg.enabled !== false && !a.charred && bulletList.length > 0) {
+                const wakeRad = dCfg.bulletWakeRadius ?? 28;
+                const minY = dirY > 0 ? a.y : a.y - a.length;
+                const maxY = dirY > 0 ? a.y + a.length : a.y;
+                for (let bIdx = 0; bIdx < bulletList.length; bIdx++) {
+                    const b = bulletList[bIdx];
+                    if (Math.abs(b.x - a.x) > wakeRad) continue;
+                    if (b.y < minY - 8 || b.y > maxY + 8) continue;
+
+                    if (dCfg.bulletWakeEnabled !== false) {
+                        const push = (b.x <= a.x ? 1 : -1) * 0.08;
+                        a.bendVel += push;
+                    }
+
+                    if (dCfg.foliageShreddingEnabled !== false && a.shredCooldown <= 0 &&
+                        (a.kind === 'VINE' || a.kind === 'FERN' || a.kind === 'BROADLEAF') &&
+                        this.leafConfetti.length < (dCfg.maxLeafConfetti ?? 40)) {
+                        a.shredCooldown = 14;
+                        for (let c = 0; c < 2; c++) {
+                            this.leafConfetti.push({
+                                x: b.x + (Math.random() - 0.5) * 6,
+                                y: b.y + (Math.random() - 0.5) * 6,
+                                vx: (Math.random() - 0.5) * 1.4,
+                                vy: -0.3 + Math.random() * 0.5,
+                                angle: Math.random() * Math.PI * 2,
+                                spin: (Math.random() - 0.5) * 0.16,
+                                life: 75 + Math.floor(Math.random() * 35),
+                                maxLife: 110,
+                                color: c === 0 ? '#38b862' : '#2ecc71'
+                            });
                         }
                     }
                 }
@@ -236,12 +324,94 @@ export class FloraLayer {
             d.vy += 0.08;
             d.y += d.vy;
             d.life--;
-            if (d.life <= 0) {
+
+            // Check Ship Hull Deflection & Thruster Steam Vaporization
+            let consumedByShip = false;
+            if (dCfg.enabled !== false && dCfg.waterInteractionsEnabled !== false) {
+                for (const s of shipList) {
+                    const distToShip = Math.hypot(d.x - s.x, d.y - s.y);
+                    if (distToShip < 18) {
+                        if (spawnParticlesFn) spawnParticlesFn(d.x, d.y, (d.x - s.x) * 0.15, -1.2, 'rgba(155, 225, 255, 0.75)', 3, 14);
+                        consumedByShip = true;
+                        break;
+                    }
+                    const isThrusting = Boolean(s.inputs && s.inputs.up && (s.fuel === undefined || s.fuel > 0));
+                    if (isThrusting && distToShip < 48) {
+                        if (spawnParticlesFn) spawnParticlesFn(d.x, d.y, (Math.random() - 0.5) * 0.8, -1.4, 'rgba(235, 245, 255, 0.55)', 4, 22);
+                        consumedByShip = true;
+                        break;
+                    }
+                }
+            }
+            if (consumedByShip) {
+                this.drips.splice(i, 1);
+                continue;
+            }
+
+            // Check Solid Floor / Pad Hit for Puddle Ripples
+            let hitFloor = d.life <= 0;
+            if (!hitFloor && level?.rawMap) {
+                const tx = Math.floor(d.x / 32);
+                const ty = Math.floor(d.y / 32);
+                const tid = level.rawMap[ty]?.[tx];
+                if (tid && tid > 0 && tid < 0x90 && tid !== 0x20) {
+                    hitFloor = true;
+                }
+            }
+
+            if (hitFloor) {
                 if (spawnParticlesFn) spawnParticlesFn(d.x, d.y, 0, -0.5, 'rgba(130, 210, 255, 0.6)', 2, 12);
+                if (dCfg.enabled !== false && dCfg.waterInteractionsEnabled !== false && this.ripples.length < (dCfg.dripRippleMaxCount ?? 25)) {
+                    this.ripples.push({ x: d.x, y: d.y, rx: 2.0, maxRx: 14.0, alpha: 0.65 });
+                }
                 this.drips.splice(i, 1);
                 continue;
             }
             ctx.fillRect(d.x - 1, d.y - 3, 2, 5);
+        }
+
+        // Update & draw expanding water puddle ripples
+        if (this.ripples.length > 0) {
+            ctx.lineWidth = 1.2;
+            for (let i = this.ripples.length - 1; i >= 0; i--) {
+                const rp = this.ripples[i];
+                rp.rx += 0.45;
+                rp.alpha -= 0.024;
+                if (rp.alpha <= 0 || rp.rx >= rp.maxRx) {
+                    this.ripples.splice(i, 1);
+                    continue;
+                }
+                ctx.strokeStyle = `rgba(145, 220, 255, ${rp.alpha})`;
+                ctx.beginPath();
+                ctx.ellipse(rp.x, rp.y, rp.rx, rp.rx * 0.28, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        // Update & draw fluttering shredded leaf confetti
+        if (this.leafConfetti.length > 0) {
+            for (let i = this.leafConfetti.length - 1; i >= 0; i--) {
+                const lf = this.leafConfetti[i];
+                lf.x += lf.vx + Math.sin(timeSec * 4.5 + i) * 0.35;
+                lf.y += lf.vy;
+                lf.vy = Math.min(0.85, lf.vy + 0.015);
+                lf.vx *= 0.97;
+                lf.angle += lf.spin;
+                lf.life--;
+                if (lf.life <= 0) {
+                    this.leafConfetti.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.translate(lf.x, lf.y);
+                ctx.rotate(lf.angle);
+                ctx.globalAlpha = Math.min(1, lf.life / 25);
+                ctx.fillStyle = lf.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 3.8, 1.7, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
         }
 
         // Update & draw rising bioluminescent flora spores
@@ -253,6 +423,16 @@ export class FloraLayer {
                 const sp = this.spores[i];
                 sp.y += sp.vy;
                 sp.x += Math.sin(timeSec * 2.2 + sp.phase) * swayAmp;
+                if (dCfg.bulletWakeEnabled !== false && bulletList.length > 0) {
+                    for (let bIdx = 0; bIdx < bulletList.length; bIdx++) {
+                        const b = bulletList[bIdx];
+                        const dx = sp.x - b.x;
+                        const dy = sp.y - b.y;
+                        if (Math.abs(dx) < 22 && Math.abs(dy) < 22) {
+                            sp.x += (dx >= 0 ? 1.2 : -1.2);
+                        }
+                    }
+                }
                 sp.life--;
                 if (sp.life <= 0) {
                     this.spores.splice(i, 1);
@@ -447,9 +627,11 @@ export class FloraLayer {
     drawGlowShroom(ctx, a, timeSec, cfg) {
         const windAmp = a.charred ? cfg.shroomWindAmp * 0.25 : cfg.shroomWindAmp;
         const sway = Math.sin(timeSec * cfg.windSpeed + a.seed) * windAmp + a.bendAngle * cfg.shroomWashScale;
+        const shyFactor = 1.0 - (a.shyness || 0) * 0.32;
+        const effLen = a.length * shyFactor;
         const tipX = a.x + sway;
-        const tipY = a.y - a.length;
-        const pulse = 0.78 + 0.22 * Math.sin(timeSec * 3.2 + a.seed);
+        const tipY = a.y - effLen;
+        const pulse = (0.78 + 0.22 * Math.sin(timeSec * 3.2 + a.seed)) * (1.0 - (a.shyness || 0) * 0.65);
         const capBurned = this.isPointBurned(a, 0.92);
         const charColor = cfg.burnCharColor || '#181512';
         const charScale = cfg.burnCharWidthScale ?? 0.68;
@@ -457,7 +639,7 @@ export class FloraLayer {
         // Outer bioluminescent aura
         if (!capBurned && cfg.localHaloEnabled !== false) {
             const haloR = (cfg.shroomHaloRadius ?? 16.0) * pulse;
-            const haloA = cfg.shroomHaloAlpha ?? 0.22;
+            const haloA = (cfg.shroomHaloAlpha ?? 0.22) * (1.0 - (a.shyness || 0) * 0.65);
             const grad = ctx.createRadialGradient(tipX, tipY, 2, tipX, tipY, haloR);
             grad.addColorStop(0, `rgba(0, 242, 254, ${haloA})`);
             grad.addColorStop(0.5, `rgba(79, 172, 254, ${haloA * 0.35})`);
@@ -470,7 +652,7 @@ export class FloraLayer {
 
         // Segmented stem so fire chars progressively along the stalk
         const ctrlX = a.x + sway * 0.4;
-        const ctrlY = a.y - a.length * 0.5;
+        const ctrlY = a.y - effLen * 0.5;
         let px = a.x;
         let py = a.y;
         for (let s = 1; s <= 5; s++) {
@@ -557,16 +739,18 @@ export class FloraLayer {
     drawCaveFlower(ctx, a, timeSec, cfg) {
         const windAmp = a.charred ? cfg.shroomWindAmp * 0.25 : cfg.shroomWindAmp;
         const sway = Math.sin(timeSec * cfg.windSpeed + a.seed) * windAmp + a.bendAngle * cfg.shroomWashScale;
+        const shyFactor = 1.0 - (a.shyness || 0) * 0.28;
+        const effLen = a.length * shyFactor;
         const tipX = a.x + sway;
-        const tipY = a.y - a.length;
-        const pulse = 0.8 + 0.2 * Math.sin(timeSec * 3.8 + a.seed);
+        const tipY = a.y - effLen;
+        const pulse = (0.8 + 0.2 * Math.sin(timeSec * 3.8 + a.seed)) * (1.0 - (a.shyness || 0) * 0.65);
         const headBurned = this.isPointBurned(a, 0.92);
         const charColor = cfg.burnCharColor || '#181512';
         const charScale = cfg.burnCharWidthScale ?? 0.68;
 
         // Segmented stem
         const ctrlX = a.x + sway * 0.35;
-        const ctrlY = a.y - a.length * 0.5;
+        const ctrlY = a.y - effLen * 0.5;
         let px = a.x;
         let py = a.y;
         for (let s = 1; s <= 5; s++) {
@@ -601,7 +785,7 @@ export class FloraLayer {
         const coreColor = isGold ? '#fff6b0' : '#ffe0f0';
         if (cfg.localHaloEnabled !== false) {
             const haloR = (cfg.flowerHaloRadius ?? 14.0) * pulse;
-            const haloA = cfg.flowerHaloAlpha ?? 0.20;
+            const haloA = (cfg.flowerHaloAlpha ?? 0.20) * (1.0 - (a.shyness || 0) * 0.65);
             const glowRgba = isGold
                 ? `rgba(255, 190, 64, ${haloA})`
                 : `rgba(255, 107, 157, ${haloA})`;
@@ -614,12 +798,13 @@ export class FloraLayer {
             ctx.fill();
         }
 
-        // Cupped bioluminescent petals
+        // Cupped bioluminescent petals (contract inward when shy!)
+        const petalReach = 5.5 * (1.0 - (a.shyness || 0) * 0.45);
         ctx.fillStyle = petalColor;
         for (let p = 0; p < 5; p++) {
             const ang = (p / 5) * Math.PI * 2 + timeSec * 0.25;
             ctx.beginPath();
-            ctx.ellipse(tipX + Math.cos(ang) * 5.5, tipY + Math.sin(ang) * 5.5, 6.2, 3.6, ang, 0, Math.PI * 2);
+            ctx.ellipse(tipX + Math.cos(ang) * petalReach, tipY + Math.sin(ang) * petalReach, 6.2 * shyFactor, 3.6 * shyFactor, ang, 0, Math.PI * 2);
             ctx.fill();
         }
 

@@ -85,7 +85,7 @@ export class PrefabLayer {
         this.builtForLevel = null;
     }
 
-    draw(ctx, level, timeSec) {
+    draw(ctx, level, timeSec, players) {
         const prefabs = level?.highRes?.prefabs;
         if (!prefabs) return;
         if (this.builtForLevel !== level) {
@@ -95,7 +95,7 @@ export class PrefabLayer {
 
         for (const p of prefabs) {
             if (p.kind === 'PAD') {
-                this.drawLandingPad(ctx, p, timeSec);
+                this.drawLandingPad(ctx, p, timeSec, players);
             } else if (p.kind === 'TEAL_BRICK') {
                 this.drawTealBrick(ctx, p);
             } else if (p.kind === 'BASE_STRUCTURE') {
@@ -170,9 +170,22 @@ export class PrefabLayer {
         ctx.restore();
     }
 
-    drawLandingPad(ctx, p, timeSec) {
+    drawLandingPad(ctx, p, timeSec, players) {
         ctx.save();
+        const dCfg = RENDER_CONFIG.details || {};
+        let dockedShip = null;
+        if (dCfg.padWeightInteractionEnabled !== false && players) {
+            for (const id in players) {
+                const s = players[id];
+                if (!s.isDead && s.isLanded && s.x >= p.x - 10 && s.x <= p.x + p.w + 10 && Math.abs(s.y - (p.y - 14)) < 12) {
+                    dockedShip = s;
+                    break;
+                }
+            }
+        }
+
         const deckH = 12;
+        const deckSink = dockedShip ? 1.5 : 0;
         // Sub-structure truss
         ctx.fillStyle = '#1b222c';
         ctx.strokeStyle = '#384454';
@@ -181,23 +194,42 @@ export class PrefabLayer {
         ctx.strokeRect(p.x, p.y, p.w, p.h);
 
         // 3-Slice Metallic Top Deck
-        const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + deckH);
+        const grad = ctx.createLinearGradient(p.x, p.y + deckSink, p.x, p.y + deckSink + deckH);
         grad.addColorStop(0, '#d0dae5');
         grad.addColorStop(0.5, '#8a99ad');
         grad.addColorStop(1, '#495464');
         ctx.fillStyle = grad;
-        ctx.fillRect(p.x, p.y, p.w, deckH);
+        ctx.fillRect(p.x, p.y + deckSink, p.w, deckH);
 
         // Sequenced Runway Approach Lights
         const isHome = p.tileId === 0x15;
         const numLights = Math.max(2, Math.floor(p.w / 24));
         for (let i = 0; i < numLights; i++) {
             const lx = p.x + 12 + i * ((p.w - 24) / Math.max(1, numLights - 1));
-            const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6 - i * 0.9);
-            ctx.fillStyle = isHome
-                ? `rgba(46, 255, 130, ${0.4 + pulse * 0.6})`
-                : `rgba(255, 200, 50, ${0.4 + pulse * 0.6})`;
-            ctx.fillRect(lx - 4, p.y + 3, 8, 4);
+            if (dockedShip) {
+                ctx.fillStyle = 'rgba(0, 242, 254, 0.95)';
+            } else {
+                const pulse = 0.5 + 0.5 * Math.sin(timeSec * 6 - i * 0.9);
+                ctx.fillStyle = isHome
+                    ? `rgba(46, 255, 130, ${0.4 + pulse * 0.6})`
+                    : `rgba(255, 200, 50, ${0.4 + pulse * 0.6})`;
+            }
+            ctx.fillRect(lx - 4, p.y + deckSink + 3, 8, 4);
+        }
+
+        // Animated Docked Energy / Cargo Transfer Pulses rising into the landed ship
+        if (dockedShip) {
+            const hasCargo = dockedShip.cargoStack && dockedShip.cargoStack.length > 0;
+            const ringT = (timeSec * 2.2) % 1;
+            const ry = p.y - ringT * 18;
+            ctx.strokeStyle = hasCargo
+                ? `rgba(46, 255, 130, ${(1 - ringT) * 0.65})`
+                : `rgba(0, 242, 254, ${(1 - ringT) * 0.45})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(dockedShip.x - 12 * (1 - ringT * 0.3), ry);
+            ctx.lineTo(dockedShip.x + 12 * (1 - ringT * 0.3), ry);
+            ctx.stroke();
         }
         ctx.restore();
     }

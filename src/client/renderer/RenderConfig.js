@@ -110,6 +110,53 @@ export const RENDER_CONFIG = {
         shipIdleIntensity: 0.08,
         shipThrustRadius: 90,
         shipThrustIntensity: 0.20
+    },
+    details: {
+        enabled: true,
+        thrusterDustEnabled: true,
+        thrusterScorchEnabled: true,
+        thrusterWallReachPx: 46,
+        scorchHeatDecay: 0.012,
+        maxHeatSpots: 28,
+        waterInteractionsEnabled: true,
+        dripRippleMaxCount: 25,
+        bulletImpactsEnabled: true,
+        bulletScorchMarksEnabled: true,
+        ricochetSparkCount: 6,
+        maxSparks: 90,
+        foliageShreddingEnabled: true,
+        maxLeafConfetti: 40,
+        bulletWakeEnabled: true,
+        bulletWakeRadius: 28,
+        turretBarrelSmokeEnabled: true,
+        turretSmokeChance: 0.018,
+        maxSmokePuffs: 35,
+        landingEffectsEnabled: true,
+        hardLandingVyThreshold: 1.25,
+        padWeightInteractionEnabled: true,
+        shyFloraEnabled: true,
+        shySpeedThreshold: 4.2,
+        shyShipRadius: 95,
+        shyBulletRadius: 85,
+        shyRecoveryRate: 0.015,
+        gravityStreamsEnabled: true,
+        gravityMotesPerTile: 2,
+        gravityStreamSpeed: 1.4,
+        gravityStreamColor: 'rgba(185, 120, 255, 0.38)',
+        crystalGlintsEnabled: true,
+        crystalVertexStride: 19,
+        crystalGlintAlpha: 0.75,
+        crashStainsEnabled: true,
+        crashStainRadius: 38,
+        crashStainAlpha: 0.72,
+        crashRayCount: 14,
+        crashFloraCharRadius: 68,
+        maxPrefabScorches: 40,
+        crashSmokeEnabled: true,
+        crashSmokeDurationTicks: 210, // ~3.5 seconds of lingering smoke emission at 60fps
+        crashSmokeSpawnChance: 0.42,  // Chance per frame to emit a dark smoke puff while active
+        crashSmokeAlpha: 0.44,        // Peak opacity of dark crash-site smoke puffs
+        maxCrashPlumes: 12            // Max concurrent smoking crash sites
     }
 };
 

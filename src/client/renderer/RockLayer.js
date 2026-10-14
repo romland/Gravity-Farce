@@ -388,4 +388,65 @@ export class RockLayer {
             }
         }
     }
+
+    stampScorch(x, y, radius = 6, alpha = 0.25) {
+        if (!this.cachedCanvas) return;
+        const ctx = this.cachedCanvas.getContext('2d');
+        ctx.save();
+        // source-atop ensures scorch/soot only paints onto existing rock pixels and NEVER into transparent sky!
+        ctx.globalCompositeOperation = 'source-atop';
+        const g = ctx.createRadialGradient(x, y, 1, x, y, radius);
+        g.addColorStop(0, `rgba(8, 5, 4, ${alpha})`);
+        g.addColorStop(1, 'rgba(8, 5, 4, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    stampBlastCrater(x, y, radius = 38, alpha = 0.72, rayCount = 14) {
+        if (!this.cachedCanvas) return;
+        const ctx = this.cachedCanvas.getContext('2d');
+        ctx.save();
+        // Strictly clip to existing rock pixels so mid-air explosions only stain adjacent rock walls
+        ctx.globalCompositeOperation = 'source-atop';
+
+        // 1. Deep carbonized core & outer soot gradient
+        const g = ctx.createRadialGradient(x, y, radius * 0.08, x, y, radius);
+        g.addColorStop(0, `rgba(4, 3, 2, ${Math.min(0.95, alpha * 1.15)})`);
+        g.addColorStop(0.45, `rgba(12, 8, 6, ${alpha * 0.75})`);
+        g.addColorStop(0.8, `rgba(22, 15, 11, ${alpha * 0.3})`);
+        g.addColorStop(1, 'rgba(12, 8, 6, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Jagged radial blast-soot streaks & fracture lines
+        ctx.lineCap = 'round';
+        for (let i = 0; i < rayCount; i++) {
+            const angle = (i / rayCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+            const len = radius * (0.55 + Math.random() * 0.65);
+            ctx.strokeStyle = `rgba(6, 4, 3, ${alpha * (0.35 + Math.random() * 0.4)})`;
+            ctx.lineWidth = 1.4 + Math.random() * 2.4;
+            ctx.beginPath();
+            ctx.moveTo(x + Math.cos(angle) * 3, y + Math.sin(angle) * 3);
+            ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+            ctx.stroke();
+        }
+
+        // 3. Outer spatter droplets
+        ctx.fillStyle = `rgba(8, 5, 4, ${alpha * 0.65})`;
+        for (let i = 0; i < rayCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = radius * (0.35 + Math.random() * 0.75);
+            const r = 1.2 + Math.random() * 2.6;
+            ctx.beginPath();
+            ctx.arc(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
 }
