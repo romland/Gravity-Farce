@@ -122,7 +122,10 @@ export class RockLayer {
         if (!this.recessedCanvas) return;
         const ox = camera.x * cfg.recessedParallax;
         const oy = camera.y * cfg.recessedParallax;
+        ctx.save();
+        if (cfg.recessedOpacity !== undefined) ctx.globalAlpha = cfg.recessedOpacity;
         ctx.drawImage(this.recessedCanvas, ox, oy);
+        ctx.restore();
     }
 
     draw(ctx, camera, viewW, viewH) {

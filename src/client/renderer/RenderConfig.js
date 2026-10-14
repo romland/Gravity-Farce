@@ -22,6 +22,7 @@ export const RENDER_CONFIG = {
     },
     rock: {
         recessedEnabled: true,
+        recessedOpacity: 1.0,   // Global opacity for the recessed cavern shadow
         recessedParallax: 0.35,  // Scroll factor for Layer -1 recessed cavern wall
         bedrockColor: '#261a14',
         strataColor: 'rgba(18, 11, 8, 0.45)',
