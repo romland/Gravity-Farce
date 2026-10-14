@@ -143,8 +143,8 @@
 
     <div id="login-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 20, 25, 0.9); backdrop-filter: blur(10px); border: 2px solid #4facfe; border-radius: 12px; width: 300px; display: none; flex-direction: column; z-index: 200; box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 20px;">
         <div class="board-title">PILOT REGISTRATION</div>
-        <input type="text" id="alias-input" maxlength="3" style="background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 24px; padding: 10px; margin-bottom: 10px; font-family: monospace; font-weight: bold; outline: none;" placeholder="AAA">
-        <div id="login-error" style="color: #e74c3c; text-align: center; margin-bottom: 10px; font-size: 12px; height: 14px; font-weight: bold;"></div>
+        <input type="text" autofocus id="alias-input" maxlength="3" style="background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 24px; padding: 10px; margin-bottom: 10px; font-family: monospace; font-weight: bold; outline: none;" placeholder="AAA">
+        <div id="login-error" style="color: #e74c3c; text-align: center; margin-bottom: 10px; font-size: 12px; font-weight: bold;"></div>
         <button id="btn-login-submit" class="btn-close" style="margin-bottom: 10px;">CONNECT</button>
         <button id="btn-login-random" class="btn-close" style="background: #2c3e50; color: #fff;">RANDOM CALLSIGN</button>
     </div>
@@ -1163,7 +1163,8 @@
                     socket.connect();
                     requestAnimationFrame(gameLoop);
                 } else {
-                    loginError.innerText = data.message;
+                    loginError.innerHTML = data.message +
+                        `<br><a style="color: white;" href="https://github.com/romland/Gravity-Farce" target="_blank">It's easy to run your own server</a>`;
                     document.getElementById('loading-screen').style.display = 'none';
                     loginModal.style.display = 'flex';
                 }
@@ -1176,7 +1177,12 @@
 
         document.getElementById('btn-login-submit').onclick = () => attemptLogin(aliasInput.value);
         document.getElementById('btn-login-random').onclick = async () => {
-            try { const res = await fetch('/api/auth/random'); const data = await res.json(); aliasInput.value = data.alias; loginError.innerText = ''; } catch (e) {}
+            try { 
+                const res = await fetch('/api/auth/random'); 
+                const data = await res.json(); 
+                aliasInput.value = data.alias; 
+                loginError.innerText = '';
+            } catch (e) {}
         };
         aliasInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') attemptLogin(aliasInput.value); });
 
