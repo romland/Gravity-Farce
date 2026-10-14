@@ -47,6 +47,6 @@ export class ServerProfiler {
         const heapUsed = mem.heapUsed / (1024 * 1024);
         const load = os.loadavg();
 
-        console.log(`[SYS]  Heap: ${heapUsed.toFixed(1)}MB | OS Free: ${freeMem.toFixed(1)}MB / ${totalMem.toFixed(1)}MB | Load (1/5/15m): ${load[0].toFixed(2)}, ${load[1].toFixed(2)}, ${load[2].toFixed(2)}`);
+        console.log(`       Heap: ${heapUsed.toFixed(1)}MB | OS Free: ${freeMem.toFixed(1)}MB / ${totalMem.toFixed(1)}MB | Load (1/5/15m): ${load[0].toFixed(2)}, ${load[1].toFixed(2)}, ${load[2].toFixed(2)}`);
     }
 }
