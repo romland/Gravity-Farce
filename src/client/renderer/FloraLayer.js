@@ -1,3 +1,5 @@
+import { RENDER_CONFIG } from './RenderConfig.js';
+
 export class FloraLayer {
     constructor() {
         this.anchors = [];
@@ -17,6 +19,8 @@ export class FloraLayer {
     }
 
     updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level) {
+        const cfg = RENDER_CONFIG.flora;
+        if (!cfg.enabled) return;
         if (level && this.builtForLevel !== level) {
             this.initLevel(level);
         }
@@ -27,7 +31,7 @@ export class FloraLayer {
         ctx.save();
         for (const a of this.anchors) {
             if (a.kind === 'DRIP_EMITTER') {
-                if (Math.random() < 0.008 && this.drips.length < 40) {
+                if (Math.random() < cfg.dripSpawnChance && this.drips.length < cfg.maxDrips) {
                     this.drips.push({ x: a.x, y: a.y + 4, vy: 1.5, life: 110 });
                 }
                 continue;
@@ -36,7 +40,6 @@ export class FloraLayer {
             // Interactive Ship-Wash & Thruster Blast Physics
             // Evaluate distance against the full vertical span of the plant so it stays parted while a ship is inside it!
             const dirY = a.kind === 'VINE' ? 1 : -1;
-            const midY = a.y + dirY * (a.length * 0.55);
             let targetBend = 0;
 
             for (const s of shipList) {
@@ -47,13 +50,14 @@ export class FloraLayer {
                 const dy = clampedY - s.y;
                 const dist = Math.hypot(dx, dy * 0.75);
 
-                const radius = (s.inputs && s.inputs.up) ? 210 : 165;
+                const isThrusting = Boolean(s.inputs && s.inputs.up);
+                const radius = isThrusting ? cfg.thrustRadius : cfg.proxRadius;
                 if (dist < radius) {
-                    const proximity = 1.0 - (dist / radius);
+                    const proximity = Math.pow(1.0 - (dist / radius), cfg.proxExponent);
                     // Keep a stable parting direction even when the ship center is dead-on the stem
                     const pushDir = Math.abs(dx) < 8 ? (a.bendAngle >= 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
-                    const thrustBoost = (s.inputs && s.inputs.up) ? 1.45 : 1.0;
-                    const desired = pushDir * Math.min(1.45, proximity * 1.35 * thrustBoost);
+                    const thrustBoost = isThrusting ? cfg.thrustMultiplier : 1.0;
+                    const desired = pushDir * Math.min(cfg.maxBendAngle, proximity * cfg.bendStrength * thrustBoost);
                     if (Math.abs(desired) > Math.abs(targetBend)) {
                         targetBend = desired;
                     }
@@ -61,17 +65,17 @@ export class FloraLayer {
             }
 
             // Smoothly spring toward targetBend (holds open while ship is present, relaxes when ship leaves)
-            const springK = targetBend !== 0 ? 0.14 : 0.045;
+            const springK = targetBend !== 0 ? cfg.activeSpringK : cfg.restSpringK;
             a.bendVel += (targetBend - a.bendAngle) * springK;
-            a.bendVel *= 0.84;
-            a.bendAngle = Math.max(-1.55, Math.min(1.55, a.bendAngle + a.bendVel));
+            a.bendVel *= cfg.damping;
+            a.bendAngle = Math.max(-cfg.maxBendAngle, Math.min(cfg.maxBendAngle, a.bendAngle + a.bendVel));
 
             if (a.kind === 'VINE') {
-                this.drawVine(ctx, a, timeSec);
+                this.drawVine(ctx, a, timeSec, cfg);
             } else if (a.kind === 'FERN') {
-                this.drawFern(ctx, a, timeSec);
+                this.drawFern(ctx, a, timeSec, cfg);
             } else if (a.kind === 'GLOW_SHROOM') {
-                this.drawGlowShroom(ctx, a, timeSec);
+                this.drawGlowShroom(ctx, a, timeSec, cfg);
             }
         }
 
@@ -92,7 +96,7 @@ export class FloraLayer {
         ctx.restore();
     }
 
-    drawVine(ctx, a, timeSec) {
+    drawVine(ctx, a, timeSec, cfg) {
         const segments = 7;
         ctx.strokeStyle = '#2ea355';
         ctx.lineWidth = 4.0;
@@ -105,8 +109,8 @@ export class FloraLayer {
         for (let s = 1; s <= segments; s++) {
             const t = s / segments;
             // Quadratic bend curve (t^2) so root stays locked to rock contour
-            const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
-            const washOffset = a.bendAngle * a.length * 0.92;
+            const wind = Math.sin(timeSec * cfg.windSpeed + a.seed + t * 2.0) * cfg.vineWindAmp;
+            const washOffset = a.bendAngle * a.length * cfg.vineWashScale;
             tipX = a.x + (wind + washOffset) * (t * t);
             tipY = a.y + a.length * t;
             ctx.lineTo(tipX, tipY);
@@ -117,8 +121,8 @@ export class FloraLayer {
         ctx.fillStyle = '#38b862';
         for (let s = 2; s < segments; s += 2) {
             const t = s / segments;
-            const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
-            const washOffset = a.bendAngle * a.length * 0.92;
+            const wind = Math.sin(timeSec * cfg.windSpeed + a.seed + t * 2.0) * cfg.vineWindAmp;
+            const washOffset = a.bendAngle * a.length * cfg.vineWashScale;
             const lx = a.x + (wind + washOffset) * (t * t);
             const ly = a.y + a.length * t;
             const side = (s % 4 === 0 ? 1 : -1) * 7;
@@ -134,8 +138,8 @@ export class FloraLayer {
         ctx.fill();
     }
 
-    drawFern(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.8 + a.seed) * 9 + a.bendAngle * 42;
+    drawFern(ctx, a, timeSec, cfg) {
+        const sway = Math.sin(timeSec * (cfg.windSpeed * 1.25) + a.seed) * cfg.fernWindAmp + a.bendAngle * cfg.fernWashScale;
         ctx.strokeStyle = '#38b862';
         ctx.lineWidth = 3.2;
         ctx.lineCap = 'round';
@@ -153,8 +157,8 @@ export class FloraLayer {
         }
     }
 
-    drawGlowShroom(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.0 + a.seed) * 7 + a.bendAngle * 36;
+    drawGlowShroom(ctx, a, timeSec, cfg) {
+        const sway = Math.sin(timeSec * cfg.windSpeed + a.seed) * cfg.shroomWindAmp + a.bendAngle * cfg.shroomWashScale;
         const tipX = a.x + sway;
         const tipY = a.y - a.length;
 

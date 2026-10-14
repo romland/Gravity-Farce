@@ -1,3 +1,5 @@
+import { RENDER_CONFIG } from './RenderConfig.js';
+
 export class RockLayer {
     constructor() {
         this.cachedCanvas = null;
@@ -7,6 +9,7 @@ export class RockLayer {
 
     buildLevelCache(level) {
         if (!level || !level.walls || level.walls.length === 0) return;
+        const cfg = RENDER_CONFIG.rock;
         this.builtForLevel = level;
 
         const w = level.width;
@@ -51,27 +54,27 @@ export class RockLayer {
         ctx.clip('evenodd');
 
         // Deep Bedrock Fill
-        ctx.fillStyle = '#261a14';
+        ctx.fillStyle = cfg.bedrockColor;
         ctx.fillRect(0, 0, w, h);
 
         // Procedural Subterranean Strata Striations inside the rock
-        ctx.fillStyle = 'rgba(18, 11, 8, 0.45)';
-        for (let y = 0; y < h; y += 28) {
-            ctx.fillRect(0, y, w, 10);
+        ctx.fillStyle = cfg.strataColor;
+        for (let y = 0; y < h; y += cfg.strataStepY) {
+            ctx.fillRect(0, y, w, cfg.strataHeight);
         }
 
         // Inner Bevel Layer 1 (Mid-Rock Warmth via thick inner stroke clipped to rock)
         traceAllLoops(ctx);
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#5c3c26';
-        ctx.lineWidth = 28;
+        ctx.strokeStyle = cfg.midBevelColor;
+        ctx.lineWidth = cfg.midBevelWidth;
         ctx.stroke();
 
         // Inner Bevel Layer 2 (Warm Ochre Sub-Rim)
         traceAllLoops(ctx);
-        ctx.strokeStyle = '#8c5b37';
-        ctx.lineWidth = 12;
+        ctx.strokeStyle = cfg.innerRimColor;
+        ctx.lineWidth = cfg.innerRimWidth;
         ctx.stroke();
 
         ctx.restore();
@@ -81,8 +84,8 @@ export class RockLayer {
         traceAllLoops(ctx);
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#b98250';
-        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = cfg.outerOutlineColor;
+        ctx.lineWidth = cfg.outerOutlineWidth;
         ctx.stroke();
         ctx.restore();
 
@@ -111,12 +114,14 @@ export class RockLayer {
     }
 
     drawRecessed(ctx, camera, viewW, viewH, level) {
+        const cfg = RENDER_CONFIG.rock;
+        if (!cfg.recessedEnabled) return;
         if (level && this.builtForLevel !== level) {
             this.buildLevelCache(level);
         }
         if (!this.recessedCanvas) return;
-        const ox = camera.x * 0.35;
-        const oy = camera.y * 0.35;
+        const ox = camera.x * cfg.recessedParallax;
+        const oy = camera.y * cfg.recessedParallax;
         ctx.drawImage(this.recessedCanvas, ox, oy);
     }
 
