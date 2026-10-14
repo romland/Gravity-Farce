@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const VALID_CHARS = `!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~¡¢£¤¥¦§¨©ª«¬\xad®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ`
+const VALID_CHARS = `!#$%&()*+,-./0123456789:;=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{|}~`;
 const EASY_CHARS = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`;
 
 export class AuthManager {
@@ -14,7 +14,9 @@ export class AuthManager {
     }
 
     public validateOrClaim(alias: string, uuid: string, allowNew: boolean = true, requireApproval: boolean = false): { success: boolean, message?: string } {
-        if (!alias || typeof alias !== 'string') return { success: false, message: 'INVALID ALIAS' };
+        if (!alias || typeof alias !== 'string' || !uuid || typeof uuid !== 'string' || uuid.length > 64) {
+            return { success: false, message: 'INVALID CREDENTIALS' };
+        }
 
         if (alias.length !== 3) {
             return { success: false, message: 'MUST BE EXACTLY 3 CHARACTERS' };

@@ -226,7 +226,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                     const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                     if (shooterEntity !== undefined) {
                         const shooter = ecs.players.get(shooterEntity);
-                        if (shooter) shooter.score += getTurretSpecByTile(turret.turretType).scoreValue;
+                        if (shooter && !shooter.isDead) shooter.score += getTurretSpecByTile(turret.turretType).scoreValue;
                     }
                     }
                     break;
@@ -251,7 +251,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                             const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                             if (shooterEntity !== undefined) {
                                 const shooter = ecs.players.get(shooterEntity);
-                                if (shooter) shooter.score += 100; // Hardcoded #$00000064 in 000360BC
+                                if (shooter && !shooter.isDead) shooter.score += 100; // Hardcoded #$00000064 in 000360BC
                             }
                         }
                         break;
@@ -279,7 +279,7 @@ export function sysBullets(ecs: Registry, room: Room) {
                                     const shooterEntity = ecs.getPlayerEntity(b.ownerId);
                                     if (shooterEntity !== undefined) {
                                         const shooter = ecs.players.get(shooterEntity);
-                                        if (shooter) shooter.score += flying.scoreValue;
+                                        if (shooter && !shooter.isDead) shooter.score += flying.scoreValue;
                                     }
                                 }
                             }

@@ -315,6 +315,10 @@
             level = data;
             renderState.players = {}; // Clear old players on level swap
             document.getElementById('loading-screen').style.display = 'none';
+            if (window.gfRenderer) {
+                window.gfRenderer.rock.buildLevelCache(level);
+                window.gfRenderer.flora.initLevel(level);
+            }
             
             raceLights = [];
             if (level.rawMap) {
@@ -864,8 +868,13 @@
             requestAnimationFrame(gameLoop);
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            ctx.fillStyle = '#050505'; 
-            ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+            const timeSec = performance.now() * 0.001;
+            if (window.gfRenderer) {
+                window.gfRenderer.parallax.draw(ctx, camera, timeSec);
+            } else {
+                ctx.fillStyle = '#050505';
+                ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+            }
             if (!level) return;
 
             // Interpolation
@@ -944,53 +953,11 @@
             ctx.save();
             ctx.translate(Math.floor(-camera.x), Math.floor(-camera.y));
 
-            // Map
-            ctx.fillStyle = '#0d1117'; 
-            ctx.strokeStyle = '#2d3748'; 
-            ctx.lineWidth = 3;
-            
-            if (level.ceiling && level.ceiling.length > 0) {
-                ctx.beginPath(); 
-                ctx.moveTo(level.ceiling[0].x, -3000);
-                for (let p of level.ceiling) {
-                    ctx.lineTo(p.x, p.y);
-                }
-                ctx.lineTo(level.ceiling[level.ceiling.length-1].x, -3000);
-                ctx.fill(); 
-                ctx.stroke();
-            }
-
-            if (level.floor && level.floor.length > 0) {
-                ctx.beginPath(); 
-                ctx.moveTo(level.floor[0].x, 3000);
-                for (let p of level.floor) {
-                    ctx.lineTo(p.x, p.y);
-                }
-                ctx.lineTo(level.floor[level.floor.length-1].x, 3000);
-                ctx.fill(); 
-                ctx.stroke();
-            }
-
-            if (level.walls) {
-                for (let wall of level.walls) {
-                    ctx.beginPath(); 
-                    ctx.moveTo(wall[0].x, wall[0].y);
-                    for (let p of wall) {
-                        ctx.lineTo(p.x, p.y);
-                    }
-                    ctx.fill(); 
-                    ctx.stroke();
-                }
-            }
-
-            // Pads
-            if (level.entities) {
-                level.entities.filter(e => e.type === 'pad').forEach(pad => {
-                    ctx.fillStyle = '#111'; 
-                    ctx.fillRect(pad.x, pad.y, pad.w || 20, pad.h || 20);
-                    ctx.fillStyle = '#4a9'; 
-                    ctx.fillRect(pad.x, pad.y, pad.w || 20, 4);
-                });
+            // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs + Interactive Flora
+            if (window.gfRenderer) {
+                window.gfRenderer.rock.draw(ctx);
+                window.gfRenderer.prefabs.draw(ctx, level, timeSec);
+                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles);
             }
 
             if (serverState.cargos) {
@@ -1209,6 +1176,19 @@
             }
         }
         bootstrapGame();
+    </script>
+    <script type="module">
+        import { ParallaxLayer } from './renderer/ParallaxLayer.js';
+        import { RockLayer } from './renderer/RockLayer.js';
+        import { PrefabLayer } from './renderer/PrefabLayer.js';
+        import { FloraLayer } from './renderer/FloraLayer.js';
+
+        window.gfRenderer = {
+            parallax: new ParallaxLayer(1600, 900),
+            rock: new RockLayer(),
+            prefabs: new PrefabLayer(),
+            flora: new FloraLayer()
+        };
     </script>
 </body>
 </html>

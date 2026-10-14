@@ -36,6 +36,8 @@ try {
     console.warn("Could not load org-levels.json. Did you run the extractor?", e);
 }
 
+const compiledLevelCache = new Map<number, LevelData>();
+
 export function getLevelData(index: number): LevelData {
     const maxLevels = Math.max(1, orgLevelsData.length);
     let safeIndex = index % maxLevels;
@@ -44,7 +46,15 @@ export function getLevelData(index: number): LevelData {
         safeIndex += maxLevels;
     }
     
-    const levelJson = orgLevelsData[safeIndex];
-    const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
-    return generator.generate(safeIndex);
+    if (!compiledLevelCache.has(safeIndex)) {
+        const levelJson = orgLevelsData[safeIndex];
+        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
+        compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
+    }
+
+    const cached = compiledLevelCache.get(safeIndex)!;
+    return {
+        ...cached,
+        rawMap: cached.rawMap ? cached.rawMap.map(row => [...row]) : undefined
+    };
 }

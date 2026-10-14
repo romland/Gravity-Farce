@@ -1,0 +1,132 @@
+import fs from 'fs';
+import path from 'path';
+import { TILE_DICTIONARY } from './tiles';
+
+export type TileCategory = 'NONE' | 'PAD' | 'BRICK' | 'TREE' | 'ROCK';
+
+const PAD_TILES = new Set([0x15, 0x29]);
+
+const BRICK_TILES = new Set([
+    0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x21, 0x24, 0x25, 0x26, 0x27, 0x28,
+    0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E,
+    0x6F, 0x70, 0x71, 0x72,
+    0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C,
+    0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8F,
+    0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42
+]);
+
+const TREE_TILES = new Set([
+    0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31,
+    0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A
+]);
+
+export function getTileCategory(tid: number): TileCategory {
+    if (tid === 0x00 || tid === 0x20 || tid === 0x32 || tid === 0x33 || tid >= 0x90) {
+        return 'NONE';
+    }
+    if (!TILE_DICTIONARY[tid]?.solid && !TILE_DICTIONARY[tid]?.pad) {
+        return 'NONE';
+    }
+    if (PAD_TILES.has(tid)) {
+        return 'PAD';
+    }
+    if (BRICK_TILES.has(tid)) {
+        return 'BRICK';
+    }
+    if (TREE_TILES.has(tid)) {
+        return 'TREE';
+    }
+    return 'ROCK';
+}
+
+const PROCEDURAL_SLOPE_MASKS: Record<number, number[]> = {
+    0x01: [0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F, 0xFF],
+    0x02: [0xFF, 0xFF, 0xE7, 0xC3, 0xC3, 0xE7, 0xFF, 0xFF],
+    0x03: [0xFF, 0xC3, 0x81, 0x81, 0x81, 0xC3, 0xFF, 0xFF],
+    0x04: [0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F, 0xFF, 0xFF],
+    0x05: [0x00, 0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F],
+    0x09: [0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xF0],
+    0x0B: [0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE, 0xFF],
+    0x0C: [0xF0, 0xF8, 0xFC, 0xFE, 0xFC, 0xF8, 0xF0, 0xF0],
+    0x0E: [0xFF, 0xFF, 0xFF, 0xFF, 0xE7, 0xC3, 0x81, 0x00],
+    0x10: [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
+    0x12: [0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF],
+    0x13: [0xFF, 0xFE, 0xFC, 0xF8, 0xF0, 0xE0, 0xC0, 0x80],
+    0x18: [0xF0, 0xF0, 0xF0, 0xE0, 0xC0, 0x80, 0x00, 0x00],
+    0x5B: [0x00, 0x00, 0x3F, 0xFF, 0xFF, 0x3F, 0x00, 0x00],
+    0x5C: [0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00],
+    0x5D: [0x00, 0x00, 0xFC, 0xFF, 0xFF, 0xFC, 0x00, 0x00],
+    0x73: [0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF],
+    0x74: [0xE0, 0xE0, 0xE0, 0xE0, 0xE0, 0xE0, 0xE0, 0xE0],
+    0x75: [0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
+};
+
+export class TileMaskRegistry {
+    private masks: number[][][] = [];
+
+    constructor() {
+        this.initDefaultMasks();
+        this.tryLoadExtractedMasks();
+    }
+
+    private initDefaultMasks() {
+        for (let tid = 0; tid < 256; tid++) {
+            const cat = getTileCategory(tid);
+            if (cat === 'NONE') {
+                this.masks[tid] = Array.from({ length: 8 }, () => Array(8).fill(0));
+                continue;
+            }
+            const rowBytes = PROCEDURAL_SLOPE_MASKS[tid] || [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+            this.masks[tid] = this.bytesToGrid(rowBytes);
+        }
+    }
+
+    private tryLoadExtractedMasks() {
+        const candidates = [
+            path.resolve(process.cwd(), 'src/server/data/tile_masks.json'),
+            path.resolve(process.cwd(), 'tile_masks.json'),
+            path.resolve(process.cwd(), 'org/tile_masks.json')
+        ];
+        for (const p of candidates) {
+            if (fs.existsSync(p)) {
+                try {
+                    const raw = JSON.parse(fs.readFileSync(p, 'utf-8'));
+                    for (let tid = 0; tid < 256; tid++) {
+                        const key = `0x${tid.toString(16).toUpperCase().padStart(2, '0')}`;
+                        const entry = raw[key];
+                        if (entry && Array.isArray(entry.visualMask)) {
+                            if (tid === 0x1B || tid === 0x28 || tid === 0x15 || tid === 0x29) {
+                                this.masks[tid] = Array.from({ length: 8 }, () => Array(8).fill(1));
+                            } else {
+                                this.masks[tid] = this.bytesToGrid(entry.visualMask);
+                            }
+                        }
+                    }
+                    console.log(`Loaded exact Amiga 8x8 bitplane masks from ${path.basename(p)}`);
+                    return;
+                } catch (e) {
+                    console.warn('Failed to parse tile_masks.json, using procedural masks.', e);
+                }
+            }
+        }
+    }
+
+    private bytesToGrid(rowBytes: number[]): number[][] {
+        const grid: number[][] = [];
+        for (let y = 0; y < 8; y++) {
+            const b = rowBytes[y] ?? 0;
+            const row: number[] = [];
+            for (let x = 0; x < 8; x++) {
+                row.push((b >> (7 - x)) & 1);
+            }
+            grid.push(row);
+        }
+        return grid;
+    }
+
+    public getMask(tid: number): number[][] {
+        return this.masks[tid] || this.masks[0];
+    }
+}
+
+export const tileMaskRegistry = new TileMaskRegistry();

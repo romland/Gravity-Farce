@@ -1,7 +1,7 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import { getLevelData } from './levels';
+import { getLevelData, getLevelCategory } from './levels';
 import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
@@ -49,6 +49,15 @@ let nextReplayRoomId = -1;
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
 const playerRooms = new Map<string, number>();
 const playerSessionStats = new Map<string, PlayerStats>();
+
+function isValidLevelIndex(index: number): boolean {
+    try {
+        getLevelCategory(index);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
@@ -221,7 +230,7 @@ io.on('connection', (socket) => {
             isServerPaused = !isServerPaused;
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
-            if (!isNaN(tgt)) {
+            if (!isNaN(tgt) && isValidLevelIndex(tgt)) {
                 handleTransitionToLevel(socket.id, tgt, false);
             }
         } else if (action.startsWith("powerup-")) {
@@ -303,6 +312,9 @@ io.on('connection', (socket) => {
     });
 
     const startReplay = (replayId: string) => {
+        if (typeof replayId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(replayId)) {
+            return;
+        }
         try {
             const dir = path.resolve(process.cwd(), 'data/replays');
             let dataRaw;
@@ -368,7 +380,12 @@ io.on('connection', (socket) => {
     socket.on('next_level', () => {
         const current = playerRooms.get(socket.id);
         if (current !== undefined) {
-            handleTransitionToLevel(socket.id, current + 1);
+            let nextLvl = current + 1;
+            while (!isValidLevelIndex(nextLvl) && nextLvl < 74) {
+                nextLvl++;
+            }
+            if (nextLvl >= 74) nextLvl = 0;
+            handleTransitionToLevel(socket.id, nextLvl);
         }
     });
 
@@ -415,7 +432,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('request_leaderboard', () => {
-        const pLevel = playerRooms.get(socket.id) ?? 0;
+        const rawLevel = playerRooms.get(socket.id) ?? 0;
+        const pLevel = rooms.get(rawLevel)?.levelIndex ?? 0;
         const room = rooms.get(pLevel);
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;

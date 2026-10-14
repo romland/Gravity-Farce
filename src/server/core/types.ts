@@ -13,6 +13,25 @@ export interface LevelEntity {
     props?: any;
 }
 
+export interface LevelPrefab {
+    kind: 'PAD' | 'BASE_STRUCTURE' | 'BARREL_STACK' | 'GRAVITY_EMITTER' | 'ANTENNA_MAST' | 'TEAL_BRICK' | 'HERO_TREE';
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    tileId: number;
+}
+
+export interface FloraAnchor {
+    kind: 'VINE' | 'FERN' | 'GLOW_SHROOM' | 'DRIP_EMITTER';
+    x: number;
+    y: number;
+    nx: number;
+    ny: number;
+    length: number;
+    seed: number;
+}
+
 export interface LevelData {
     name: string;
     width: number;
@@ -21,6 +40,10 @@ export interface LevelData {
     walls: Point[][];
     entities: LevelEntity[];
     rawMap?: number[][];
+    highRes?: {
+        prefabs: LevelPrefab[];
+        flora: FloraAnchor[];
+    };
 }
 
 export interface PlayerStats {

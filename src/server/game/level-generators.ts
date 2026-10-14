@@ -1,6 +1,11 @@
 import type { LevelData, Point, LevelEntity } from '../core/types';
 import type { LevelGenerator } from '../core/level-generator';
 import { TILE_DICTIONARY } from '../core/tiles';
+import { tileMaskRegistry, getTileCategory } from '../core/tile-masks';
+import { ContourExtractor } from './highres/ContourExtractor';
+import { ContourSmoother } from './highres/ContourSmoother';
+import { ClusterPromoter } from './highres/ClusterPromoter';
+import { FloraSeeder } from './highres/FloraSeeder';
 
 export const TILE_SIZE = 32;
 
@@ -131,11 +136,23 @@ export class LegacyTileGenerator implements LevelGenerator {
     }
 
     generate(index: number): LevelData {
-        const walls = this.mesher.mesh(t => !!TILE_DICTIONARY[t]?.solid);
+        const smoothedLoops = this.extractSmoothedContours();
+        const walls: Point[][] = smoothedLoops.map(loop => {
+            const pts = loop.map(v => ({
+                x: Number((v.x * 4).toFixed(1)),
+                y: Number((v.y * 4).toFixed(1))
+            }));
+            if (pts.length > 0) {
+                pts.push({ x: pts[0].x, y: pts[0].y }); // Close loop for checkPolyIntersect
+            }
+            return pts;
+        });
+
         const rawPads = this.mesher.mesh(t => !!TILE_DICTIONARY[t]?.pad);
-        
         const pads = rawPads.map((p, idx) => this.polyToPadEntity(p, idx === rawPads.length - 1));
         const entities = this.extractor.extract(pads);
+        const prefabs = ClusterPromoter.extractPrefabs(this.grid, TILE_SIZE);
+        const flora = FloraSeeder.generateFlora(smoothedLoops, index, 4);
 
         return { 
             name: this.name, 
@@ -145,8 +162,39 @@ export class LegacyTileGenerator implements LevelGenerator {
             floor: [], 
             walls,
             entities: [...pads, ...entities],
-            rawMap: this.grid
+            rawMap: this.grid,
+            highRes: {
+                prefabs,
+                flora
+            }
         };
+    }
+
+    private extractSmoothedContours() {
+        const tilesH = this.grid.length;
+        const tilesW = tilesH > 0 ? this.grid[0].length : 0;
+        const pxW = tilesW * 8;
+        const pxH = tilesH * 8;
+
+        const solidGrid: number[][] = Array.from({ length: pxH }, () => new Array(pxW).fill(0));
+        for (let ty = 0; ty < tilesH; ty++) {
+            for (let tx = 0; tx < tilesW; tx++) {
+                const tid = this.grid[ty][tx];
+                if (getTileCategory(tid) !== 'NONE') {
+                    const mask = tileMaskRegistry.getMask(tid);
+                    for (let py = 0; py < 8; py++) {
+                        for (let px = 0; px < 8; px++) {
+                            if (mask[py][px]) {
+                                solidGrid[ty * 8 + py][tx * 8 + px] = 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const rawLoops = ContourExtractor.extractLoops(solidGrid, pxW, pxH);
+        return rawLoops.map(loop => ContourSmoother.smoothLoop(loop, this.grid, tilesW, tilesH, 3));
     }
 
     private polyToPadEntity(poly: Point[], isEndPad: boolean): LevelEntity {
