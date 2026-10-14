@@ -197,6 +197,59 @@
             -webkit-text-fill-color: transparent;
             color: transparent;
         }
+
+        /* Persistent Selected State for Tabs */
+        .tab-item.selected-tab {
+            background-color: #333;
+            border-top: 4px solid #111;
+            border-left: 4px solid #111;
+            border-bottom: 4px solid #666;
+            border-right: 4px solid #666;
+        }
+        .tab-item.selected-tab span {
+            background: linear-gradient(to bottom, #ffffff 0%, #00ffff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 4px rgba(0, 255, 255, 0.6));
+        }
+
+        /* New Nav / Arrow Styles */
+        .retro-btn:focus {
+            /*
+            outline: 2px solid #00ffff;
+            outline-offset: 2px;
+            */
+            outline: none;
+        }
+
+        .retro-mode-btn:focus {
+            outline: 2px solid #00ffff;
+            outline-offset: 2px;
+        }
+
+        .arrow {
+            display: inline-block;
+            transition: all 0.1s;
+            color: #555;
+            font-size: 0.8em;
+            vertical-align: middle;
+            margin: 0 2px;
+            padding: 4px; /* Larger hit area for mouse clicks */
+            position: relative;
+            top: -4px; /* Push it up to align perfectly with the number */
+            cursor: pointer;
+        }
+
+        .retro-btn.active .arrow {
+            color: #00ffff;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+            animation: arrow-pulse 1s infinite alternate;
+        }
+
+        @keyframes arrow-pulse {
+            from { opacity: 1; }
+            to { opacity: 0.3; }
+        }
     </style>
 </head>
 <body>
@@ -223,26 +276,36 @@
                 <!--
                 <div class="mb-4 text-gray-label text-sm tracking-wider">BY STEPHAN WENZLER</div>
                 -->
-                <div class="mb-4 text-gray-label text-sm tracking-wider">&nbsp;</div>
                 
-                <button class="retro-btn active">
+                <!-- Multiplayer / Single Player Tabs -->
+                <div class="flex gap-4 mb-4 border-b-4 border-gray-600 pb-4">
+                    <button class="retro-btn retro-mode-btn tab-item flex-1 !p-2 !mb-0 text-center justify-center !text-xs" tabindex="0">
+                        <span>MULTI<br>PLAYER</span>
+                    </button>
+                    <button class="retro-btn retro-mode-btn tab-item flex-1 !p-2 !mb-0 text-center justify-center !text-xs" tabindex="0">
+                        <span>SINGLE<br>PLAYER</span>
+                    </button>
+                </div>
+                
+                <button class="retro-btn menu-item has-value" tabindex="0" data-val="0" data-min="0" data-max="49">
                     <span>MISSION</span>
+                    <span><span class="arrow left-arrow">◀</span><span class="val">0</span><span class="arrow right-arrow">▶</span></span>
                 </button>
                 
-                <button class="retro-btn">
+                <button class="retro-btn menu-item has-value" tabindex="0" data-val="0" data-min="0" data-max="99">
                     <span>RACE</span>
-                    <span>9</span>
+                    <span><span class="arrow left-arrow">◀</span><span class="val">0</span><span class="arrow right-arrow">▶</span></span>
                 </button>
                 
-                <button class="retro-btn">
-                    <span>2 PILOTS RACE</span>
-                    <span>0</span>
-                </button>
-                
-                <button class="retro-btn">
+                <button class="retro-btn menu-item has-value" tabindex="0" data-val="0" data-min="0" data-max="99">
                     <span>DOGFIGHT</span>
-                    <span>0</span>
+                    <span><span class="arrow left-arrow">◀</span><span class="val">0</span><span class="arrow right-arrow">▶</span></span>
                 </button>
+
+                <button class="retro-btn menu-item">
+                    <span>OPTIONS</span>
+                </button>
+
             </div>
 
             <!-- Right Column: Hi-Scores -->
@@ -274,13 +337,16 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
                 <div class="mt-4 text-center">
                     <div class="text-gray-light text-xs mb-2">COURSE 9 RECORD</div>
-                    <div class="bg-black border-t-4 border-l-4 border-gray-800 border-b-4 border-r-4 border-gray-400 p-2 gradient-text-cyan text-sm">
-                        04:16:70 FRI
+                    <div class="screen-area" style="padding: 10px;">
+                        <span class="gradient-text-cyan text-sm">
+                            04:16:70 FRI
+                        </span>
                     </div>
+                </div>
+
                 </div>
 
                 <!--
@@ -288,10 +354,144 @@
                     &copy; 1989 BY KINGSOFT
                 </div>
                 -->
+                <div class="mt-6 text-right gradient-text-cyan text-nowrap">
+                    <a class="mb-4 text-[10px] text-gray-label tracking-wider" href="https://github.com/romland/Gravity-Farce" target="_blank">github.com/romland/Gravity-Farce</a>
+                    <div class="mb-4 text-[10px] text-gray-label tracking-wider">ORIGINAL BY STEPHAN WENZLER</div>
+                </div>
             </div>
 
         </div>
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = Array.from(document.querySelectorAll('.tab-item'));
+            const menuItems = Array.from(document.querySelectorAll('.menu-item'));
+            
+            let currentTabIndex = 0;
+            let currentMenuIndex = 0;
+            let inTabs = false; // Start with focus in the menu items
+
+            function renderFocus() {
+                // Reset all states
+                tabs.forEach(tab => {
+                    tab.classList.remove('active', 'selected-tab');
+                    tab.style.opacity = '0.5'; // Dim unselected tabs
+                });
+                menuItems.forEach(item => item.classList.remove('active'));
+
+                // The active tab is always fully opaque (even if focus is in the menu)
+                tabs[currentTabIndex].classList.add('selected-tab');
+                tabs[currentTabIndex].style.opacity = '1';
+
+                // Highlight and focus the currently active zone
+                const target = inTabs ? tabs[currentTabIndex] : menuItems[currentMenuIndex];
+                target.classList.add('active');
+                
+                if (document.activeElement !== target) target.focus();
+            }
+
+            function changeValue(item, delta) {
+                let val = parseInt(item.dataset.val, 10);
+                const min = parseInt(item.dataset.min, 10);
+                const max = parseInt(item.dataset.max, 10);
+                
+                if (delta > 0 && val < max) val++;
+                if (delta < 0 && val > min) val--;
+                
+                item.dataset.val = val;
+                item.querySelector('.val').textContent = val;
+                
+                // Visual bump for the arrow
+                const arrow = item.querySelector(delta < 0 ? '.left-arrow' : '.right-arrow');
+                if (arrow) {
+                    arrow.style.transform = 'scale(1.5)';
+                    arrow.style.color = '#fff';
+                    setTimeout(() => {
+                        arrow.style.transform = '';
+                        arrow.style.color = '';
+                    }, 100);
+                }
+            }
+
+            // Init first state
+            renderFocus();
+
+            window.addEventListener('keydown', (e) => {
+                if (inTabs) {
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        inTabs = false;
+                        renderFocus(); // Drops focus straight down to the last used menu item
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        inTabs = false;
+                        currentMenuIndex = menuItems.length - 1; // Wrap to bottom of menu
+                        renderFocus();
+                    } else if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        if (currentTabIndex > 0) currentTabIndex--;
+                        renderFocus();
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        if (currentTabIndex < tabs.length - 1) currentTabIndex++;
+                        renderFocus();
+                    }
+                } else {
+                    // We are in the menu
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (currentMenuIndex < menuItems.length - 1) {
+                            currentMenuIndex++;
+                        } else {
+                            inTabs = true; // Wrap down into tabs
+                        }
+                        renderFocus();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (currentMenuIndex > 0) {
+                            currentMenuIndex--;
+                        } else {
+                            inTabs = true; // Move up into tabs
+                        }
+                        renderFocus();
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        const currentItem = menuItems[currentMenuIndex];
+                        if (currentItem.classList.contains('has-value')) {
+                            e.preventDefault();
+                            changeValue(currentItem, e.key === 'ArrowRight' ? 1 : -1);
+                        }
+                    }
+                }
+            });
+
+            // Allow mouse clicks on the arrows
+            document.querySelectorAll('.arrow').forEach(arrow => {
+                arrow.addEventListener('mousedown', (e) => {
+                    e.stopPropagation(); // Prevent the button's own click event from firing twice
+                    const item = e.target.closest('.has-value');
+                    if (item) {
+                        inTabs = false;
+                        currentMenuIndex = menuItems.indexOf(item);
+                        renderFocus();
+                        changeValue(item, e.target.classList.contains('right-arrow') ? 1 : -1);
+                    }
+                });
+            });
+
+            // Sync browser tabbing and mouse clicks with our internal state
+            tabs.forEach((tab, index) => {
+                const setTab = () => { inTabs = true; currentTabIndex = index; renderFocus(); };
+                tab.addEventListener('focus', setTab);
+                tab.addEventListener('mousedown', setTab);
+            });
+
+            menuItems.forEach((item, index) => {
+                const setMenu = () => { inTabs = false; currentMenuIndex = index; renderFocus(); };
+                item.addEventListener('focus', setMenu);
+                item.addEventListener('mousedown', setMenu);
+            });
+        });
+    </script>
 </body>
 </html>

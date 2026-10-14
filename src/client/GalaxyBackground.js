@@ -8,7 +8,42 @@
         const container = document.getElementById('selection-screen');
         const galaxy = new GalaxyBackground(container);
     </script>
-*/
+ */
+const CONFIG = {
+    // --- CAMERA & VIEW ---
+    offsetX: 0.0,           // Move galaxy center left/right (positive = right)
+    offsetY: -0.0,          // Move galaxy center up/down (positive = up)
+    camDist: 1.5,           // Distance from camera to galaxy
+    fov: 5.0,               // Field of view (higher = wider)
+    aspectSpread: 0.45,     // How much to stretch the galaxy horizontally
+    pitchCos: 0.866,        // Camera tilt (pitch). 0.866 / 0.5 = ~30 deg
+    pitchSin: 0.5,          
+    yawCos: 0.9848,         // Camera rotation (yaw). 0.9848 / 0.1736 = ~10 deg
+    yawSin: 0.1736,         
+    
+    // --- SHADER GLOBALS ---
+    nebulaShaderAlpha: 1.65, // Global opacity multiplier for all gas clouds
+    starSizeMultiplier: 4.0, // Global size multiplier for all stars
+    starBrightnessMultiplier: 1.0, // Global brightness multiplier for all stars
+    
+    // --- ANIMATION SPEED ---
+    globalTimeSpeed: 1.0,    // Multiplier for everything (twinkle, waves, and orbit)
+    orbitSpeed: 0.5,         // Multiplier for ONLY the rotation speed of the galaxy
+
+    // --- GALAXY STRUCTURE ---
+    arms: 2,                 // Number of spiral arms
+    spiralTightness: 1.5,    // How tightly the arms wind (lower = looser)
+    
+    // --- PARTICLES: { count, spread, size: [min, max], alpha: [min, max] } ---
+    core:     { count: 1500/4, spread: 0.8, size: [1.5, 5.5],   alpha: [0.1, 0.25] },
+    armStars: { count: 8000/4, spread: 7.5, size: [1.5, 5.5],   alpha: [0.3, 0.8]  },
+    nebula:   { count: 3500/4, spread: 8.0, size: [20.0, 60.0], alpha: [0.06, 0.12] },
+    bgStars:  { count: 2000/4,              size: [0.5, 3.0],   alpha: [0.15, 0.5] }
+};
+
+// Helper to ensure WebGL gets floats for shader injection (e.g., 5 becomes "5.0")
+const f = (n) => Number.isInteger(n) ? n.toFixed(1) : n.toString();
+
 export default class GalaxyBackground {
     constructor(containerElement) {
         this.container = containerElement;
@@ -37,8 +72,7 @@ export default class GalaxyBackground {
 
         if (!this.gl) throw new Error("WebGL not supported");
 
-        // Keep the GPU count highly optimized but much more visible
-        this.totalParticles = 14500;
+        this.totalParticles = CONFIG.core.count + CONFIG.armStars.count + CONFIG.nebula.count + CONFIG.bgStars.count;
         this.time = 0;
 
         this.initShaders();
@@ -75,61 +109,62 @@ export default class GalaxyBackground {
                     float speed = a_params.y;
 
                     // Super slow deep-space movement (natural visual orbital decay)
-                    float angVel = (speed * 0.085) / (r * 0.7 + 0.3);
-                    float theta = baseAngle + u_time * angVel;
+                    float angVel = (speed * 0.03 * ${f(CONFIG.orbitSpeed)}) / (r * 0.5 + 0.1);
+                    float theta = baseAngle - u_time * angVel;
 
-                    // Highly organic, larger waves on interstellar gas to give depth
+                    // Subtle organic waves for interstellar gas
                     if (a_params.z > 0.5) {
-                        float wave1 = sin(u_time * 0.08 + r * 2.8 + baseAngle * 1.5);
-                        float wave2 = cos(u_time * 0.05 + baseAngle * 2.5);
-                        r += wave1 * 0.16;
-                        theta += wave2 * 0.09;
-                        z += sin(u_time * 0.1 + r * 1.8) * 0.06;
+                        float wave1 = sin(u_time * 0.05 + r * 3.0 + baseAngle * 2.0);
+                        r += wave1 * 0.05;
+                        z += sin(u_time * 0.08 + r * 2.0) * 0.04;
                     }
 
                     float gx = r * cos(theta);
                     float gy = r * sin(theta);
                     float gz = z;
 
-                    // Angle calculation (24-degree camera pitch and natural yaw)
-                    float cosP = 0.9135; 
-                    float sinP = 0.4067; 
+                    // Tilt the galaxy (pitch ~30 degrees to avoid the flat edge-on line)
+                    float cosP = ${f(CONFIG.pitchCos)}; 
+                    float sinP = ${f(CONFIG.pitchSin)}; 
                     float py = gy * cosP - gz * sinP;
                     float pz = gy * sinP + gz * cosP;
 
-                    float cosY = 0.9781; 
-                    float sinY = 0.2079; 
+                    // Slight yaw
+                    float cosY = ${f(CONFIG.yawCos)}; 
+                    float sinY = ${f(CONFIG.yawSin)}; 
                     float px = gx * cosY - pz * sinY;
                     pz = gx * sinY + pz * cosY;
 
-                    pos = vec3(px, py, pz);
+                    // Offset to move the center of the galaxy in the view
+                    pos = vec3(px + ${f(CONFIG.offsetX)}, py + ${f(CONFIG.offsetY)}, pz);
                 } else {
                     // Back star parallax
                     pos = a_coords;
-                    pos.x += sin(u_time * 0.03 + a_params.y) * 0.1;
-                    pos.y += cos(u_time * 0.02 + a_params.y) * 0.1;
+                    pos.x += sin(u_time * 0.02 + a_params.y) * 0.05;
+                    pos.y += cos(u_time * 0.015 + a_params.y) * 0.05;
                 }
 
-                // Smooth cinematic zoom & scale values
-                float camDist = 2.4;
+                float camDist = ${f(CONFIG.camDist)};
                 float depth = camDist + pos.z;
-                float fov = 3.9; 
+                float fov = ${f(CONFIG.fov)}; 
                 vec2 projected = (pos.xy * fov) / depth;
 
-                // Spreads the galaxy organically across a widescreen element
-                projected.x /= (u_aspect * 0.38);
+                // Stop perfect-circle aspect constraint; allow it to spread across widescreen
+                projected.x /= (u_aspect * ${f(CONFIG.aspectSpread)});
 
                 gl_Position = vec4(projected, pos.z * 0.01, 1.0);
 
-                // Depth scaling that maintains large visible clouds on any screen scale
                 float size = a_params.x * (fov / depth);
                 if (a_params.z > 0.5 && a_params.z < 1.5) {
-                    size *= 1.0 + 0.35 * sin(u_time * 0.3 + a_coords.y * 2.0);
+                    size *= 1.0 + 0.2 * sin(u_time * 0.2 + a_coords.y * 3.0);
+                } else {
+                    size *= ${f(CONFIG.starSizeMultiplier)};
                 }
 
                 float twinkle = 1.0;
                 if (a_params.z < 0.5 || a_params.z > 1.5) {
-                    twinkle = 0.65 + 0.35 * sin(u_time * 3.2 + a_coords.y * 12.0);
+                    twinkle = 0.7 + 0.3 * sin(u_time * 2.5 + a_coords.y * 15.0);
+                    twinkle *= ${f(CONFIG.starBrightnessMultiplier)};
                 }
 
                 gl_PointSize = max(1.0, size);
@@ -149,16 +184,16 @@ export default class GalaxyBackground {
 
                 float alpha;
                 if (v_type > 0.5 && v_type < 1.5) {
-                    // Massive Volumetric Fog/Nebula. Non-linear gamma for rich cloud textures
+                    // Nebula: softer, much darker falloff to prevent white-out blur
                     float norm = dist * 2.0; 
-                    float falloff = pow(max(0.0, 1.0 - norm), 1.6);
-                    alpha = falloff * 0.42; 
+                    float falloff = pow(max(0.0, 1.0 - norm), 1.8);
+                    alpha = falloff * ${f(CONFIG.nebulaShaderAlpha)};
                 } else {
                     // Stars: sharp focus
-                    float core = exp(-dist * 22.0);
-                    float halo = exp(-dist * 4.2);
-                    alpha = clamp(core * 0.85 + halo * 0.15, 0.0, 1.0);
-                    alpha *= (1.0 - smoothstep(0.18, 0.5, dist));
+                    float core = exp(-dist * 25.0);
+                    float halo = exp(-dist * 5.0);
+                    alpha = clamp(core * 0.9 + halo * 0.1, 0.0, 1.0);
+                    alpha *= (1.0 - smoothstep(0.2, 0.5, dist));
                 }
 
                 gl_FragColor = vec4(v_color.rgb, v_color.a * alpha);
@@ -183,133 +218,118 @@ export default class GalaxyBackground {
         const colors = new Float32Array(this.totalParticles * 4);
         const params = new Float32Array(this.totalParticles * 3);
 
-        const arms = 3;
-        const armParticles = 6500;
-        const coreParticles = 2000;
-        const nebulaParticles = 4500;
-        const backgroundStars = 1500;
-
         let idx = 0;
 
-        // 1. DENSE WARM CORE (High-visibility fallback)
-        for (let i = 0; i < coreParticles; i++, idx++) {
-            const r = Math.pow(Math.random(), 1.8) * 0.55;
+        // 1. CORE
+        for (let i = 0; i < CONFIG.core.count; i++, idx++) {
+            const r = Math.pow(Math.random(), 1.8) * CONFIG.core.spread;
             const theta = Math.random() * Math.PI * 2;
-            const z = (Math.random() - 0.5) * 0.25 * (1.0 - r);
+            const z = (Math.random() - 0.5) * 0.15 * (1.0 - r);
 
             coords[idx * 3] = r;
             coords[idx * 3 + 1] = theta;
             coords[idx * 3 + 2] = z;
 
             const warmTone = Math.random();
-            colors[idx * 4] = 1.0;                           // R
-            colors[idx * 4 + 1] = 0.52 + warmTone * 0.32;    // G
-            colors[idx * 4 + 2] = 0.18 + warmTone * 0.22;    // B
-            colors[idx * 4 + 3] = 0.32 + Math.random() * 0.25; // Much higher core baseline alpha
+            colors[idx * 4] = 1.0;                             // R
+            colors[idx * 4 + 1] = 0.8 + warmTone * 0.2;        // G
+            colors[idx * 4 + 2] = 0.7 + warmTone * 0.3;        // B
+            colors[idx * 4 + 3] = CONFIG.core.alpha[0] + Math.random() * (CONFIG.core.alpha[1] - CONFIG.core.alpha[0]);
 
-            params[idx * 3 + 1] = 0.35 + Math.random() * 0.1;
+            params[idx * 3 + 1] = 0.5 + Math.random() * 0.2;
             params[idx * 3 + 2] = 0.0;
-            params[idx * 3] = Math.random() * 6.0 + 3.0; // Enlarge slightly for viewability
+            params[idx * 3] = Math.random() * (CONFIG.core.size[1] - CONFIG.core.size[0]) + CONFIG.core.size[0];
         }
 
-        // 2. VIBRANT SPIRAL ARMS
-        for (let i = 0; i < armParticles; i++, idx++) {
-            const armIndex = i % arms;
-            const armAngle = (armIndex * (Math.PI * 2)) / arms;
+        // 2. SWEEPING SPIRAL ARMS
+        for (let i = 0; i < CONFIG.armStars.count; i++, idx++) {
+            const armIndex = i % CONFIG.arms;
+            const armAngle = (armIndex * Math.PI); 
 
-            const r = 0.12 + Math.pow(Math.random(), 1.05) * 3.2; // Wide reach past edges
-            const spiralAngle = armAngle + 2.05 * Math.log(r + 0.35);
-            const spread = (Math.random() - 0.5) * (0.28 + r * 0.38);
+            const r = 0.1 + Math.pow(Math.random(), 1.2) * CONFIG.armStars.spread;
+            const spiralAngle = armAngle + r * CONFIG.spiralTightness; 
+            // Tighten spread near the core, fan out at the edges
+            const spread = (Math.random() - 0.5) * (Math.random() * 0.6) * (1.0 + r * 0.5);
             const theta = spiralAngle + spread;
-            const z = (Math.random() - 0.5) * 0.16 * Math.exp(-r * 0.45);
+            const z = (Math.random() - 0.5) * 0.08 * Math.exp(-r * 0.3);
 
             coords[idx * 3] = r;
             coords[idx * 3 + 1] = theta;
             coords[idx * 3 + 2] = z;
 
-            // Highly saturated separation: Deep Coral Red, Ultraviolet Violet, Aqua-Cyan
-            const t = r / 3.2;
-            if (t < 0.3) {
-                colors[idx * 4] = 0.98;                         // Warm Violet-Pink
-                colors[idx * 4 + 1] = 0.2 + Math.random() * 0.15;
-                colors[idx * 4 + 2] = 0.65;
-            } else if (t < 0.65) {
-                colors[idx * 4] = 0.55;                        // Deep ultraviolet
-                colors[idx * 4 + 1] = 0.12;
-                colors[idx * 4 + 2] = 0.95;
+            // Deep luxury colors: icy blues, deep indigos, sparse magenta
+            const t = Math.random();
+            if (t < 0.6) {
+                colors[idx * 4] = 0.4 + Math.random() * 0.2;   // Ice Blue
+                colors[idx * 4 + 1] = 0.7 + Math.random() * 0.3;
+                colors[idx * 4 + 2] = 1.0;
+            } else if (t < 0.9) {
+                colors[idx * 4] = 0.1;                         // Deep Indigo
+                colors[idx * 4 + 1] = 0.2 + Math.random() * 0.2;
+                colors[idx * 4 + 2] = 0.9;
             } else {
-                colors[idx * 4] = 0.02;                        // Vibrant Aqua Teal
-                colors[idx * 4 + 1] = 0.75 + Math.random() * 0.22;
-                colors[idx * 4 + 2] = 0.95;
+                colors[idx * 4] = 0.9;                         // Sparse Magenta
+                colors[idx * 4 + 1] = 0.2 + Math.random() * 0.2;
+                colors[idx * 4 + 2] = 0.6;
             }
-            colors[idx * 4 + 3] = 0.42 + Math.random() * 0.38; // Up-scaled star clarity
+            colors[idx * 4 + 3] = CONFIG.armStars.alpha[0] + Math.random() * (CONFIG.armStars.alpha[1] - CONFIG.armStars.alpha[0]);
 
-            params[idx * 3 + 1] = 0.28 + Math.random() * 0.08;
+            params[idx * 3 + 1] = 0.3 + Math.random() * 0.1;
             params[idx * 3 + 2] = 0.0;
-            params[idx * 3] = Math.random() * 4.8 + 2.2;
+            params[idx * 3] = Math.random() * (CONFIG.armStars.size[1] - CONFIG.armStars.size[0]) + CONFIG.armStars.size[0];
         }
 
-        // 3. STRONG INTERSTELLAR CLOUDS (Massive, non-pixelated overlapping dust)
-        for (let i = 0; i < nebulaParticles; i++, idx++) {
-            const armIndex = i % arms;
-            const armAngle = (armIndex * (Math.PI * 2)) / arms;
+        // 3. SUBTLE SPACE CLOUDS (Darker, richer, less opaque)
+        for (let i = 0; i < CONFIG.nebula.count; i++, idx++) {
+            const armIndex = i % CONFIG.arms;
+            const armAngle = (armIndex * Math.PI);
 
-            const isAmbient = Math.random() < 0.32;
-            const r = isAmbient ? Math.random() * 3.8 : 0.15 + Math.pow(Math.random(), 1.05) * 3.1;
-            const spiralAngle = armAngle + 2.05 * Math.log(r + 0.35);
-            const spread = isAmbient ? (Math.random() - 0.5) * 3.8 : (Math.random() - 0.5) * (0.38 + r * 0.42);
+            const r = Math.pow(Math.random(), 1.1) * CONFIG.nebula.spread;
+            const spiralAngle = armAngle + r * CONFIG.spiralTightness;
+            const spread = (Math.random() - 0.5) * (0.4 + r * 0.6);
             const theta = spiralAngle + spread;
-            const z = (Math.random() - 0.5) * 0.32;
+            const z = (Math.random() - 0.5) * 0.2;
 
             coords[idx * 3] = r;
             coords[idx * 3 + 1] = theta;
             coords[idx * 3 + 2] = z;
 
             const paletteChoice = Math.random();
-            if (paletteChoice < 0.25) {
-                colors[idx * 4] = 0.02;                        // Electric teal
-                colors[idx * 4 + 1] = 0.82;
-                colors[idx * 4 + 2] = 0.68;
-            } else if (paletteChoice < 0.5) {
-                colors[idx * 4] = 0.95;                        // Bright Nebula pink
-                colors[idx * 4 + 1] = 0.18;
-                colors[idx * 4 + 2] = 0.48;
-            } else if (paletteChoice < 0.7) {
-                colors[idx * 4] = 0.55;                        // Nebula violet
-                colors[idx * 4 + 1] = 0.08;
-                colors[idx * 4 + 2] = 0.88;
-            } else if (paletteChoice < 0.85) {
-                colors[idx * 4] = 0.92;                        // Amber/Orange dust
-                colors[idx * 4 + 1] = 0.45;
-                colors[idx * 4 + 2] = 0.08;
+            if (paletteChoice < 0.5) {
+                colors[idx * 4] = 0.02;                        // Deep Void Blue
+                colors[idx * 4 + 1] = 0.05;
+                colors[idx * 4 + 2] = 0.25;
+            } else if (paletteChoice < 0.8) {
+                colors[idx * 4] = 0.15;                        // Dark Violet
+                colors[idx * 4 + 1] = 0.02;
+                colors[idx * 4 + 2] = 0.25;
             } else {
-                colors[idx * 4] = 0.05;                        // Nebula dark cobalt blue
-                colors[idx * 4 + 1] = 0.35;
-                colors[idx * 4 + 2] = 0.88;
+                colors[idx * 4] = 0.01;                        // Subtle Cyan Dust
+                colors[idx * 4 + 1] = 0.15;
+                colors[idx * 4 + 2] = 0.2;
             }
             
-            // Fixed threshold issue: high base alphas (around 0.04 - 0.12) to resist black clamping on basic screens
-            colors[idx * 4 + 3] = 0.045 + Math.random() * 0.075; 
+            colors[idx * 4 + 3] = CONFIG.nebula.alpha[0] + Math.random() * (CONFIG.nebula.alpha[1] - CONFIG.nebula.alpha[0]);
 
-            params[idx * 3] = Math.random() * 65.0 + 38.0; // Visible size for layered, voluminous texture
-            params[idx * 3 + 1] = 0.22 + Math.random() * 0.06;
-            params[idx * 3 + 2] = 1.0;
+            params[idx * 3] = Math.random() * (CONFIG.nebula.size[1] - CONFIG.nebula.size[0]) + CONFIG.nebula.size[0]; 
+            params[idx * 3 + 1] = 0.25 + Math.random() * 0.1;
+            params[idx * 3 + 2] = 1.0; // 1 = nebula
         }
 
-        // 4. HIGH DENSITY BACKGROUND STARFIELD
-        for (let i = 0; i < backgroundStars; i++, idx++) {
-            coords[idx * 3] = (Math.random() - 0.5) * 16.0;
-            coords[idx * 3 + 1] = (Math.random() - 0.5) * 9.0;
-            coords[idx * 3 + 2] = (Math.random() - 0.5) * 2.5;
+        // 4. DEEP BACKGROUND STARFIELD
+        for (let i = 0; i < CONFIG.bgStars.count; i++, idx++) {
+            coords[idx * 3] = (Math.random() - 0.5) * 20.0;
+            coords[idx * 3 + 1] = (Math.random() - 0.5) * 12.0;
+            coords[idx * 3 + 2] = (Math.random() - 0.5) * 5.0;
 
-            colors[idx * 4] = 0.65 + Math.random() * 0.35;
-            colors[idx * 4 + 1] = 0.72 + Math.random() * 0.28;
+            colors[idx * 4] = 0.6 + Math.random() * 0.4;
+            colors[idx * 4 + 1] = 0.7 + Math.random() * 0.3;
             colors[idx * 4 + 2] = 1.0;
-            colors[idx * 4 + 3] = 0.35 + Math.random() * 0.45; // Enhanced visibility for ambient star layers
+            colors[idx * 4 + 3] = CONFIG.bgStars.alpha[0] + Math.random() * (CONFIG.bgStars.alpha[1] - CONFIG.bgStars.alpha[0]);
 
-            params[idx * 3] = Math.random() * 3.0 + 1.1;
+            params[idx * 3] = Math.random() * (CONFIG.bgStars.size[1] - CONFIG.bgStars.size[0]) + CONFIG.bgStars.size[0];
             params[idx * 3 + 1] = Math.random() * 6.28;
-            params[idx * 3 + 2] = 2.0;
+            params[idx * 3 + 2] = 2.0; // 2 = background
         }
 
         this.bindBuffer('a_coords', coords, 3);
@@ -358,7 +378,7 @@ export default class GalaxyBackground {
     animate(now) {
         const delta = (now - this.lastTime) * 0.001;
         this.lastTime = now;
-        this.time += delta;
+        this.time += delta * CONFIG.globalTimeSpeed;
 
         this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
