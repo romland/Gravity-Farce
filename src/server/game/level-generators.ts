@@ -180,7 +180,8 @@ export class LegacyTileGenerator implements LevelGenerator {
         for (let ty = 0; ty < tilesH; ty++) {
             for (let tx = 0; tx < tilesW; tx++) {
                 const tid = this.grid[ty][tx];
-                if (getTileCategory(tid) !== 'NONE') {
+                const cat = getTileCategory(tid);
+                if (cat !== 'NONE' && !TILE_DICTIONARY[tid]?.pad) {
                     const mask = tileMaskRegistry.getMask(tid);
                     for (let py = 0; py < 8; py++) {
                         for (let px = 0; px < 8; px++) {

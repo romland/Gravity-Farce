@@ -31,6 +31,7 @@ export function checkEnvironmentCollisions(
 
     // 2. Check Pads
     let safelyLanded = false;
+    let clearingPad = false;
     const pads = level.entities.filter(e => e.type === 'pad');
     for (const pad of pads) {
         if (!pad.w || !pad.h) continue;
@@ -42,6 +43,11 @@ export function checkEnvironmentCollisions(
                 safelyLanded = true;
                 break;
             }
+            // If ascending (taking off) from the pad surface, grant clearance so wingtips don't clip the pad
+            if (y <= pad.y - 10) {
+                clearingPad = true;
+                break;
+            }
         }
 
         const padPoly = [
@@ -49,9 +55,9 @@ export function checkEnvironmentCollisions(
             {x: pad.x + pad.w, y: pad.y + pad.h}, {x: pad.x, y: pad.y + pad.h}, {x: pad.x, y: pad.y}
         ];
 
-        if (!safelyLanded && checkPolyIntersect(shipLines, padPoly)) return true;
+        if (!safelyLanded && !clearingPad && checkPolyIntersect(shipLines, padPoly)) return true;
     }
-    if (safelyLanded) return false;
+    if (safelyLanded || clearingPad) return false;
 
     // 3. Check Walls & Ceiling
     if (level.walls && level.walls.some(wall => checkPolyIntersect(shipLines, wall))) return true;
