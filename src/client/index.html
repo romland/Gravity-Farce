@@ -337,6 +337,18 @@
             }
         });
 
+        socket.on('flora_burn', (data) => {
+            if (window.gfRenderer && window.gfRenderer.flora && data) {
+                window.gfRenderer.flora.igniteAnchor(data.idx, data.originT);
+            }
+        });
+
+        socket.on('flora_burn_sync', (burns) => {
+            if (window.gfRenderer && window.gfRenderer.flora) {
+                window.gfRenderer.flora.syncServerBurns(burns);
+            }
+        });
+
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         function formatTimeMs(diff) {

@@ -21,6 +21,7 @@ import { GameTracker } from './core/tracker';
 import { SERVER_CONFIG } from './core/config';
 import { createPRNG } from './core/math';
 import { getActivePhysicsHash } from './core/records';
+import { FloraBurnSystem, type FloraBurnRecord } from './game/highres/FloraBurnSystem';
 
 export class Room {
     public ecs = new Registry();
@@ -36,6 +37,8 @@ export class Room {
     public isReplayMode: boolean = false;
     private lastInputMasks = new Map<string, number>();
     public replayFrames: any[] = [];
+    public floraBurns = new Map<number, FloraBurnRecord>();
+    public floraHeat = new Map<number, number>();
 
     constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void, public isLethalRacing: boolean = false, public raceBumpModifier: number = 0.4) {
         if (level.rawMap) {
@@ -108,6 +111,7 @@ export class Room {
             sysRacing(this.ecs, this);
             sysMission(this.ecs, this);
             sysBullets(this.ecs, this);
+            FloraBurnSystem.update(this.ecs, this);
         }
 
         sysNetworkSync(this.ecs, this, this.io);
@@ -152,6 +156,10 @@ export class Room {
         }
         this.trySpawnPlayer(id, type, { ...stats, joinedAtTick: this.globalWaveTimer });
         this.tracker.initPlayer(id, stats?.uuid || id, stats?.alias || 'UNK');
+        if (this.floraBurns.size > 0) {
+            const burns = Array.from(this.floraBurns.entries()).map(([idx, b]) => ({ idx, originT: b.originT }));
+            this.emitToPlayer(id, 'flora_burn_sync', burns);
+        }
     }
 
     removePlayer(id: string) {
@@ -260,6 +268,10 @@ export class Room {
         this.io.to(`level_${this.levelIndex}`).emit('tile_update', { x, y, tile });
     }
 
+    broadcastFloraBurn(idx: number, originT: number) {
+        this.io.to(`level_${this.levelIndex}`).emit('flora_burn', { idx, originT });
+    }
+
     emitToPlayer(id: string, event: string, payload: any) {
         this.io.to(id).emit(event, payload);
     }
@@ -272,6 +284,8 @@ export class Room {
         this.tracker['entry'].replayData.seed = this.seed;
         this.globalWaveTimer = 0;
         this.lastInputMasks.clear();
+        this.floraBurns.clear();
+        this.floraHeat.clear();
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }
