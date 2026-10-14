@@ -33,8 +33,8 @@ export class FloraSeeder {
                 const wy = Number((v.y * scaleToWorld).toFixed(1));
 
                 // Ceiling Hanging Vines (Outward normal pointing down into cavern air: ny > 0.65)
-                if (v.ny > 0.65 && fertility > 0.42 && rng < 0.28) {
-                    const length = Math.round((14 + rng * 38) * (0.7 + fertility * 0.6));
+                if (v.ny > 0.60 && fertility > 0.35 && rng < 0.34) {
+                    const length = Math.round((42 + rng * 95) * (0.8 + fertility * 0.7));
                     anchors.push({
                         kind: 'VINE',
                         x: wx,
@@ -58,14 +58,14 @@ export class FloraSeeder {
                     });
                 }
                 // Floor / Ledge Bioluminescent Spore Fronds & Cave Moss (Outward normal pointing up: ny < -0.65)
-                else if (v.ny < -0.65 && fertility > 0.45 && rng < 0.22) {
+                else if (v.ny < -0.60 && fertility > 0.38 && rng < 0.30) {
                     anchors.push({
-                        kind: rng < 0.10 ? 'GLOW_SHROOM' : 'FERN',
+                        kind: rng < 0.12 ? 'GLOW_SHROOM' : 'FERN',
                         x: wx,
                         y: wy,
                         nx: Number(v.nx.toFixed(2)),
                         ny: Number(v.ny.toFixed(2)),
-                        length: Math.round(12 + rng * 20),
+                        length: Math.round(32 + rng * 54),
                         seed: Number((rng * 100).toFixed(2))
                     });
                 }

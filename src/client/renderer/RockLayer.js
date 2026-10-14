@@ -16,6 +16,21 @@ export class RockLayer {
         canvas.height = h;
         const ctx = canvas.getContext('2d');
 
+        // Includes outer level bounding box so even-odd rule fills SOLID ROCK
+        // and carves out the enclosed cavern air loops as transparent sky!
+        const traceRockVolume = (targetCtx) => {
+            targetCtx.beginPath();
+            targetCtx.rect(-64, -64, w + 128, h + 128);
+            for (const wall of level.walls) {
+                if (wall.length < 3) continue;
+                targetCtx.moveTo(wall[0].x, wall[0].y);
+                for (let i = 1; i < wall.length; i++) {
+                    targetCtx.lineTo(wall[i].x, wall[i].y);
+                }
+                targetCtx.closePath();
+            }
+        };
+
         const traceAllLoops = (targetCtx) => {
             targetCtx.beginPath();
             for (const wall of level.walls) {
@@ -30,7 +45,7 @@ export class RockLayer {
 
         // Clip to the exact even-odd interior of the rock mass
         ctx.save();
-        traceAllLoops(ctx);
+        traceRockVolume(ctx);
         ctx.clip('evenodd');
 
         // Deep Bedrock Fill

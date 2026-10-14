@@ -33,8 +33,8 @@ export class FloraLayer {
                 const dx = a.x - s.x;
                 const dy = a.y - s.y;
                 const dist = Math.hypot(dx, dy);
-                if (dist < 110 && dist > 1) {
-                    const shipForce = (110 - dist) / 110;
+                if (dist < 150 && dist > 1) {
+                    const shipForce = (150 - dist) / 150;
                     const thrustMult = (s.inputs && s.inputs.up) ? 2.4 : 1.0;
                     const pushDir = dx >= 0 ? 1 : -1;
                     a.bendVel += pushDir * shipForce * thrustMult * 0.035;
@@ -73,9 +73,10 @@ export class FloraLayer {
     }
 
     drawVine(ctx, a, timeSec) {
-        const segments = 5;
+        const segments = 7;
         ctx.strokeStyle = '#2ea355';
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 4.0;
+        ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
 
@@ -84,7 +85,7 @@ export class FloraLayer {
         for (let s = 1; s <= segments; s++) {
             const t = s / segments;
             // Quadratic bend curve (t^2) so root stays locked to rock contour
-            const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 6.0;
+            const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
             const washOffset = a.bendAngle * a.length * 0.65;
             tipX = a.x + (wind + washOffset) * (t * t);
             tipY = a.y + a.length * t;
@@ -92,45 +93,61 @@ export class FloraLayer {
         }
         ctx.stroke();
 
+        // Secondary side-leaf nodes along the vine
+        ctx.fillStyle = '#38b862';
+        for (let s = 2; s < segments; s += 2) {
+            const t = s / segments;
+            const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
+            const washOffset = a.bendAngle * a.length * 0.65;
+            const lx = a.x + (wind + washOffset) * (t * t);
+            const ly = a.y + a.length * t;
+            const side = (s % 4 === 0 ? 1 : -1) * 7;
+            ctx.beginPath();
+            ctx.ellipse(lx + side, ly, 6, 2.5, side > 0 ? 0.4 : -0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         // Bioluminescent spore tip
         ctx.fillStyle = '#7dffaa';
         ctx.beginPath();
-        ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
+        ctx.arc(tipX, tipY, 4.5, 0, Math.PI * 2);
         ctx.fill();
     }
 
     drawFern(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.8 + a.seed) * 4 + a.bendAngle * 14;
+        const sway = Math.sin(timeSec * 2.8 + a.seed) * 9 + a.bendAngle * 26;
         ctx.strokeStyle = '#38b862';
-        ctx.lineWidth = 2;
-        for (const spread of [-0.5, 0, 0.5]) {
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = 'round';
+        for (const spread of [-0.75, -0.35, 0, 0.35, 0.75]) {
+            const frondLen = a.length * (1.0 - Math.abs(spread) * 0.35);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.quadraticCurveTo(
-                a.x + spread * 10 + sway * 0.5,
-                a.y - a.length * 0.6,
-                a.x + spread * 18 + sway,
-                a.y - a.length
+                a.x + spread * 22 + sway * 0.5,
+                a.y - frondLen * 0.6,
+                a.x + spread * 38 + sway,
+                a.y - frondLen
             );
             ctx.stroke();
         }
     }
 
     drawGlowShroom(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.0 + a.seed) * 3 + a.bendAngle * 12;
+        const sway = Math.sin(timeSec * 2.0 + a.seed) * 7 + a.bendAngle * 22;
         const tipX = a.x + sway;
         const tipY = a.y - a.length;
 
         ctx.strokeStyle = '#70a1ff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3.5;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(tipX, tipY);
+        ctx.quadraticCurveTo(a.x + sway * 0.4, a.y - a.length * 0.5, tipX, tipY);
         ctx.stroke();
 
         ctx.fillStyle = '#00f2fe';
         ctx.beginPath();
-        ctx.arc(tipX, tipY, 4.5, Math.PI, 0);
+        ctx.arc(tipX, tipY, 9.0, Math.PI, 0);
         ctx.fill();
     }
 }

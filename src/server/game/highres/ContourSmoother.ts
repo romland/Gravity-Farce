@@ -123,8 +123,9 @@ export class ContourSmoother {
             const tx = next.x - prev.x;
             const ty = next.y - prev.y;
             const tlen = Math.hypot(tx, ty) || 1.0;
-            const nx = -ty / tlen;
-            const ny = tx / tlen;
+            // In screen space (+Y down), outward normal into open cavern air is (ty, -tx)
+            const nx = ty / tlen;
+            const ny = -tx / tlen;
 
             if (curr.pinned) {
                 out.push({ x: curr.x, y: curr.y, pinned: true, nx, ny });
