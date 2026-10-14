@@ -955,7 +955,8 @@
 
             // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs + Interactive Flora
             if (window.gfRenderer) {
-                window.gfRenderer.rock.draw(ctx);
+                window.gfRenderer.rock.drawRecessed(ctx, camera, VIEW_W, VIEW_H);
+                window.gfRenderer.rock.draw(ctx, camera, VIEW_W, VIEW_H);
                 window.gfRenderer.prefabs.draw(ctx, level, timeSec);
                 window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles);
             }

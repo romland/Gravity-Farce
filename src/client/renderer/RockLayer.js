@@ -85,11 +85,45 @@ export class RockLayer {
         ctx.restore();
 
         this.cachedCanvas = canvas;
+
+        // 2. Build Layer -1: Recessed Cavern Back-Wall Shell (0.65x Parallax)
+        const backCanvas = document.createElement('canvas');
+        backCanvas.width = w;
+        backCanvas.height = h;
+        const bCtx = backCanvas.getContext('2d');
+
+        bCtx.save();
+        traceRockVolume(bCtx);
+        bCtx.clip('evenodd');
+        bCtx.fillStyle = 'rgba(14, 18, 28, 0.82)';
+        bCtx.fillRect(0, 0, w, h);
+
+        traceAllLoops(bCtx);
+        bCtx.lineJoin = 'round';
+        bCtx.strokeStyle = '#1c2436';
+        bCtx.lineWidth = 44;
+        bCtx.stroke();
+        bCtx.restore();
+
+        this.recessedCanvas = backCanvas;
     }
 
-    draw(ctx) {
+    drawRecessed(ctx, camera, viewW, viewH) {
+        if (!this.recessedCanvas) return;
+        const ox = Math.floor(camera.x * 0.35);
+        const oy = Math.floor(camera.y * 0.35);
+        ctx.drawImage(this.recessedCanvas, ox, oy);
+    }
+
+    draw(ctx, camera, viewW, viewH) {
         if (this.cachedCanvas) {
-            ctx.drawImage(this.cachedCanvas, 0, 0);
+            const sx = Math.max(0, Math.floor(camera.x));
+            const sy = Math.max(0, Math.floor(camera.y));
+            const sw = Math.min(this.cachedCanvas.width - sx, viewW + 2);
+            const sh = Math.min(this.cachedCanvas.height - sy, viewH + 2);
+            if (sw > 0 && sh > 0) {
+                ctx.drawImage(this.cachedCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
+            }
         }
     }
 }
