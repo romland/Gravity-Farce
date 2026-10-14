@@ -55,7 +55,9 @@ https://...
 
 
 ### Gameplay Tips
-If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
+If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control).  
+Oh, but I _DO_ believe playing the single player missions make you a better player (at least it pisses you off less when you die)!  
+
 
 ### Levels and Data
 All levels (multi- and single player) and power-ups and similar structures are ported over from the

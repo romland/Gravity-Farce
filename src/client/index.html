@@ -1043,7 +1043,7 @@
                 for (let y = 0; y < level.rawMap.length; y++) {
                     for (let x = 0; x < level.rawMap[y].length; x++) {
                         const tile = level.rawMap[y][x];
-                        if(tile !== 0 && tile > 0x1A) {
+                        if(tile !== 0 && tile > 0x1A && (tile < 0xBD && tile > 0xCB)) {
                             const tDef = tileDictionary[tile];
                             if (tDef && tDef.known) {
                                 ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
