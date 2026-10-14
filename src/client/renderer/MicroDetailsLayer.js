@@ -387,6 +387,7 @@ export class MicroDetailsLayer {
         if (cfg.crashSmokeEnabled !== false && this.crashPlumes.length > 0) {
             const maxSmoke = (cfg.maxSmokePuffs ?? 35) + 30;
             const baseChance = cfg.crashSmokeSpawnChance ?? 0.42;
+            const scaleFactor = cfg.crashSmokeAlpha ?? 0.75;
             for (let i = this.crashPlumes.length - 1; i >= 0; i--) {
                 const cp = this.crashPlumes[i];
                 cp.life--;
@@ -398,16 +399,16 @@ export class MicroDetailsLayer {
                 if (Math.random() < baseChance * (0.35 + intensity * 0.65) && this.smokePuffs.length < maxSmoke) {
                     const puffLife = 52 + Math.floor(Math.random() * 26);
                     this.smokePuffs.push({
-                        x: cp.x + (Math.random() - 0.5) * 14 * cp.scale,
-                        y: cp.y + (Math.random() - 0.5) * 8 * cp.scale,
-                        vx: (Math.random() - 0.5) * 0.35,
-                        vy: -0.42 - Math.random() * 0.38,
-                        r: (3.2 + Math.random() * 2.4) * cp.scale,
-                        grow: 0.13,
+                        x: cp.x + (Math.random() - 0.5) * 18 * cp.scale,
+                        y: cp.y + (Math.random() - 0.5) * 10 * cp.scale,
+                        vx: (Math.random() - 0.5) * 0.45,
+                        vy: -0.58 - Math.random() * 0.45,
+                        r: (4.8 + Math.random() * 3.8) * cp.scale,
+                        grow: 0.18,
                         life: puffLife,
                         maxLife: puffLife,
-                        rgb: '20, 17, 15',
-                        peakAlpha: (cfg.crashSmokeAlpha ?? 0.44) * (0.45 + intensity * 0.55)
+                        rgb: '32, 27, 24',
+                        peakAlpha: scaleFactor * (0.5 + intensity * 0.5)
                     });
                 }
             }
@@ -436,13 +437,34 @@ export class MicroDetailsLayer {
             ctx.globalCompositeOperation = 'source-over';
         }
 
-        // 5. Update & Draw Turret Muzzle & Crash-Site Smoke Puffs
+        // 5. Update & Draw Turret Muzzle & Crash-Site Smoke Puffs (with Ship Swirl Interaction)
         if (this.smokePuffs.length > 0) {
+            const pushRad = cfg.smokePushRadius ?? 75;
+            const pushForce = cfg.smokePushForce ?? 0.85;
+            const activeShips = players ? Object.values(players).filter(s => !s.isDead) : [];
+
             for (let i = this.smokePuffs.length - 1; i >= 0; i--) {
                 const sm = this.smokePuffs[i];
+
+                // Deflect smoke particles away from passing ship hulls / thruster wash
+                if (activeShips.length > 0) {
+                    for (const s of activeShips) {
+                        const dx = sm.x - s.x;
+                        const dy = sm.y - s.y;
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < pushRad && dist > 1) {
+                            const power = (1 - dist / pushRad) * pushForce;
+                            sm.vx += (dx / dist) * power;
+                            sm.vy += (dy / dist) * power * 0.5 - 0.08; // Upward draft pull
+                        }
+                    }
+                }
+
                 sm.x += sm.vx + Math.sin(timeSec * 3 + i) * 0.08;
                 sm.y += sm.vy;
                 sm.r += sm.grow ?? 0.09;
+                sm.vx *= 0.96;
+                sm.vy *= 0.97;
                 sm.life--;
                 if (sm.life <= 0) {
                     this.smokePuffs.splice(i, 1);

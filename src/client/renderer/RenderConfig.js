@@ -155,8 +155,10 @@ export const RENDER_CONFIG = {
         crashSmokeEnabled: true,
         crashSmokeDurationTicks: 210, // ~3.5 seconds of lingering smoke emission at 60fps
         crashSmokeSpawnChance: 0.42,  // Chance per frame to emit a dark smoke puff while active
-        crashSmokeAlpha: 0.44,        // Peak opacity of dark crash-site smoke puffs
-        maxCrashPlumes: 12            // Max concurrent smoking crash sites
+        crashSmokeAlpha: 0.75,        // High-visibility peak opacity for dark crash smoke
+        maxCrashPlumes: 12,           // Max concurrent smoking crash sites
+        smokePushRadius: 75,          // Radius where ships push smoke particles aside
+        smokePushForce: 0.85          // Strength of ship thruster wash deflection on smoke
     }
 };
 
