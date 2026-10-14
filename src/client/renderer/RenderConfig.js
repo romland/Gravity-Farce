@@ -18,7 +18,20 @@ export const RENDER_CONFIG = {
         fernWashScale: 26.0,     // How far fern fronds displace per radian of bend
         shroomWashScale: 20.0,   // How far glow shrooms displace per radian of bend
         dripSpawnChance: 0.006,  // Chance per frame per emitter to spawn a water drop
-        maxDrips: 35             // Max concurrent falling water drops
+        maxDrips: 35,            // Max concurrent falling water drops
+        broadleafEnabled: true,
+        caveFlowerEnabled: true,
+        vineBlossomsEnabled: true,
+        firefliesEnabled: true,
+        fireflyRadius: 1.8,
+        fireflyAlpha: 0.45,
+        localHaloEnabled: true,
+        shroomHaloRadius: 16.0,
+        shroomHaloAlpha: 0.22,
+        flowerHaloRadius: 14.0,
+        flowerHaloAlpha: 0.20,
+        vineTipHaloRadius: 7.0,
+        vineTipHaloAlpha: 0.16
     },
     rock: {
         recessedEnabled: true,
@@ -28,12 +41,28 @@ export const RENDER_CONFIG = {
         strataColor: 'rgba(18, 11, 8, 0.45)',
         strataStepY: 28,
         strataHeight: 10,
+        strataWarpAmp1: 12,
+        strataWarpAmp2: 4,
+        grainEnabled: true,
+        grainSpeckleCount: 750,
+        grainFissureCount: 22,
         midBevelColor: '#5c3c26',
         midBevelWidth: 28,
         innerRimColor: '#8c5b37',
         innerRimWidth: 12,
         outerOutlineColor: '#b98250',
-        outerOutlineWidth: 3.5
+        outerOutlineWidth: 3.5,
+        stalactitesEnabled: true,
+        stalactiteMaxSpanPx: 140, // Max horizontal thickness of a rock feature to receive internal stalactite/stalagmite faceting
+        stalactiteRidgeAlpha: 0.38,
+        stalactiteShadeAlpha: 0.42,
+        wetSheenEnabled: true,
+        wetSheenColor: 'rgba(155, 228, 255, 0.32)',
+        wetSheenWidth: 1.8,
+        wetDripRangeX: 140,
+        wetDripRangeY: 380,
+        mineralVeinsEnabled: true,
+        mineralVeinDensityDivisor: 55000
     },
     parallax: {
         enabled: true,
@@ -41,7 +70,46 @@ export const RENDER_CONFIG = {
         moteCount: 65,
         nearPillarDepth: 0.32,
         farPillarDepth: 0.18,
-        moteParallax: 0.45
+        moteParallax: 0.45,
+        nebulaEnabled: true,
+        nebulaCount: 7,
+        nebulaParallax: 0.12,
+        nebulaOpacity: 0.45,
+        godRaysEnabled: true,
+        godRayCount: 5,
+        godRayOpacity: 0.40
+    },
+    lighting: {
+        enabled: true,
+        scale: 0.25,
+        ambientIntensity: 0.28,   // Master multiplier for baked environmental lightmap
+        pulseSpeed: 2.2,
+        pulseAmplitude: 0.06,
+        shroomRadius: 68,
+        shroomIntensity: 0.24,
+        flowerRadius: 56,
+        flowerIntensity: 0.20,
+        vineTipRadius: 36,
+        vineTipIntensity: 0.14,
+        padRadius: 80,
+        padIntensity: 0.18,
+        baseRadius: 95,
+        baseIntensity: 0.20,
+        gravityRadius: 85,
+        gravityIntensity: 0.22,
+        beaconRadius: 48,
+        beaconIntensity: 0.22,
+        raceMarkerRadius: 52,
+        raceMarkerIntensity: 0.26,
+        raceMarkerLocalGlowRadius: 24,
+        raceMarkerLocalGlowAlpha: 0.24,
+        activeCheckpointGlowRadius: 28,
+        activeCheckpointGlowAlpha: 0.45,
+        shipLightEnabled: true,
+        shipIdleRadius: 44,
+        shipIdleIntensity: 0.08,
+        shipThrustRadius: 90,
+        shipThrustIntensity: 0.20
     }
 };
 

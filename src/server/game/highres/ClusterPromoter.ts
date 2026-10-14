@@ -5,6 +5,10 @@ const BASE_TILES = new Set([0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x7C
 const BARREL_TILES = new Set([0x77, 0x78, 0x79, 0x7A, 0x7B, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8F]);
 const GRAV_WELL_TILES = new Set([0x6F, 0x70, 0x71, 0x72]);
 const MAST_TILES = new Set([0x7D, 0x7E, 0x7F, 0x80, 0x81, 0x82, 0x83]);
+const RACE_MARKER_TILES = new Set([
+    0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42,
+    0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E
+]);
 
 export class ClusterPromoter {
     public static extractPrefabs(grid: number[][], tileSize: number = 32): LevelPrefab[] {
@@ -36,6 +40,7 @@ export class ClusterPromoter {
         if (BARREL_TILES.has(tid)) return 'BARREL_STACK';
         if (GRAV_WELL_TILES.has(tid)) return 'GRAVITY_EMITTER';
         if (MAST_TILES.has(tid)) return 'ANTENNA_MAST';
+        if (RACE_MARKER_TILES.has(tid)) return 'RACE_MARKER';
         if (getTileCategory(tid) === 'BRICK') return 'TEAL_BRICK';
         if (getTileCategory(tid) === 'TREE') return 'HERO_TREE';
         return null;
@@ -57,9 +62,11 @@ export class ClusterPromoter {
             const tid = grid[cy][cx];
             cluster.push({ x: cx, y: cy, tid });
 
-            const neighbors: [number, number][] = family === 'PAD'
-                ? [[cx + 1, cy], [cx - 1, cy]] // Pads group strictly horizontally
-                : [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
+            const neighbors: [number, number][] = family === 'RACE_MARKER'
+                ? [] // Race markers are strictly individual 32x32 tiles — never merge!
+                : (family === 'PAD'
+                    ? [[cx + 1, cy], [cx - 1, cy]] // Pads group strictly horizontally
+                    : [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]);
 
             for (const [nx, ny] of neighbors) {
                 if (ny < 0 || ny >= grid.length || nx < 0 || nx >= grid[0].length) continue;

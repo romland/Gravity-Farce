@@ -1042,6 +1042,7 @@
             // Layer +1: Foreground Interactive Flora Canopy (Renders above ships, enemies & bullets for dogfight cover!)
             if (window.gfRenderer) {
                 window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level);
+                window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, camera, VIEW_W, VIEW_H, level, timeSec, renderState.players);
             }
 
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
@@ -1070,12 +1071,28 @@
                 if (rState < 2) {
                     let targetLight = 0x3A + rNext;
                     let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
+                    let lCfg = (window.GF_RENDER_CONFIG && window.GF_RENDER_CONFIG.lighting) || {};
+                    let baseRad = lCfg.activeCheckpointGlowRadius ?? 28;
+                    let baseAlpha = lCfg.activeCheckpointGlowAlpha ?? 0.45;
                     ctx.save();
-                    ctx.fillStyle = `rgba(46, 204, 113, ${pulse * 0.8})`;
-                    ctx.shadowColor = '#2ecc71';
-                    ctx.shadowBlur = 15;
+                    ctx.globalCompositeOperation = 'lighter';
                     for (let l of raceLights) {
-                        if (l.id === targetLight) ctx.fillRect(l.x, l.y, 32, 32);
+                        if (l.id === targetLight) {
+                            const cx = l.x + 16;
+                            const cy = l.y + 16;
+                            const rad = baseRad * (0.85 + pulse * 0.30);
+                            const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
+                            g.addColorStop(0, `rgba(0, 245, 255, ${baseAlpha * (0.7 + pulse * 0.3)})`);
+                            g.addColorStop(0.6, `rgba(255, 215, 0, ${baseAlpha * 0.4 * pulse})`);
+                            g.addColorStop(1, 'rgba(0, 245, 255, 0)');
+                            ctx.fillStyle = g;
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.strokeStyle = '#ffd700';
+                            ctx.lineWidth = 2.0;
+                            ctx.strokeRect(l.x, l.y, 32, 32);
+                        }
                     }
                     ctx.restore();
                 }

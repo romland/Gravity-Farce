@@ -14,6 +14,8 @@ export const FLORA_SEED_CONFIG = {
     floorMinFertility: 0.38,
     floorSpawnChance: 0.30,
     shroomChance: 0.12,
+    flowerChance: 0.19,
+    broadleafChance: 0.25,
     floorBaseLength: 32,
     floorVarLength: 54
 };
@@ -77,8 +79,16 @@ export class FloraSeeder {
                 }
                 // Floor / Ledge Bioluminescent Spore Fronds & Cave Moss (Outward normal pointing up: ny < -0.60)
                 else if (v.ny < cfg.floorMaxNormalY && fertility > cfg.floorMinFertility && rng < cfg.floorSpawnChance) {
+                    let kind: FloraAnchor['kind'] = 'FERN';
+                    if (rng < cfg.shroomChance) {
+                        kind = 'GLOW_SHROOM';
+                    } else if (rng < cfg.flowerChance) {
+                        kind = 'CAVE_FLOWER';
+                    } else if (rng < cfg.broadleafChance) {
+                        kind = 'BROADLEAF';
+                    }
                     anchors.push({
-                        kind: rng < cfg.shroomChance ? 'GLOW_SHROOM' : 'FERN',
+                        kind,
                         x: wx,
                         y: wy,
                         nx: Number(v.nx.toFixed(2)),

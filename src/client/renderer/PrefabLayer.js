@@ -1,7 +1,97 @@
+import { RENDER_CONFIG } from './RenderConfig.js';
+
+class EnvironmentalLightBaker {
+    static buildStaticLightCanvas(level) {
+        if (!level || !RENDER_CONFIG.lighting?.enabled) return null;
+        const lCfg = RENDER_CONFIG.lighting;
+        const scale = lCfg.scale || 0.25;
+        const lw = Math.max(1, Math.ceil(level.width * scale));
+        const lh = Math.max(1, Math.ceil(level.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = lw;
+        canvas.height = lh;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        ctx.globalCompositeOperation = 'lighter';
+
+        const addRadialLight = (x, y, radius, r, gCol, b, alpha) => {
+            if (!radius || radius <= 0 || !alpha || alpha <= 0) return;
+            const g = ctx.createRadialGradient(x, y, radius * 0.04, x, y, radius);
+            g.addColorStop(0, `rgba(${r}, ${gCol}, ${b}, ${alpha})`);
+            g.addColorStop(0.45, `rgba(${r}, ${gCol}, ${b}, ${alpha * 0.35})`);
+            g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        // 1. Bake Bioluminescent Flora Lights (Subtle illumination on neighboring rock & foliage)
+        const flora = level.highRes?.flora || [];
+        for (const a of flora) {
+            if (a.kind === 'GLOW_SHROOM') {
+                addRadialLight(a.x, a.y - a.length, lCfg.shroomRadius, 0, 242, 254, lCfg.shroomIntensity ?? 0.24);
+            } else if (a.kind === 'CAVE_FLOWER') {
+                const isGold = (Math.floor(a.seed) % 2) === 0;
+                addRadialLight(
+                    a.x,
+                    a.y - a.length,
+                    lCfg.flowerRadius,
+                    isGold ? 255 : 255,
+                    isGold ? 200 : 105,
+                    isGold ? 75 : 165,
+                    lCfg.flowerIntensity ?? 0.20
+                );
+            } else if (a.kind === 'VINE') {
+                addRadialLight(a.x, a.y + a.length, lCfg.vineTipRadius, 110, 255, 165, lCfg.vineTipIntensity ?? 0.14);
+            }
+        }
+
+        // 2. Bake Decorative Prefab Lights & Colorblind-Accessible Race Beacons
+        const prefabs = level.highRes?.prefabs || [];
+        for (const p of prefabs) {
+            const cx = p.x + p.w * 0.5;
+            const cy = p.y + p.h * 0.5;
+            if (p.kind === 'PAD') {
+                const isHome = p.tileId === 0x15;
+                addRadialLight(
+                    cx,
+                    p.y + 4,
+                    lCfg.padRadius,
+                    isHome ? 46 : 255,
+                    isHome ? 255 : 200,
+                    isHome ? 140 : 60,
+                    lCfg.padIntensity ?? 0.18
+                );
+            } else if (p.kind === 'BASE_STRUCTURE') {
+                addRadialLight(cx, cy, lCfg.baseRadius, 95, 220, 255, lCfg.baseIntensity ?? 0.20);
+            } else if (p.kind === 'GRAVITY_EMITTER') {
+                addRadialLight(cx, cy, lCfg.gravityRadius, 195, 105, 255, lCfg.gravityIntensity ?? 0.22);
+            } else if (p.kind === 'ANTENNA_MAST') {
+                addRadialLight(cx, p.y + 6, lCfg.beaconRadius, 255, 65, 55, lCfg.beaconIntensity ?? 0.22);
+            } else if (p.kind === 'RACE_MARKER') {
+                addRadialLight(cx, cy, lCfg.raceMarkerRadius, 0, 245, 255, lCfg.raceMarkerIntensity ?? 0.26);
+            }
+        }
+
+        return canvas;
+    }
+}
+
 export class PrefabLayer {
+    constructor() {
+        this.lightCanvas = null;
+        this.builtForLevel = null;
+    }
+
     draw(ctx, level, timeSec) {
         const prefabs = level?.highRes?.prefabs;
         if (!prefabs) return;
+        if (this.builtForLevel !== level) {
+            this.builtForLevel = level;
+            this.lightCanvas = EnvironmentalLightBaker.buildStaticLightCanvas(level);
+        }
 
         for (const p of prefabs) {
             if (p.kind === 'PAD') {
@@ -16,8 +106,68 @@ export class PrefabLayer {
                 this.drawGravityEmitter(ctx, p, timeSec);
             } else if (p.kind === 'ANTENNA_MAST') {
                 this.drawAntennaMast(ctx, p, timeSec);
+            } else if (p.kind === 'RACE_MARKER') {
+                this.drawRaceMarker(ctx, p, timeSec);
             }
         }
+    }
+
+    drawEnvironmentalGlow(ctx, camera, viewW, viewH, level, timeSec, players) {
+        if (!level || !RENDER_CONFIG.lighting?.enabled) return;
+        if (this.builtForLevel !== level) {
+            this.builtForLevel = level;
+            this.lightCanvas = EnvironmentalLightBaker.buildStaticLightCanvas(level);
+        }
+        if (!this.lightCanvas) return;
+
+        const lCfg = RENDER_CONFIG.lighting;
+        const scale = lCfg.scale || 0.25;
+        const pulseAmp = lCfg.pulseAmplitude ?? 0.06;
+        const pulse = (1.0 - pulseAmp) + pulseAmp * Math.sin(timeSec * (lCfg.pulseSpeed || 2.2));
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = (lCfg.ambientIntensity ?? 0.28) * pulse;
+
+        const sx = Math.max(0, camera.x * scale);
+        const sy = Math.max(0, camera.y * scale);
+        const sw = Math.min(this.lightCanvas.width - sx, (viewW + 4) * scale);
+        const sh = Math.min(this.lightCanvas.height - sy, (viewH + 4) * scale);
+        if (sw > 0 && sh > 0) {
+            ctx.drawImage(
+                this.lightCanvas,
+                sx,
+                sy,
+                sw,
+                sh,
+                sx / scale,
+                sy / scale,
+                sw / scale,
+                sh / scale
+            );
+        }
+
+        // Dynamic Ship Engine Thruster Illumination onto neighboring walls & flora
+        if (players && lCfg.shipLightEnabled !== false) {
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 1.0;
+            for (const id in players) {
+                const p = players[id];
+                if (p.isDead) continue;
+                const isThrusting = Boolean(p.inputs && p.inputs.up && p.fuel > 0);
+                const rad = isThrusting ? (lCfg.shipThrustRadius ?? 90) : (lCfg.shipIdleRadius ?? 44);
+                const alpha = isThrusting ? (lCfg.shipThrustIntensity ?? 0.20) : (lCfg.shipIdleIntensity ?? 0.08);
+                if (rad <= 0 || alpha <= 0) continue;
+                const g = ctx.createRadialGradient(p.x, p.y, 4, p.x, p.y, rad);
+                g.addColorStop(0, `rgba(79, 195, 255, ${alpha})`);
+                g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
     }
 
     drawLandingPad(ctx, p, timeSec) {
@@ -136,13 +286,70 @@ export class PrefabLayer {
         ctx.stroke();
 
         // Blinking warning beacon
-        if (Math.sin(timeSec * 7 + p.x) > 0) {
-            ctx.fillStyle = '#ff3b30';
-            ctx.shadowColor = '#ff3b30';
-            ctx.shadowBlur = 10;
+        const blink = 0.5 + 0.5 * Math.sin(timeSec * 7 + p.x);
+        if (blink > 0.25) {
+            const g = ctx.createRadialGradient(cx, p.y + 6, 1, cx, p.y + 6, 18 * blink);
+            g.addColorStop(0, `rgba(255, 75, 60, ${0.45 * blink})`);
+            g.addColorStop(0.4, `rgba(255, 45, 30, ${0.18 * blink})`);
+            g.addColorStop(1, 'rgba(255, 45, 30, 0)');
+            ctx.fillStyle = g;
             ctx.beginPath();
-            ctx.arc(cx, p.y + 6, 4, 0, Math.PI * 2);
+            ctx.arc(cx, p.y + 6, 18 * blink, 0, Math.PI * 2);
             ctx.fill();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(cx, p.y + 6, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    drawRaceMarker(ctx, p, timeSec) {
+        // Strictly 32x32 tile-accurate Colorblind-safe Checkpoint Tile
+        ctx.save();
+        const lCfg = RENDER_CONFIG.lighting || {};
+        const cx = p.x + p.w * 0.5;
+        const cy = p.y + p.h * 0.5;
+        const pulse = 0.65 + 0.35 * Math.sin(timeSec * 6.5 + p.x * 0.05);
+
+        // Subtle, configurable local glow that stays tight to the 32x32 tile
+        const auraRadius = lCfg.raceMarkerLocalGlowRadius ?? 24;
+        const auraAlpha = lCfg.raceMarkerLocalGlowAlpha ?? 0.24;
+        if (auraRadius > 0 && auraAlpha > 0) {
+            const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraRadius);
+            g.addColorStop(0, `rgba(0, 245, 255, ${auraAlpha * pulse})`);
+            g.addColorStop(0.6, `rgba(255, 215, 0, ${auraAlpha * 0.4 * pulse})`);
+            g.addColorStop(1, 'rgba(0, 245, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx, cy, auraRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Exact 32x32 tile housing with high-contrast gold & cyan border
+        ctx.fillStyle = '#0b1320';
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2.0;
+        ctx.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+        ctx.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(p.x + 4, p.y + 4, Math.max(2, p.w - 8), Math.max(2, p.h - 8));
+
+        // If checkpoint number tile (0x3B - 0x42), render crisp high-contrast number badge
+        if (p.tileId >= 0x3B && p.tileId <= 0x42) {
+            const cpNum = (p.tileId - 0x3A).toString();
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 14px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cpNum, cx, cy);
+        } else {
+            // Holder tile (0x43 - 0x4E): crisp internal indicator bar
+            ctx.fillStyle = '#00f5ff';
+            ctx.fillRect(cx - 6, cy - 2, 12, 4);
         }
         ctx.restore();
     }
