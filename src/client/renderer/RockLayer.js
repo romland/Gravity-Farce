@@ -2,10 +2,12 @@ export class RockLayer {
     constructor() {
         this.cachedCanvas = null;
         this.recessedCanvas = null;
+        this.builtForLevel = null;
     }
 
     buildLevelCache(level) {
         if (!level || !level.walls || level.walls.length === 0) return;
+        this.builtForLevel = level;
 
         const w = level.width;
         const h = level.height;
@@ -108,10 +110,13 @@ export class RockLayer {
         this.recessedCanvas = backCanvas;
     }
 
-    drawRecessed(ctx, camera, viewW, viewH) {
+    drawRecessed(ctx, camera, viewW, viewH, level) {
+        if (level && this.builtForLevel !== level) {
+            this.buildLevelCache(level);
+        }
         if (!this.recessedCanvas) return;
-        const ox = Math.floor(camera.x * 0.35);
-        const oy = Math.floor(camera.y * 0.35);
+        const ox = camera.x * 0.35;
+        const oy = camera.y * 0.35;
         ctx.drawImage(this.recessedCanvas, ox, oy);
     }
 

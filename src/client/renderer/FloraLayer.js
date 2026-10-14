@@ -2,9 +2,11 @@ export class FloraLayer {
     constructor() {
         this.anchors = [];
         this.drips = [];
+        this.builtForLevel = null;
     }
 
     initLevel(level) {
+        this.builtForLevel = level;
         const raw = level?.highRes?.flora || [];
         this.anchors = raw.map(a => ({
             ...a,
@@ -14,7 +16,10 @@ export class FloraLayer {
         this.drips = [];
     }
 
-    updateAndDraw(ctx, players, timeSec, spawnParticlesFn) {
+    updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level) {
+        if (level && this.builtForLevel !== level) {
+            this.initLevel(level);
+        }
         if (!this.anchors.length) return;
 
         const shipList = Object.values(players).filter(p => !p.isDead);
@@ -29,22 +34,37 @@ export class FloraLayer {
             }
 
             // Interactive Ship-Wash & Thruster Blast Physics
+            // Evaluate distance against the full vertical span of the plant so it stays parted while a ship is inside it!
+            const dirY = a.kind === 'VINE' ? 1 : -1;
+            const midY = a.y + dirY * (a.length * 0.55);
+            let targetBend = 0;
+
             for (const s of shipList) {
                 const dx = a.x - s.x;
-                const dy = a.y - s.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist < 150 && dist > 1) {
-                    const shipForce = (150 - dist) / 150;
-                    const thrustMult = (s.inputs && s.inputs.up) ? 2.4 : 1.0;
-                    const pushDir = dx >= 0 ? 1 : -1;
-                    a.bendVel += pushDir * shipForce * thrustMult * 0.035;
+                const clampedY = dirY > 0
+                    ? Math.max(a.y, Math.min(a.y + a.length, s.y))
+                    : Math.max(a.y - a.length, Math.min(a.y, s.y));
+                const dy = clampedY - s.y;
+                const dist = Math.hypot(dx, dy * 0.75);
+
+                const radius = (s.inputs && s.inputs.up) ? 210 : 165;
+                if (dist < radius) {
+                    const proximity = 1.0 - (dist / radius);
+                    // Keep a stable parting direction even when the ship center is dead-on the stem
+                    const pushDir = Math.abs(dx) < 8 ? (a.bendAngle >= 0 ? 1 : -1) : (dx > 0 ? 1 : -1);
+                    const thrustBoost = (s.inputs && s.inputs.up) ? 1.45 : 1.0;
+                    const desired = pushDir * Math.min(1.45, proximity * 1.35 * thrustBoost);
+                    if (Math.abs(desired) > Math.abs(targetBend)) {
+                        targetBend = desired;
+                    }
                 }
             }
 
-            // Damped harmonic spring back to rest
-            a.bendVel += -a.bendAngle * 0.08;
-            a.bendVel *= 0.88;
-            a.bendAngle = Math.max(-1.1, Math.min(1.1, a.bendAngle + a.bendVel));
+            // Smoothly spring toward targetBend (holds open while ship is present, relaxes when ship leaves)
+            const springK = targetBend !== 0 ? 0.14 : 0.045;
+            a.bendVel += (targetBend - a.bendAngle) * springK;
+            a.bendVel *= 0.84;
+            a.bendAngle = Math.max(-1.55, Math.min(1.55, a.bendAngle + a.bendVel));
 
             if (a.kind === 'VINE') {
                 this.drawVine(ctx, a, timeSec);
@@ -86,7 +106,7 @@ export class FloraLayer {
             const t = s / segments;
             // Quadratic bend curve (t^2) so root stays locked to rock contour
             const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
-            const washOffset = a.bendAngle * a.length * 0.65;
+            const washOffset = a.bendAngle * a.length * 0.92;
             tipX = a.x + (wind + washOffset) * (t * t);
             tipY = a.y + a.length * t;
             ctx.lineTo(tipX, tipY);
@@ -98,7 +118,7 @@ export class FloraLayer {
         for (let s = 2; s < segments; s += 2) {
             const t = s / segments;
             const wind = Math.sin(timeSec * 2.2 + a.seed + t * 2.0) * 14.0;
-            const washOffset = a.bendAngle * a.length * 0.65;
+            const washOffset = a.bendAngle * a.length * 0.92;
             const lx = a.x + (wind + washOffset) * (t * t);
             const ly = a.y + a.length * t;
             const side = (s % 4 === 0 ? 1 : -1) * 7;
@@ -115,7 +135,7 @@ export class FloraLayer {
     }
 
     drawFern(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.8 + a.seed) * 9 + a.bendAngle * 26;
+        const sway = Math.sin(timeSec * 2.8 + a.seed) * 9 + a.bendAngle * 42;
         ctx.strokeStyle = '#38b862';
         ctx.lineWidth = 3.2;
         ctx.lineCap = 'round';
@@ -134,7 +154,7 @@ export class FloraLayer {
     }
 
     drawGlowShroom(ctx, a, timeSec) {
-        const sway = Math.sin(timeSec * 2.0 + a.seed) * 7 + a.bendAngle * 22;
+        const sway = Math.sin(timeSec * 2.0 + a.seed) * 7 + a.bendAngle * 36;
         const tipX = a.x + sway;
         const tipY = a.y - a.length;
 

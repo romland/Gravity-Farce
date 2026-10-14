@@ -16,8 +16,8 @@ export class ParallaxLayer {
 
         for (let i = 0; i < 45; i++) {
             this.pillars.push({
-                x: rng() * 2400,
-                y: rng() * 3200,
+                x: rng() * 2600,
+                y: rng() * 3600,
                 w: 90 + rng() * 220,
                 h: 300 + rng() * 700,
                 depth: i % 2 === 0 ? 0.18 : 0.32
@@ -47,9 +47,11 @@ export class ParallaxLayer {
 
         // Layer -2: Distant Mega-Cavern Pillars (0.18x and 0.32x Parallax)
         ctx.save();
+        const wrapW = 2600;
+        const wrapH = 3600;
         for (const p of this.pillars) {
-            const sx = ((p.x - camera.x * p.depth) % 2400 + 2400) % 2400 - 200;
-            const sy = ((p.y - camera.y * p.depth) % 3200 + 3200) % 3200 - 400;
+            const sx = ((p.x - camera.x * p.depth + 400) % wrapW + wrapW) % wrapW - 400;
+            const sy = ((p.y - camera.y * p.depth + 750) % wrapH + wrapH) % wrapH - 750;
             if (sx + p.w < 0 || sx > this.viewW || sy + p.h < 0 || sy > this.viewH) continue;
 
             ctx.fillStyle = p.depth < 0.25 ? '#0f1624' : '#141d2f';
@@ -59,9 +61,11 @@ export class ParallaxLayer {
         }
 
         // Ambient Bioluminescent Spores (0.5x Parallax)
+        const moteW = this.viewW + 60;
+        const moteH = this.viewH + 60;
         for (const m of this.motes) {
-            const mx = ((m.x + Math.sin(timeSec * 0.6 + m.phase) * 20 - camera.x * 0.45) % this.viewW + this.viewW) % this.viewW;
-            const my = ((m.y - timeSec * 12 * m.speed - camera.y * 0.45) % this.viewH + this.viewH) % this.viewH;
+            const mx = ((m.x + Math.sin(timeSec * 0.6 + m.phase) * 20 - camera.x * 0.45 + 30) % moteW + moteW) % moteW - 30;
+            const my = ((m.y - timeSec * 12 * m.speed - camera.y * 0.45 + 30) % moteH + moteH) % moteH - 30;
             ctx.fillStyle = m.color;
             ctx.beginPath();
             ctx.arc(mx, my, m.r, 0, Math.PI * 2);

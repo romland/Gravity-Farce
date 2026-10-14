@@ -953,12 +953,11 @@
             ctx.save();
             ctx.translate(Math.floor(-camera.x), Math.floor(-camera.y));
 
-            // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs + Interactive Flora
+            // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs
             if (window.gfRenderer) {
-                window.gfRenderer.rock.drawRecessed(ctx, camera, VIEW_W, VIEW_H);
+                window.gfRenderer.rock.drawRecessed(ctx, camera, VIEW_W, VIEW_H, level);
                 window.gfRenderer.rock.draw(ctx, camera, VIEW_W, VIEW_H);
                 window.gfRenderer.prefabs.draw(ctx, level, timeSec);
-                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles);
             }
 
             if (serverState.cargos) {
@@ -1039,6 +1038,11 @@
                 }
             }
             updateAndDrawParticles(ctx);
+
+            // Layer +1: Foreground Interactive Flora Canopy (Renders above ships, enemies & bullets for dogfight cover!)
+            if (window.gfRenderer) {
+                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level);
+            }
 
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i];
