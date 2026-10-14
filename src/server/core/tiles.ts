@@ -51,7 +51,7 @@ export const TILE_DICTIONARY: Record<number, TileDefinition> = {
     0x26: { id: 0x26, description: "Ground to brick transition", solid: true, known: true },
     0x27: { id: 0x27, description: "Ground to brick transition", solid: true, known: true },
     0x28: { id: 0x28, description: "Full/four Teal Bricks (same as 0x1B)", pad: true, known: true },
-    0x29: { id: 0x29, description: "Full ground", solid: true, known: true },
+    0x29: { id: 0x29, description: "Full ground", pad: true, solid: true, known: true },
     0x2A: { id: 0x2A, description: "Ground->Tree transition", solid: true, known: true },
     0x2B: { id: 0x2B, description: "Tree", solid: true, known: true },
     0x2C: { id: 0x2C, description: "Tree", solid: true, known: true },
