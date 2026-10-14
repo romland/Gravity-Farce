@@ -7,10 +7,23 @@
 ...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
 So, some hours (more than I will admit) thrown at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
 
-It's awesome to see that a lot of old games are getting a second life these days! To manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. It's very much a labour of love. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.
-
+It's awesome to see that a lot of old games are getting a second life these days! To manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. It's very much a labour of love. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.  
 
 ## Deviations from the original
+
+### Competitive play
+Not really a deviation from the original game since that was all about competition! But I want to stress that
+Gravity-Farce is _also_ written for competitive play. The intention is to, if not prevent, at least make exploitability
+annoying enough so that it's not worth it. The hi-scores should mean something. Server admins can also review
+games.  
+
+For fair competitiveness, I suggest you start a server with a region in mind since it can be pretty frustrating
+with latency differences. To this day I have not done _much_ to even out the playingfield with differing latencies
+but it is definitely on the list of things to add. The primary reason it's not in there yet is because it is a 
+bit of a conflict with what the original Gravity-Force was: You _felt_ like you had full control, down to the pixel.
+I mean, I know I counted on the nose of my ship literally being pixel-to-pixel against the wall in turns. So, yeah, I 
+am worried that I will lose a bit of that feeling then! But, would have to test it and see!
+
 
 ### 1. No split-screen and Server-side
 I did not really fancy the split-screen for multi-player. I went for networked play instead. The server is 
@@ -25,7 +38,7 @@ it was nice to give someone a punch on the arm when they were being an ass (read
 
 This version of GF keeps track of all kinds of high-scores and records for both single and multiplayer globally. You don't have to snail-mail your mate your fastest time on the "8 race". You just race on the same server.  
 
-_But obviously, multi-player is the way to go! `:D`_
+_But obviously, multi-player is the way to go!_ `:D`
 
 ### 3. Bots, bots, bots
 I also added _optional_ bots to the single-player disciplines. I'm quite pleased with them as they're dumb enough, and not too dumb.
@@ -38,6 +51,8 @@ It's not really a port. I have tried to get the _feeling_ correct. It is written
 
 ## Party like it's 1989: Play It!
 https://...
+
+
 
 ### Gameplay Tips
 If using keyboard: fire bullets with one hand, control ship with the other (e.g. `w` to fire and numpad `4,5,6` for control)
