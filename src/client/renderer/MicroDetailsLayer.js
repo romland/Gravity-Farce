@@ -151,10 +151,16 @@ export class MicroDetailsLayer {
         // Verify that a rock/tree bank on the left or right rises above the water surface and has a solid bottom corner
         const hasHighBank = (bankX, basinY) => {
             if (!isValidBasinTile(bankX, basinY + 1)) return false;
-            for (let r = 0; r < minBankRise; r++) {
+            for (let r = 0; r < Math.ceil(minBankRise); r++) {
                 if (!isValidBasinTile(bankX, basinY - r)) return false;
             }
             return true;
+        };
+
+        const isSolidOrBottom = (tx, ty) => {
+            if (ty >= h) return true;
+            const t = map[ty]?.[tx] ?? 0;
+            return t !== 0;
         };
 
         let seed = 8191;
@@ -173,7 +179,7 @@ export class MicroDetailsLayer {
                 let valid = true;
                 while (x + span < w - 1 && map[y][x + span] === 0 && span <= maxSpan) {
                     const cx = x + span;
-                    if (!isValidBasinTile(cx, y + 1) || hasDryEntityOrPadAt(cx, y) || hasDryEntityOrPadAt(cx, y - 1)) {
+                    if (!isValidBasinTile(cx, y + 1) || hasDryEntityOrPadAt(cx, y) || hasDryEntityOrPadAt(cx, y - 1) || !isSolidOrBottom(cx, y + 2)) {
                         valid = false;
                         break;
                     }
@@ -628,7 +634,7 @@ export class MicroDetailsLayer {
             }
 
             // Draw water body extended by padPx into left, right, and bottom rock (RockLayer masks the edges!)
-            const deepBottomY = pool.bottomY + padPx;
+            const deepBottomY = pool.bottomY + padPx + 32;
             ctx.fillStyle = 'rgba(10, 82, 118, 0.62)';
             ctx.beginPath();
             ctx.moveTo(startX, deepBottomY);

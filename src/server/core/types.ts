@@ -14,7 +14,7 @@ export interface LevelEntity {
 }
 
 export interface LevelPrefab {
-    kind: 'PAD' | 'BASE_STRUCTURE' | 'BARREL_STACK' | 'GRAVITY_EMITTER' | 'ANTENNA_MAST' | 'TEAL_BRICK' | 'HERO_TREE' | 'RACE_MARKER';
+    kind: 'PAD' | 'BASE_STRUCTURE' | 'BARREL_STACK' | 'GRAVITY_EMITTER' | 'ANTENNA_MAST' | 'HERO_TREE' | 'RACE_MARKER';
     x: number;
     y: number;
     w: number;

@@ -169,9 +169,9 @@ export const RENDER_CONFIG = {
         waterRarityChance: 0.85,       // Chance for a qualifying basin to hold water
         waterMinSpanTiles: 2,          // Minimum width (in 32px tiles) of a rock/tree basin
         waterMaxSpanTiles: 10,         // Maximum width (in 32px tiles) of a rock/tree basin
-        waterMinBankRiseTiles: 1,      // Left & right banks must rise at least this many tiles above the pool floor
+        waterMinBankRiseTiles: 0.6,    // Left & right banks must rise at least this many tiles above the pool floor
         waterDepthPx: 18,              // Depth of water surface inside the bottom of the rock basin
-        waterOverlapPx: 24,            // How far water extends into surrounding solid tiles (clipped by RockLayer)
+        waterOverlapPx: 32,            // How far water extends into surrounding solid tiles (clipped by RockLayer)
         waterAllowTreeBases: true,     // Allow water to pool against Ground->Tree transitions and tree roots
         waterAllowedGroundTiles: [
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F,

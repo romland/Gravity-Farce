@@ -116,11 +116,10 @@ class EntityExtractor {
     }
 
     private buildTurret(def: Omit<LevelEntity, 'x'|'y'>, gridX: number, gridY: number): LevelEntity {
-        const isUp = def.props?.orientUp;
         return { 
             ...def, 
             x: gridX * TILE_SIZE + TILE_SIZE / 2, 
-            y: isUp ? (gridY + 1) * TILE_SIZE : gridY * TILE_SIZE 
+            y: gridY * TILE_SIZE + TILE_SIZE / 2 
         };
     }
 

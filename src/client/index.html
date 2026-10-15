@@ -79,12 +79,16 @@
             box-shadow: 0 0 14px rgba(255, 215, 0, 0.45);
         }
         #server-banner {
+            white-space: normal;
             position: absolute; top: 88px; left: 50%; transform: translateX(-50%);
             z-index: 90; pointer-events: none; display: none;
             background: linear-gradient(135deg, rgba(20, 25, 35, 0.92), rgba(40, 30, 10, 0.92));
             border: 1px solid #ffd700; color: #ffd700; padding: 10px 26px; border-radius: 999px;
             font-weight: 800; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase;
             box-shadow: 0 0 28px rgba(255, 215, 0, 0.55);
+            max-width: 80%;
+            text-align: center;
+            line-height: 1.4;
         }
         #playfield-announce {
             position: absolute; top: 24%; left: 50%; transform: translate(-50%, -50%);
@@ -253,6 +257,7 @@
 
         let freecam = false;
         let debugMode = false;
+        let showDebugLines = false;
         const camKeys = { up: false, down: false, left: false, right: false };
 
         window.addEventListener('keydown', (e) => {
@@ -269,6 +274,7 @@
 
             if (debugMode) {
                 if (e.code === 'KeyP') { socket.emit('debug_action', 'pause'); return; }
+                if (e.code === 'KeyV') { showDebugLines = !showDebugLines; return; }
                 if (e.code === 'KeyC') { freecam = !freecam; return; }
                 if (e.code === 'KeyU') { socket.emit('debug_action', 'powerup-0xD6'); return; }
                 if (e.code === 'KeyI') { socket.emit('debug_action', 'powerup-0xD7'); return; }
@@ -605,10 +611,10 @@
                     return;
                 }
                 if (b.title && b.title.includes('SUMMARY')) {
-                    summaryHtml += `<div class="board-card"><div class="board-title">${b.title}</div>`;
-                    summaryHtml += `<div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px; font-family: monospace; padding: 4px 0;">`;
+                    summaryHtml += `<div class="board-card" style="max-width: 600px;"><div class="board-title">${b.title}</div>`;
+                    summaryHtml += `<div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; font-family: monospace; padding: 4px 0;">`;
                     b.entries.forEach(e => {
-                        summaryHtml += `<div style="display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); min-width: 80px;"><span style="font-size: 10px; color: #888; letter-spacing: 1px; margin-bottom: 2px;">${e.alias}</span><span style="font-size: 13px; font-weight: bold; color: ${e.isMe ? '#2ecc71' : '#fff'};">${e.displayValue}</span></div>`;
+                        summaryHtml += `<div style="display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); min-width: 70px; flex: 1;"><span style="font-size: 10px; color: #888; letter-spacing: 1px; margin-bottom: 2px; white-space: nowrap;">${e.alias}</span><span style="font-size: 13px; font-weight: bold; color: ${e.isMe ? '#2ecc71' : '#fff'};">${e.displayValue}</span></div>`;
                     });
                     summaryHtml += `</div></div>`;
                 } else {
@@ -873,7 +879,7 @@
                 ctx.restore();
             }
             ctx.restore();
-            if (debugMode) {
+            if (debugMode && showDebugLines) {
                 ctx.save();
                 ctx.translate(Math.round(p.x), Math.round(p.y));
                 ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -944,7 +950,7 @@
             }
             
             ctx.restore();
-            if (debugMode) {
+            if (debugMode && showDebugLines) {
                 ctx.save();
                 ctx.translate(Math.round(t.x), Math.round(t.y));
                 ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -966,12 +972,12 @@
             ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
             ctx.restore();
 
-            if (debugMode && t.debugId !== undefined) {
+            if (debugMode && showDebugLines && t.debugId !== undefined) {
                 ctx.fillStyle = '#0f0';
                 ctx.font = '10px monospace';
                 ctx.fillText(`ID:${t.debugId} (TANK)`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
             }
-            if (debugMode) {
+            if (debugMode && showDebugLines) {
                 ctx.save();
                 ctx.translate(Math.round(t.x), Math.round(t.y));
                 ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -1003,12 +1009,12 @@
             }
             ctx.restore();
 
-            if (debugMode && t.debugId !== undefined) {
+            if (debugMode && showDebugLines && t.debugId !== undefined) {
                 ctx.fillStyle = '#0f0';
                 ctx.font = '10px monospace';
                 ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
             }
-            if (debugMode) {
+            if (debugMode && showDebugLines) {
                 ctx.save();
                 ctx.translate(Math.round(t.x), Math.round(t.y));
                 ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -1262,7 +1268,7 @@
             }
             
             // Debug Bot AI Visualizations
-            if (debugMode) {
+            if (debugMode && showDebugLines) {
                 for (let id in renderState.players) {
                     const p = renderState.players[id];
                     if (p.isBot && !p.isDead) {

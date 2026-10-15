@@ -1,5 +1,19 @@
 import { RENDER_CONFIG } from './RenderConfig.js';
 
+const TEAL_BRICK_LAYOUTS = {
+    0x1B: [1, 1, 1, 1], // Full
+    0x1C: [0, 0, 1, 0], // Bottom-Left Only
+    0x1D: [1, 0, 1, 1], // TL, BL, BR
+    0x1E: [0, 1, 1, 1], // TR, BL, BR
+    0x1F: [0, 0, 0, 1], // Bottom-Right Only
+    0x21: [1, 1, 1, 1], // Full (Variant)
+    0x24: [0, 0, 1, 1], // BL, BR (Ground Top)
+    0x25: [0, 1, 1, 1], // TR, BL, BR (Ground TL)
+    0x26: [0, 0, 1, 1], // BL, BR (Ground Top Variant)
+    0x27: [1, 0, 1, 1], // TL, BL, BR (Ground TR)
+    0x28: [1, 1, 1, 1]  // Full (Variant)
+};
+
 class RockTextureGenerator {
     static createGrainPattern(cfg) {
         const pCanvas = document.createElement('canvas');
@@ -328,6 +342,36 @@ export class RockLayer {
         ctx.lineWidth = cfg.outerOutlineWidth;
         ctx.stroke();
         ctx.restore();
+
+        // Draw Teal Bricks accurately based on their partial 16x16 layout
+        if (level.rawMap) {
+            const drawSubBrick = (bx, by) => {
+                ctx.fillStyle = '#105b64';
+                ctx.fillRect(bx, by, 16, 16);
+                ctx.fillStyle = '#136f7a';
+                ctx.strokeStyle = '#0a3d43';
+                ctx.lineWidth = 1;
+                ctx.fillRect(bx + 1, by + 1, 14, 14);
+                ctx.strokeRect(bx + 1, by + 1, 14, 14);
+                ctx.fillStyle = '#2cb1bf';
+                ctx.fillRect(bx + 2, by + 2, 12, 2);
+            };
+
+            for (let y = 0; y < level.rawMap.length; y++) {
+                for (let x = 0; x < level.rawMap[y].length; x++) {
+                    const tid = level.rawMap[y][x];
+                    const layout = TEAL_BRICK_LAYOUTS[tid];
+                    if (layout) {
+                        const px = x * 32;
+                        const py = y * 32;
+                        if (layout[0]) drawSubBrick(px, py);           // TL
+                        if (layout[1]) drawSubBrick(px + 16, py);      // TR
+                        if (layout[2]) drawSubBrick(px, py + 16);      // BL
+                        if (layout[3]) drawSubBrick(px + 16, py + 16); // BR
+                    }
+                }
+            }
+        }
 
         // Glossy Wet Specular Rim on damp rock & beneath water drip emitters
         RockTextureGenerator.drawWetSpecularSheen(ctx, level, cfg);

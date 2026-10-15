@@ -97,8 +97,6 @@ export class PrefabLayer {
         for (const p of prefabs) {
             if (p.kind === 'PAD') {
                 this.drawLandingPad(ctx, p, timeSec, players);
-            } else if (p.kind === 'TEAL_BRICK') {
-                this.drawTealBrick(ctx, p);
             } else if (p.kind === 'BASE_STRUCTURE') {
                 this.drawBaseStructure(ctx, p, timeSec);
             } else if (p.kind === 'BARREL_STACK') {
@@ -235,32 +233,6 @@ export class PrefabLayer {
         ctx.restore();
     }
 
-    drawTealBrick(ctx, p) {
-        ctx.save();
-        ctx.fillStyle = '#136f7a';
-        ctx.strokeStyle = '#2cb1bf';
-        ctx.lineWidth = 2;
-        ctx.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
-        ctx.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
-
-        // Riveted internal grid cells
-        ctx.strokeStyle = 'rgba(10, 45, 52, 0.75)';
-        ctx.lineWidth = 1;
-        for (let x = p.x + 32; x < p.x + p.w; x += 32) {
-            ctx.beginPath();
-            ctx.moveTo(x, p.y);
-            ctx.lineTo(x, p.y + p.h);
-            ctx.stroke();
-        }
-        for (let y = p.y + 32; y < p.y + p.h; y += 32) {
-            ctx.beginPath();
-            ctx.moveTo(p.x, y);
-            ctx.lineTo(p.x + p.w, y);
-            ctx.stroke();
-        }
-        ctx.restore();
-    }
-
     drawBaseStructure(ctx, p, timeSec) {
         const sprite = this.assetManager?.get('PREFAB_BASE');
         if (sprite) {
@@ -315,10 +287,7 @@ export class PrefabLayer {
         ctx.save();
         const pulse = 0.5 + 0.5 * Math.sin(timeSec * 8);
         ctx.fillStyle = '#1f2438';
-        ctx.strokeStyle = `rgba(180, 100, 255, ${0.5 + pulse * 0.5})`;
-        ctx.lineWidth = 2;
         ctx.fillRect(p.x, p.y, p.w, p.h);
-        ctx.strokeRect(p.x, p.y, p.w, p.h);
         ctx.restore();
     }
 

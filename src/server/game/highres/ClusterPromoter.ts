@@ -41,7 +41,6 @@ export class ClusterPromoter {
         if (GRAV_WELL_TILES.has(tid)) return 'GRAVITY_EMITTER';
         if (MAST_TILES.has(tid)) return 'ANTENNA_MAST';
         if (RACE_MARKER_TILES.has(tid)) return 'RACE_MARKER';
-        if (getTileCategory(tid) === 'BRICK') return 'TEAL_BRICK';
         if (getTileCategory(tid) === 'TREE') return 'HERO_TREE';
         return null;
     }

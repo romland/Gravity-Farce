@@ -809,15 +809,17 @@ export class FloraLayer {
         }
 
         // Local blossom glow halo
-        const isGold = (Math.floor(a.seed) % 2) === 0;
-        const petalColor = isGold ? '#ffbe40' : '#ff6b9d';
-        const coreColor = isGold ? '#fff6b0' : '#ffe0f0';
+        const colorType = Math.floor(a.seed) % 4;
+        let petalColor, coreColor, glowRgb;
+        if (colorType === 0) { petalColor = '#ffbe40'; coreColor = '#fff6b0'; glowRgb = '255, 190, 64'; }
+        else if (colorType === 1) { petalColor = '#ff6b9d'; coreColor = '#ffe0f0'; glowRgb = '255, 107, 157'; }
+        else if (colorType === 2) { petalColor = '#4facfe'; coreColor = '#e0f7fa'; glowRgb = '79, 172, 254'; }
+        else { petalColor = '#b57edd'; coreColor = '#f3e5f5'; glowRgb = '181, 126, 221'; }
+
         if (cfg.localHaloEnabled !== false) {
             const haloR = (cfg.flowerHaloRadius ?? 14.0) * pulse;
             const haloA = (cfg.flowerHaloAlpha ?? 0.20) * (1.0 - (a.shyness || 0) * 0.65);
-            const glowRgba = isGold
-                ? `rgba(255, 190, 64, ${haloA})`
-                : `rgba(255, 107, 157, ${haloA})`;
+            const glowRgba = `rgba(${glowRgb}, ${haloA})`;
             const grad = ctx.createRadialGradient(tipX, tipY, 2, tipX, tipY, haloR);
             grad.addColorStop(0, glowRgba);
             grad.addColorStop(1, 'rgba(0, 0, 0, 0)');

@@ -90,21 +90,21 @@ const VEC_3WAY_DOWN: Vector2D[] = [
 
 // Complete 15-Type Specification Table ($00035B16)
 export const TURRET_SPECS_BY_TILE: Record<number, TurretSpec> = {
-    0xAE: { typeId: 1,  hpMax: 4, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 8,  vectors: VEC_3WAY_UP,       width: 56, height: 56 },
-    0xAF: { typeId: 2,  hpMax: 4, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 8,  vectors: VEC_3WAY_UP,       width: 56, height: 56 },
-    0xB0: { typeId: 3,  hpMax: 5, cooldownMax: 80, scoreValue: 120, muzzleOffset: { x: 1,  y: 3 }, soundId: 10, vectors: VEC_4WAY_UP,       width: 56, height: 56 },
-    0xB1: { typeId: 4,  hpMax: 5, cooldownMax: 80, scoreValue: 120, muzzleOffset: { x: 1,  y: 3 }, soundId: 10, vectors: VEC_4WAY_UP,       width: 56, height: 56 },
-    0xB2: { typeId: 5,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP,   width: 56, height: 56 },
-    0xB3: { typeId: 6,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP,   width: 56, height: 56 },
-    0xB4: { typeId: 7,  hpMax: 8, cooldownMax: 70, scoreValue: 100, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC,      width: 56, height: 56 },
-    0xB5: { typeId: 8,  hpMax: 8, cooldownMax: 70, scoreValue: 100, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC,      width: 56, height: 56 },
-    0xB6: { typeId: 9,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 7 }, soundId: 9,  vectors: VEC_STRAIGHT_DOWN, width: 56, height: 56 },
-    0xB7: { typeId: 10, hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 6,  y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_EAST, width: 56, height: 56 },
-    0xB8: { typeId: 11, hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: -1, y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_WEST, width: 56, height: 56 },
-    0xB9: { typeId: 12, hpMax: 8, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: -1, y: 0 }, soundId: 10, vectors: VEC_7WAY_FAN,      width: 56, height: 56 },
-    0xBA: { typeId: 13, hpMax: 9, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 1,  y: 2 }, soundId: 12, vectors: VEC_5WAY_FAN,      width: 56, height: 56 },
-    0xBB: { typeId: 14, hpMax: 9, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP,       width: 56, height: 56 },
-    0xBC: { typeId: 15, hpMax: 9, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP,       width: 56, height: 56 }
+    0xAE: { typeId: 1,  hpMax: 4, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 8,  vectors: VEC_3WAY_UP,       width: 32, height: 32 },
+    0xAF: { typeId: 2,  hpMax: 4, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 8,  vectors: VEC_3WAY_UP,       width: 32, height: 32 },
+    0xB0: { typeId: 3,  hpMax: 5, cooldownMax: 80, scoreValue: 120, muzzleOffset: { x: 1,  y: 3 }, soundId: 10, vectors: VEC_4WAY_UP,       width: 32, height: 32 },
+    0xB1: { typeId: 4,  hpMax: 5, cooldownMax: 80, scoreValue: 120, muzzleOffset: { x: 1,  y: 3 }, soundId: 10, vectors: VEC_4WAY_UP,       width: 32, height: 32 },
+    0xB2: { typeId: 5,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP,   width: 32, height: 32 },
+    0xB3: { typeId: 6,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 0 }, soundId: 9,  vectors: VEC_STRAIGHT_UP,   width: 32, height: 32 },
+    0xB4: { typeId: 7,  hpMax: 8, cooldownMax: 70, scoreValue: 100, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC,      width: 32, height: 32 },
+    0xB5: { typeId: 8,  hpMax: 8, cooldownMax: 70, scoreValue: 100, muzzleOffset: { x: -1, y: 2 }, soundId: 11, vectors: VEC_8WAY_ARC,      width: 32, height: 32 },
+    0xB6: { typeId: 9,  hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 2,  y: 7 }, soundId: 9,  vectors: VEC_STRAIGHT_DOWN, width: 32, height: 32 },
+    0xB7: { typeId: 10, hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 6,  y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_EAST, width: 32, height: 32 },
+    0xB8: { typeId: 11, hpMax: 5, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: -1, y: 3 }, soundId: 9,  vectors: VEC_STRAIGHT_WEST, width: 32, height: 32 },
+    0xB9: { typeId: 12, hpMax: 8, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: -1, y: 0 }, soundId: 10, vectors: VEC_7WAY_FAN,      width: 32, height: 32 },
+    0xBA: { typeId: 13, hpMax: 9, cooldownMax: 40, scoreValue: 150, muzzleOffset: { x: 1,  y: 2 }, soundId: 12, vectors: VEC_5WAY_FAN,      width: 32, height: 32 },
+    0xBB: { typeId: 14, hpMax: 9, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP,       width: 32, height: 32 },
+    0xBC: { typeId: 15, hpMax: 9, cooldownMax: 80, scoreValue: 150, muzzleOffset: { x: 1,  y: 3 }, soundId: 9,  vectors: VEC_3WAY_UP,       width: 32, height: 32 }
 };
 
 export function getTriggerIdForTurretTile(turretTileId: number): number {
