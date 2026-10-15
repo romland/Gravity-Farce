@@ -185,6 +185,12 @@
     <div id="login-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 20, 25, 0.9); backdrop-filter: blur(10px); border: 2px solid #4facfe; border-radius: 12px; width: 300px; display: none; flex-direction: column; z-index: 200; box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 20px;">
         <div class="board-title">PILOT REGISTRATION</div>
         <input type="text" autofocus id="alias-input" maxlength="3" style="background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 24px; padding: 10px; margin-bottom: 10px; font-family: monospace; font-weight: bold; outline: none;" placeholder="AAA">
+        <!--
+        <label style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #bdc3c7; margin-bottom: 12px; cursor: pointer; user-select: none; font-family: monospace;">
+            <input type="checkbox" id="bot-pilot-checkbox" style="accent-color: #4facfe; width: 15px; height: 15px; cursor: pointer;">
+            <span>I WILL BE A BOT/AI PILOT (BOT LEAGUE)</span>
+        </label>
+        -->
         <div id="login-error" style="color: #e74c3c; text-align: center; margin-bottom: 10px; font-size: 12px; font-weight: bold;"></div>
         <button id="btn-login-submit" class="btn-close" style="margin-bottom: 10px;">CONNECT</button>
         <button id="btn-login-random" class="btn-close" style="background: #2c3e50; color: #fff;">RANDOM CALLSIGN</button>
@@ -222,6 +228,7 @@
             localStorage.setItem('gf_uuid', myUuid);
         }
         let myAlias = localStorage.getItem('gf_alias');
+        let myIsBot = localStorage.getItem('gf_is_bot') === 'true';
 
         const socket = io({ autoConnect: false });
         let myId = null;
@@ -1428,26 +1435,31 @@
         const loginModal = document.getElementById('login-modal');
         const aliasInput = document.getElementById('alias-input');
         const loginError = document.getElementById('login-error');
+        const botPilotCheckbox = document.getElementById('bot-pilot-checkbox');
+        if (botPilotCheckbox) botPilotCheckbox.checked = myIsBot;
         
         async function attemptLogin(alias) {
             aliasInput.value = alias;
+            const isBotFlag = Boolean(botPilotCheckbox && botPilotCheckbox.checked);
             try {
                 const res = await fetch('/api/auth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ alias, uuid: myUuid })
+                    body: JSON.stringify({ alias, uuid: myUuid, isBot: isBotFlag })
                 });
                 const data = await res.json();
                 if (data.success) {
                     localStorage.setItem('gf_alias', alias);
+                    localStorage.setItem('gf_is_bot', String(Boolean(data.isBot ?? isBotFlag)));
                     myAlias = alias;
+                    myIsBot = Boolean(data.isBot ?? isBotFlag);
                     loginModal.style.display = 'none';
                     document.getElementById('loading-screen').style.display = 'none';
                     
                     // Launch the Socket!
                     const savedLvl = localStorage.getItem('gf_dev_level');
                     const startLvl = savedLvl !== null ? parseInt(savedLvl, 10) : 0;
-                    socket.auth = { uuid: myUuid, alias: myAlias, levelIndex: isNaN(startLvl) ? 0 : startLvl };
+                    socket.auth = { uuid: myUuid, alias: myAlias, isBot: myIsBot, levelIndex: isNaN(startLvl) ? 0 : startLvl };
                     socket.connect();
                     requestAnimationFrame(gameLoop);
                 } else {

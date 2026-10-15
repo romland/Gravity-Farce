@@ -6,14 +6,14 @@ const EASY_CHARS = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 
 export class AuthManager {
     private dbPath: string;
-    private aliases: Record<string, { uuid: string, approved: boolean }> = {}; // Mapping of ALIAS -> Object
+    private aliases: Record<string, { uuid: string, approved: boolean, isBot?: boolean }> = {}; // Mapping of ALIAS -> Object
 
     constructor(filename: string = 'data/server_aliases.json') {
         this.dbPath = path.resolve(process.cwd(), filename);
         this.load();
     }
 
-    public validateOrClaim(alias: string, uuid: string, allowNew: boolean = true, requireApproval: boolean = false): { success: boolean, message?: string } {
+    public validateOrClaim(alias: string, uuid: string, allowNew: boolean = true, requireApproval: boolean = false, isBot?: boolean): { success: boolean, message?: string, isBot?: boolean } {
         if (!alias || typeof alias !== 'string' || !uuid || typeof uuid !== 'string' || uuid.length > 64) {
             return { success: false, message: 'INVALID CREDENTIALS' };
         }
@@ -38,7 +38,12 @@ export class AuthManager {
                 return { success: false, message: 'ACCOUNT PENDING ADMIN APPROVAL' };
             }
 
-            return { success: true };
+            if (typeof isBot === 'boolean' && existing.isBot !== isBot) {
+                existing.isBot = isBot;
+                this.save();
+            }
+
+            return { success: true, isBot: Boolean(existing.isBot) };
         }
         
         // Enforce strict 1:1 mapping - ensure this UUID doesn't already own a different alias
@@ -53,14 +58,18 @@ export class AuthManager {
         }
 
         // Always save as a predictable object structure
-        this.aliases[alias] = { uuid, approved: !requireApproval };
+        this.aliases[alias] = { uuid, approved: !requireApproval, isBot: Boolean(isBot) };
         this.save();
 
         if (requireApproval) {
             return { success: false, message: 'ACCOUNT CREATED. PENDING ADMIN APPROVAL' };
         }
 
-        return { success: true };
+        return { success: true, isBot: Boolean(isBot) };
+    }
+
+    public isBotPilot(alias: string): boolean {
+        return Boolean(this.aliases[alias]?.isBot);
     }
 
     public generateRandom(): string {

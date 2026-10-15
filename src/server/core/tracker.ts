@@ -127,7 +127,7 @@ export class GameTracker {
         if (!this.isActive || !this.entry.playerStats[playerId]) return;
         const { uuid, alias } = this.entry.playerStats[playerId];
         this.entry.highscores.push({ playerId, uuid, alias, metric, value, isNewPb });
-        if (isNewPb) this.hasHighscore = true;
+        this.hasHighscore = true;
     }
 
     public updatePlayerFuelConsumed(playerId: string, consumed: number) {
@@ -156,9 +156,10 @@ export class GameTracker {
         if (!this.isActive) return;
         this.isActive = false;
         
-        if (!this.isCompleted) return; // Discard failed attempts
+        if (!this.isCompleted && !this.hasHighscore) return; // Discard failed attempts unless they scored a record
 
         this.entry.endedAt = Date.now();
+        if (!this.isCompleted && !this.hasHighscore) return; // Discard failed attempts unless they scored a record
         this.entry.durationMs = this.entry.endedAt - this.entry.startedAt;
         this.entry.events.push({ timestamp: this.entry.endedAt, event: { type: 'game_end', reason: 'completed' } });
         

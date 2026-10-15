@@ -114,10 +114,17 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
 
     if (p.lives <= 0) {
         p.lives = 0;
-        // Record arcade score before reset
-        if (room && p.score > 0 && !ecs.bots.has(e) && !room.isReplayMode) {
+        // TODO 15: Arcade records (score) only count on mission levels (0-49), never racing or dogfights
+        if (room && room.category === 'mission' && p.score > 0 && !ecs.bots.has(e) && !room.isReplayMode) {
             const mode = room.getRoomMode();
-            const rScore = recordDB.submitRecord('arcade_score', 0, mode, room.getPhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score, metadata: { replayId: room.tracker.uuid } });
+            const startLvl = p.streakStartLevel ?? room.levelIndex;
+            const rScore = recordDB.submitRecord('arcade_score', 0, mode, room.getPhysicsHash(), 'desc_asc', {
+                playerId: p.uuid,
+                alias: p.alias,
+                value: p.score,
+                secondaryValue: Math.round((room.globalWaveTimer - p.joinedAtTick) * (1000 / 60)),
+                metadata: { replayId: room.tracker.uuid, botCount: room.getBotCount(), startLevel: startLvl, endLevel: room.levelIndex }
+            }, 100, Boolean(p.isBotPilot));
             if (rScore.rank !== -1) room.tracker.logHighscore(p.id, 'arcade_score', p.score, rScore.isNewPb);
             if (rScore.rank === 1) {
                 room.broadcastGlobalAnnouncement(`${p.alias} SET #1 ARCADE SCORE: ${p.score}!`);

@@ -18,6 +18,7 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         type: 'modern',
         uuid: stats?.uuid ?? id,
         alias: stats?.alias ?? 'UNK',
+        isBotPilot: stats?.isBot ?? false,
         joinedAt: stats?.joinedAt ?? Date.now(),
         joinedAtTick: stats?.joinedAtTick ?? 0,
         isDead: false,
@@ -29,6 +30,10 @@ export function spawnModernPlayer(ecs: Registry, id: string, x: number, y: numbe
         score: stats?.score ?? 0,
         spawnX: x,
         spawnY: y,
+        homeSpawnX: stats?.homeSpawnX ?? x,
+        homeSpawnY: stats?.homeSpawnY ?? y,
+        levelStartScore: stats?.score ?? 0,
+        streakStartLevel: stats?.streakStartLevel ?? 0,
         race: stats?.race,
         lives: stats?.lives ?? 5,
         ping: 0

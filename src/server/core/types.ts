@@ -54,6 +54,7 @@ export interface PlayerStats {
     race?: PlayerRaceState;
     uuid?: string;
     alias?: string;
+    isBot?: boolean;
     joinedAt?: number;
     joinedAtTick?: number;
     shipType?: 'classic' | 'modern';
@@ -61,6 +62,11 @@ export interface PlayerStats {
     lives?: number;
     shotsFired?: number;
     fuelConsumed?: number;
+    homeSpawnX?: number;
+    homeSpawnY?: number;
+    streakScore?: number;
+    streakStartLevel?: number;
+    streakLastLevel?: number;
 }
 
 export interface BotState {

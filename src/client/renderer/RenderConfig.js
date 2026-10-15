@@ -37,6 +37,16 @@ export const RENDER_CONFIG = {
         recessedEnabled: true,
         recessedOpacity: 1.0,   // Global opacity for the recessed cavern shadow
         recessedParallax: 0.35,  // Scroll factor for Layer -1 recessed cavern wall
+        recessedCataclysmsEnabled: true,
+        recessedCataclysmSpawnChance: 0.0016, // Rare surprise event (~once every 10-12s at 60fps)
+        recessedCataclysmMaxActive: 2,
+        recessedCataclysmAlpha: 0.28,         // Faded into deep background layer so it never distracts
+        recessedCataclysmBaseSpeed: 1.15,     // Slow, heavy cinematic drift speed across the background cavern
+        recessedCataclysmSpeedVar: 0.75,      // Random speed variation added to base speed
+        recessedCataclysmGravity: 0.008,      // Gentle downward arc pull per frame
+        recessedCataclysmTrailLength: 34,     // Long smoldering tail segment count
+        recessedCataclysmBurnGlowMultiplier: 3.4, // Radius multiplier for the outer atmospheric burn halo
+        recessedCataclysmEmberShedChance: 0.48,   // Chance per frame to shed a slow-burning ember into the tail wake
         bedrockColor: '#261a14',
         strataColor: 'rgba(18, 11, 8, 0.45)',
         strataStepY: 28,

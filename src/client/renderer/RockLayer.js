@@ -246,6 +246,77 @@ class RockTextureGenerator {
         }
         ctx.restore();
     }
+
+    static drawMachinedTealBrick(ctx, bx, by, neighbors) {
+        // Deep recessed mounting socket
+        ctx.fillStyle = '#061a1e';
+        ctx.fillRect(bx, by, 16, 16);
+
+        // Chamfered metallic armor plate
+        const ch = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(bx + ch, by + 0.5);
+        ctx.lineTo(bx + 15.5 - ch, by + 0.5);
+        ctx.lineTo(bx + 15.5, by + ch);
+        ctx.lineTo(bx + 15.5, by + 15.5 - ch);
+        ctx.lineTo(bx + 15.5 - ch, by + 15.5);
+        ctx.lineTo(bx + ch, by + 15.5);
+        ctx.lineTo(bx + 0.5, by + 15.5 - ch);
+        ctx.lineTo(bx + 0.5, by + ch);
+        ctx.closePath();
+
+        const grad = ctx.createLinearGradient(bx, by, bx + 16, by + 16);
+        grad.addColorStop(0, '#238996');
+        grad.addColorStop(0.45, '#145e68');
+        grad.addColorStop(1, '#0b3840');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.lineWidth = 1.0;
+        ctx.strokeStyle = '#07262b';
+        ctx.stroke();
+
+        // Top-left directional specular bevel
+        ctx.strokeStyle = 'rgba(110, 238, 250, 0.55)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(bx + 1.2, by + 13.5);
+        ctx.lineTo(bx + 1.2, by + ch);
+        ctx.lineTo(bx + ch, by + 1.2);
+        ctx.lineTo(bx + 13.5, by + 1.2);
+        ctx.stroke();
+
+        // Recessed inner armor panel with subtle diagonal milled rib
+        ctx.fillStyle = 'rgba(8, 36, 42, 0.55)';
+        ctx.fillRect(bx + 3.5, by + 3.5, 9, 9);
+        ctx.strokeStyle = 'rgba(56, 190, 205, 0.22)';
+        ctx.lineWidth = 1.0;
+        ctx.strokeRect(bx + 3.5, by + 3.5, 9, 9);
+
+        ctx.strokeStyle = 'rgba(35, 137, 150, 0.35)';
+        ctx.beginPath();
+        ctx.moveTo(bx + 4.5, by + 11.5);
+        ctx.lineTo(bx + 11.5, by + 4.5);
+        ctx.stroke();
+
+        // Micro-rivets at corners
+        ctx.fillStyle = 'rgba(150, 245, 255, 0.45)';
+        ctx.fillRect(bx + 2.2, by + 2.2, 1.2, 1.2);
+        ctx.fillRect(bx + 12.6, by + 2.2, 1.2, 1.2);
+        ctx.fillStyle = 'rgba(5, 20, 24, 0.75)';
+        ctx.fillRect(bx + 2.2, by + 12.6, 1.2, 1.2);
+        ctx.fillRect(bx + 12.6, by + 12.6, 1.2, 1.2);
+
+        // Weld-seam shadow on exposed outer edges where brick meets rock/air
+        if (!neighbors.top) {
+            ctx.fillStyle = 'rgba(135, 250, 255, 0.28)';
+            ctx.fillRect(bx + 2, by + 0.5, 12, 1.0);
+        }
+        if (!neighbors.bottom) {
+            ctx.fillStyle = 'rgba(4, 14, 18, 0.75)';
+            ctx.fillRect(bx + 2, by + 14.5, 12, 1.5);
+        }
+    }
 }
 
 export class RockLayer {
@@ -253,12 +324,16 @@ export class RockLayer {
         this.cachedCanvas = null;
         this.recessedCanvas = null;
         this.builtForLevel = null;
+        this.cataclysms = [];
+        this.cataclysmDebris = [];
     }
 
     buildLevelCache(level) {
         if (!level || !level.walls || level.walls.length === 0) return;
         const cfg = RENDER_CONFIG.rock;
         this.builtForLevel = level;
+        this.cataclysms = [];
+        this.cataclysmDebris = [];
 
         const w = level.width;
         const h = level.height;
@@ -333,8 +408,28 @@ export class RockLayer {
 
         ctx.restore();
 
-        // Crisp Outer Rim Highlight (Drawn along the exact same polygon path — zero drift!)
+        // Crisp Outer Rim Highlight (Masked out where Teal Bricks / Prefabs sit so contours don't cut across bricks!)
         ctx.save();
+        if (level.rawMap) {
+            ctx.beginPath();
+            ctx.rect(-64, -64, w + 128, h + 128);
+            for (let y = 0; y < level.rawMap.length; y++) {
+                for (let x = 0; x < level.rawMap[y].length; x++) {
+                    const tid = level.rawMap[y][x];
+                    const layout = TEAL_BRICK_LAYOUTS[tid];
+                    if (layout) {
+                        const px = x * 32;
+                        const py = y * 32;
+                        const pad = 2.5;
+                        if (layout[0]) ctx.rect(px - pad, py - pad, 16 + pad * 2, 16 + pad * 2);
+                        if (layout[1]) ctx.rect(px + 16 - pad, py - pad, 16 + pad * 2, 16 + pad * 2);
+                        if (layout[2]) ctx.rect(px - pad, py + 16 - pad, 16 + pad * 2, 16 + pad * 2);
+                        if (layout[3]) ctx.rect(px + 16 - pad, py + 16 - pad, 16 + pad * 2, 16 + pad * 2);
+                    }
+                }
+            }
+            ctx.clip('evenodd');
+        }
         traceAllLoops(ctx);
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
@@ -345,16 +440,15 @@ export class RockLayer {
 
         // Draw Teal Bricks accurately based on their partial 16x16 layout
         if (level.rawMap) {
-            const drawSubBrick = (bx, by) => {
-                ctx.fillStyle = '#105b64';
-                ctx.fillRect(bx, by, 16, 16);
-                ctx.fillStyle = '#136f7a';
-                ctx.strokeStyle = '#0a3d43';
-                ctx.lineWidth = 1;
-                ctx.fillRect(bx + 1, by + 1, 14, 14);
-                ctx.strokeRect(bx + 1, by + 1, 14, 14);
-                ctx.fillStyle = '#2cb1bf';
-                ctx.fillRect(bx + 2, by + 2, 12, 2);
+            const hasSubBrickAt = (subX, subY) => {
+                const tx = Math.floor(subX / 2);
+                const ty = Math.floor(subY / 2);
+                const tid = level.rawMap[ty]?.[tx];
+                const lay = TEAL_BRICK_LAYOUTS[tid];
+                if (!lay) return false;
+                const qx = ((subX % 2) + 2) % 2;
+                const qy = ((subY % 2) + 2) % 2;
+                return Boolean(lay[qy * 2 + qx]);
             };
 
             for (let y = 0; y < level.rawMap.length; y++) {
@@ -364,10 +458,24 @@ export class RockLayer {
                     if (layout) {
                         const px = x * 32;
                         const py = y * 32;
-                        if (layout[0]) drawSubBrick(px, py);           // TL
-                        if (layout[1]) drawSubBrick(px + 16, py);      // TR
-                        if (layout[2]) drawSubBrick(px, py + 16);      // BL
-                        if (layout[3]) drawSubBrick(px + 16, py + 16); // BR
+                        for (let qy = 0; qy < 2; qy++) {
+                            for (let qx = 0; qx < 2; qx++) {
+                                if (!layout[qy * 2 + qx]) continue;
+                                const sx = x * 2 + qx;
+                                const sy = y * 2 + qy;
+                                RockTextureGenerator.drawMachinedTealBrick(
+                                    ctx,
+                                    px + qx * 16,
+                                    py + qy * 16,
+                                    {
+                                        top: hasSubBrickAt(sx, sy - 1),
+                                        bottom: hasSubBrickAt(sx, sy + 1),
+                                        left: hasSubBrickAt(sx - 1, sy),
+                                        right: hasSubBrickAt(sx + 1, sy)
+                                    }
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -439,6 +547,186 @@ export class RockLayer {
         ctx.save();
         if (cfg.recessedOpacity !== undefined) ctx.globalAlpha = cfg.recessedOpacity;
         ctx.drawImage(this.recessedCanvas, ox, oy);
+        if (cfg.recessedCataclysmsEnabled !== false) {
+            this.updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg);
+        }
+        ctx.restore();
+    }
+
+    updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg) {
+        const maxActive = cfg.recessedCataclysmMaxActive ?? 2;
+        const spawnChance = cfg.recessedCataclysmSpawnChance ?? 0.0016;
+        const baseAlpha = cfg.recessedCataclysmAlpha ?? 0.28;
+        const baseSpeed = cfg.recessedCataclysmBaseSpeed ?? 1.15;
+        const speedVar = cfg.recessedCataclysmSpeedVar ?? 0.75;
+        const grav = cfg.recessedCataclysmGravity ?? 0.008;
+        const maxTrail = cfg.recessedCataclysmTrailLength ?? 34;
+        const burnMult = cfg.recessedCataclysmBurnGlowMultiplier ?? 3.4;
+        const emberChance = cfg.recessedCataclysmEmberShedChance ?? 0.48;
+
+        if (this.cataclysms.length < maxActive && Math.random() < spawnChance) {
+            const spawnX = camera.x + viewW * (0.15 + Math.random() * 0.70);
+            const spawnY = camera.y + viewH * (0.05 + Math.random() * 0.35);
+            const dirSign = Math.random() > 0.5 ? 1 : -1;
+            const angle = (Math.PI * 0.5) + dirSign * (0.28 + Math.random() * 0.42);
+            const speed = baseSpeed + Math.random() * speedVar;
+            const isComet = Math.random() > 0.45;
+            const maxLife = 220 + Math.floor(Math.random() * 140);
+            this.cataclysms.push({
+                x: spawnX - ox,
+                y: spawnY - oy,
+                vx: Math.cos(angle) * speed,
+                vy: Math.abs(Math.sin(angle)) * speed + 0.35,
+                r: 5.5 + Math.random() * 3.5,
+                life: maxLife,
+                maxLife,
+                isComet,
+                trail: []
+            });
+        }
+
+        if (this.cataclysms.length === 0 && this.cataclysmDebris.length === 0) return;
+
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (let i = this.cataclysms.length - 1; i >= 0; i--) {
+            const c = this.cataclysms[i];
+            c.trail.push({ x: c.x, y: c.y });
+            if (c.trail.length > maxTrail) c.trail.shift();
+
+            c.x += c.vx;
+            c.y += c.vy;
+            c.vy += grav;
+            c.life--;
+
+            // Continuously shed slow-burning sparks/embers along the tail wake
+            if (Math.random() < emberChance && this.cataclysmDebris.length < 64) {
+                this.cataclysmDebris.push({
+                    x: c.x + (Math.random() - 0.5) * c.r * 0.9,
+                    y: c.y + (Math.random() - 0.5) * c.r * 0.9,
+                    vx: -c.vx * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.35,
+                    vy: -c.vy * (0.15 + Math.random() * 0.25) - 0.15 + (Math.random() - 0.5) * 0.35,
+                    r: 1.1 + Math.random() * 1.8,
+                    life: 32 + Math.floor(Math.random() * 28),
+                    maxLife: 60,
+                    isComet: c.isComet
+                });
+            }
+
+            // Check approximate collision against recessed cavern boundary
+            let hitWall = c.life <= 0;
+            if (!hitWall && level?.highRes?.recessedWalls) {
+                const scaleX = level.highRes.recessedWidth ? (level.width / level.highRes.recessedWidth) : 1.0;
+                const scaleY = level.highRes.recessedHeight ? (level.height / level.highRes.recessedHeight) : 1.0;
+                const walls = level.highRes.recessedWalls;
+                for (let w = 0; w < walls.length && !hitWall; w++) {
+                    const loop = walls[w];
+                    for (let k = 0; k < loop.length; k += 4) {
+                        const wx = loop[k].x * scaleX;
+                        const wy = loop[k].y * scaleY;
+                        if (Math.abs(c.x - wx) < 18 && Math.abs(c.y - wy) < 18) {
+                            hitWall = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (hitWall) {
+                // Stamp subtle faded crater onto recessed wall and scatter slow background embers
+                if (this.recessedCanvas) {
+                    const bCtx = this.recessedCanvas.getContext('2d');
+                    bCtx.save();
+                    bCtx.globalCompositeOperation = 'source-atop';
+                    const cg = bCtx.createRadialGradient(c.x, c.y, 2, c.x, c.y, c.r * 5.5);
+                    cg.addColorStop(0, 'rgba(255, 110, 40, 0.14)');
+                    cg.addColorStop(0.5, 'rgba(10, 6, 4, 0.28)');
+                    cg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    bCtx.fillStyle = cg;
+                    bCtx.beginPath();
+                    bCtx.arc(c.x, c.y, c.r * 5.5, 0, Math.PI * 2);
+                    bCtx.fill();
+                    bCtx.restore();
+                }
+                for (let d = 0; d < 10 && this.cataclysmDebris.length < 36; d++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const spd = 0.45 + Math.random() * 1.65;
+                    this.cataclysmDebris.push({
+                        x: c.x,
+                        y: c.y,
+                        vx: Math.cos(ang) * spd - c.vx * 0.15,
+                        vy: Math.sin(ang) * spd - Math.abs(c.vy) * 0.2,
+                        r: 1.6 + Math.random() * 2.4,
+                        life: 45 + Math.floor(Math.random() * 35),
+                        maxLife: 80,
+                        isComet: c.isComet
+                    });
+                }
+                this.cataclysms.splice(i, 1);
+                continue;
+            }
+
+            // Draw long smoldering meteor tail with outer burn envelope + hot inner core
+            for (let t = 0; t < c.trail.length; t++) {
+                const ratio = (t + 1) / c.trail.length;
+                const jitterX = Math.sin(t * 1.7 + c.life * 0.15) * (1 - ratio) * 2.2;
+                const jitterY = Math.cos(t * 1.3 - c.life * 0.12) * (1 - ratio) * 2.2;
+                const tx = c.trail[t].x + jitterX;
+                const ty = c.trail[t].y + jitterY;
+
+                ctx.globalAlpha = Math.pow(ratio, 1.35) * baseAlpha * 0.42;
+                ctx.fillStyle = c.isComet ? '#1868a8' : '#b82808';
+                ctx.beginPath();
+                ctx.arc(tx, ty, c.r * (0.55 + ratio * 1.15), 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.globalAlpha = Math.pow(ratio, 1.8) * baseAlpha * 0.78;
+                ctx.fillStyle = c.isComet ? '#4facfe' : '#ff6b2b';
+                ctx.beginPath();
+                ctx.arc(tx, ty, c.r * ratio * 0.75, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw wide atmospheric burn halo around fireball head
+            const burnR = c.r * burnMult;
+            const halo = ctx.createRadialGradient(c.x, c.y, c.r * 0.2, c.x, c.y, burnR);
+            halo.addColorStop(0, c.isComet ? `rgba(110, 235, 255, ${baseAlpha * 0.95})` : `rgba(255, 165, 65, ${baseAlpha * 0.95})`);
+            halo.addColorStop(0.45, c.isComet ? `rgba(45, 140, 235, ${baseAlpha * 0.42})` : `rgba(235, 65, 20, ${baseAlpha * 0.42})`);
+            halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = halo;
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, burnR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw glowing core
+            ctx.globalAlpha = baseAlpha;
+            ctx.fillStyle = c.isComet ? '#e0f7fa' : '#fff3a0';
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        for (let i = this.cataclysmDebris.length - 1; i >= 0; i--) {
+            const d = this.cataclysmDebris[i];
+            d.x += d.vx;
+            d.y += d.vy;
+            d.vy += grav * 1.4;
+            d.vx *= 0.985;
+            d.life--;
+            if (d.life <= 0) {
+                this.cataclysmDebris.splice(i, 1);
+                continue;
+            }
+            ctx.globalAlpha = (d.life / d.maxLife) * baseAlpha;
+            ctx.fillStyle = d.isComet ? '#70d6ff' : '#ff9233';
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         ctx.restore();
     }
 

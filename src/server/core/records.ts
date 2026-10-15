@@ -63,8 +63,8 @@ export class RecordManager {
     /**
      * Builds the composite key for strict categorical isolation.
      */
-    private getCompositeKey(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string): string {
-        return `${metric}:lvl_${level}:${mode}:phys_${physicsHash}`;
+    private getCompositeKey(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string, isBotPilot: boolean = false): string {
+        return `${metric}:lvl_${level}:${mode}:phys_${physicsHash}${isBotPilot ? ':bot' : ''}`;
     }
 
     /**
@@ -77,9 +77,10 @@ export class RecordManager {
         physicsHash: string, 
         sort: SortOrder,
         entry: Omit<RecordEntry, 'timestamp'>,
-        limit: number = 100
+        limit: number = 100,
+        isBotPilot: boolean = false
     ): SubmitResult {
-        const key = this.getCompositeKey(metric, level, mode, physicsHash);
+        const key = this.getCompositeKey(metric, level, mode, physicsHash, isBotPilot);
         
         if (!this.db[key]) {
             this.db[key] = { sort, entries: [] };
@@ -169,24 +170,104 @@ export class RecordManager {
         return { isNewPb: madeLeaderboard && isNewPb, rank: madeLeaderboard ? finalIdx + 1 : -1, timestamp: newTimestamp };
     }
 
-    public getRecords(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string): RecordEntry[] {
-        const key = this.getCompositeKey(metric, level, mode, physicsHash);
+    public getRecords(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string, isBotPilot: boolean = false): RecordEntry[] {
+        const key = this.getCompositeKey(metric, level, mode, physicsHash, isBotPilot);
         return this.db[key]?.entries || [];
     }
 
-    public getPlayerBestLapRecord(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string): RecordEntry | undefined {
-        const entries = this.getRecords('fastest_lap', level, mode, physicsHash).filter(e => e.playerId === playerId);
+    public getPlayerBestLapRecord(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string, isBotPilot: boolean = false): RecordEntry | undefined {
+        const entries = this.getRecords('fastest_lap', level, mode, physicsHash, isBotPilot).filter(e => e.playerId === playerId);
         if (entries.length === 0) return undefined;
         return entries.reduce((best, cur) => (cur.value < best.value ? cur : best), entries[0]);
     }
 
-    public updatePlayerBestLapSplits(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string, timestamp: number, splits: Record<number, number>) {
-        const entries = this.getRecords('fastest_lap', level, mode, physicsHash);
+    public updatePlayerBestLapSplits(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string, timestamp: number, splits: Record<number, number>, isBotPilot: boolean = false) {
+        const entries = this.getRecords('fastest_lap', level, mode, physicsHash, isBotPilot);
         const rec = entries.find(e => e.playerId === playerId && e.timestamp === timestamp);
         if (rec) {
             rec.metadata = { ...(rec.metadata || {}), splits };
             this.save();
         }
+    }
+
+    /**
+     * Aggregates a pilot's personal bests across all 50 mission caverns (0-49)
+     * and updates the three Campaign Mastery leaderboards (Score, Blitz Time, Eco Fuel).
+     */
+    public recalculateCampaignMastery(
+        mode: 'SP' | 'MP',
+        physicsHash: string,
+        playerId: string,
+        alias: string,
+        isBotPilot: boolean = false,
+        botCount: number = 0
+    ) {
+        let cavernsScored = 0;
+        let totalBestScore = 0;
+        let totalTimeForScore = 0;
+
+        let cavernsTimed = 0;
+        let totalFastestTime = 0;
+
+        let cavernsEco = 0;
+        let totalLeastFuel = 0;
+
+        for (let lvl = 0; lvl <= 49; lvl++) {
+            // 1. Best Score per cavern (Primary: Score DESC, Secondary: Time ASC)
+            const scoreEntries = this.getRecords('sp_level_best', lvl, mode, physicsHash, isBotPilot).filter(e => e.playerId === playerId);
+            if (scoreEntries.length > 0) {
+                const bestS = scoreEntries.reduce((best, cur) => {
+                    if (cur.value !== best.value) return cur.value > best.value ? cur : best;
+                    return (cur.secondaryValue ?? Infinity) < (best.secondaryValue ?? Infinity) ? cur : best;
+                }, scoreEntries[0]);
+                cavernsScored++;
+                totalBestScore += bestS.value;
+                totalTimeForScore += (bestS.secondaryValue ?? 0);
+            }
+
+            // 2. Fastest Completion Time per cavern
+            const fastEntries = this.getRecords('sp_fastest', lvl, mode, physicsHash, isBotPilot).filter(e => e.playerId === playerId);
+            if (fastEntries.length > 0) {
+                const bestF = fastEntries.reduce((best, cur) => (cur.value < best.value ? cur : best), fastEntries[0]);
+                cavernsTimed++;
+                totalFastestTime += bestF.value;
+            }
+
+            // 3. Least Fuel Consumed per cavern
+            const ecoEntries = this.getRecords('sp_eco', lvl, mode, physicsHash, isBotPilot).filter(e => e.playerId === playerId);
+            if (ecoEntries.length > 0) {
+                const bestE = ecoEntries.reduce((best, cur) => (cur.value < best.value ? cur : best), ecoEntries[0]);
+                cavernsEco++;
+                totalLeastFuel += bestE.value;
+            }
+        }
+
+        const rCampScore = cavernsScored > 0
+            ? this.submitRecord('campaign_score', 0, mode, physicsHash, 'desc_asc', {
+                playerId, alias, value: totalBestScore, secondaryValue: totalTimeForScore,
+                metadata: { cavernsCleared: cavernsScored, botCount }
+            }, 100, isBotPilot)
+            : { isNewPb: false, rank: -1, timestamp: undefined };
+
+        const rCampTime = cavernsTimed > 0
+            ? this.submitRecord('campaign_time', 0, mode, physicsHash, 'desc_asc', {
+                playerId, alias, value: cavernsTimed, secondaryValue: totalFastestTime,
+                metadata: { cavernsCleared: cavernsTimed, botCount }
+            }, 100, isBotPilot)
+            : { isNewPb: false, rank: -1, timestamp: undefined };
+
+        const rCampFuel = cavernsEco > 0
+            ? this.submitRecord('campaign_fuel', 0, mode, physicsHash, 'desc_asc', {
+                playerId, alias, value: cavernsEco, secondaryValue: totalLeastFuel,
+                metadata: { cavernsCleared: cavernsEco, botCount }
+            }, 100, isBotPilot)
+            : { isNewPb: false, rank: -1, timestamp: undefined };
+
+        return {
+            score: { ...rCampScore, totalScore: totalBestScore, totalTime: totalTimeForScore, caverns: cavernsScored },
+            time: { ...rCampTime, caverns: cavernsTimed, totalTime: totalFastestTime },
+            fuel: { ...rCampFuel, caverns: cavernsEco, totalFuel: totalLeastFuel }
+        };
     }
 
     private load() {
@@ -251,7 +332,8 @@ export function buildLeaderboardContext(
     arg7: number | undefined | ((e: RecordEntry) => string), 
     arg8?: ((e: RecordEntry) => string) | number,
     arg9: number = 10,
-    currentRun?: { value: number, secondaryValue?: number, alias: string }
+    currentRun?: { value: number, secondaryValue?: number, alias: string },
+    isBotPilot: boolean = false
 ) {
     let newEntryTimestamp: number | undefined = undefined;
     let formatFn: (e: RecordEntry) => string = x => String(x.value);
@@ -265,7 +347,7 @@ export function buildLeaderboardContext(
         if (typeof arg8 === 'function') formatFn = arg8;
     }
 
-    const records = recordDB.getRecords(metric, level, mode, physicsHash);
+    const records = recordDB.getRecords(metric, level, mode, physicsHash, isBotPilot);
     let recordsCopy = [...records];
 
     let pIdx = newEntryTimestamp !== undefined
@@ -280,7 +362,7 @@ export function buildLeaderboardContext(
         };
         recordsCopy.push(tempEntry);
         
-        const key = recordDB['getCompositeKey'](metric, level, mode, physicsHash);
+        const key = recordDB['getCompositeKey'](metric, level, mode, physicsHash, isBotPilot);
         const sort = recordDB['db'][key]?.sort || 'asc';
         
         recordsCopy.sort((a, b) => {

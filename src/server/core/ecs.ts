@@ -42,6 +42,7 @@ export interface Player {
     id: string;
     uuid: string;
     alias: string;
+    isBotPilot?: boolean;
     type: 'classic' | 'modern';
     isDead: boolean;
     inputs: Inputs;
@@ -54,6 +55,10 @@ export interface Player {
     joinedAtTick: number;
     spawnX: number;
     spawnY: number;
+    homeSpawnX: number;
+    homeSpawnY: number;
+    levelStartScore: number;
+    streakStartLevel: number;
     advancing?: boolean;
     race?: PlayerRaceState;
     lives: number;

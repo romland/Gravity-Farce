@@ -6,7 +6,7 @@ import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
 import type { PlayerStats } from './core/types';
-import { getActivePhysicsHash } from './core/records';
+import { getActivePhysicsHash, buildLeaderboardContext } from './core/records';
 import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
@@ -30,8 +30,8 @@ app.post('/api/auth', (req, res) => {
     if (playerSessionStats.size >= SERVER_CONFIG.maxPlayers) {
         return res.json({ success: false, message: `SERVER AT CAPACITY (${SERVER_CONFIG.maxPlayers}/${SERVER_CONFIG.maxPlayers})` });
     }
-    const { alias, uuid } = req.body || {};
-    res.json(authDB.validateOrClaim(alias || '', uuid || '', SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval));
+    const { alias, uuid, isBot } = req.body || {};
+    res.json(authDB.validateOrClaim(alias || '', uuid || '', SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval, Boolean(isBot)));
 
 });
 
@@ -87,8 +87,12 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
                         score: p.score,
                         uuid: p.uuid,
                         alias: p.alias,
+                        isBot: p.isBotPilot,
                         shipType: p.type,
-                        lives: p.lives
+                        lives: p.lives,
+                        streakScore: p.score,
+                        streakStartLevel: p.streakStartLevel,
+                        streakLastLevel: room.levelIndex
                     };
                     playerSessionStats.set(id, stats);
                 }
@@ -117,6 +121,24 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     }
 
     const { pType, stats } = leaveCurrentRoom(id);
+
+    // Enforce 5-Lives Sequential Streak rules on Mission Levels (0-49):
+    // Advancing sequentially (lastLevel -> lastLevel + 1) preserves accumulated score & remaining lives.
+    // Jumping out of sequence, retrying, or switching categories starts a fresh 5-lives streak.
+    const isSequentialMissionAdvance = !forceReset
+        && targetLevel >= 0 && targetLevel <= 49
+        && stats.streakLastLevel !== undefined
+        && targetLevel === stats.streakLastLevel + 1
+        && (stats.lives ?? 0) > 0;
+
+    if (!isSequentialMissionAdvance) {
+        stats.score = 0;
+        stats.lives = SERVER_CONFIG.defaultLives;
+        stats.streakStartLevel = targetLevel;
+        stats.streakLastLevel = targetLevel;
+    } else {
+        stats.streakLastLevel = targetLevel;
+    }
 
     const newRoom = getOrCreateRoom(targetLevel);
     if (forceReset && newRoom.ecs.players.size === 0) {
@@ -151,6 +173,7 @@ function handleTransition(actorOrSocketId: string) {
 
             if (oldRoom.category === 'mission') {
                 const boards = evaluateMissionEnd(oldRoom, actorOrSocketId, timeTaken);
+                oldRoom.tracker.finishAndSave(); // Now that highscores are logged, save the replay!
                 if (boards) {
                     if (oldRoom.isReplayMode) {
                         for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
@@ -160,7 +183,7 @@ function handleTransition(actorOrSocketId: string) {
                 }
             } else {
                 if (oldRoom.isReplayMode) {
-                    const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.getRoomMode(), oldRoom.getPhysicsHash(), p.uuid, p.alias);
+                    const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.getRoomMode(), oldRoom.getPhysicsHash(), p.uuid, p.alias, undefined, undefined, undefined, oldRoom.getBotCount(), Boolean(p.isBotPilot));
                     for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
                 } else {
                     const summary = [
@@ -194,16 +217,17 @@ io.on('connection', (socket) => {
     const auth = socket.handshake.auth || {};
     let alias = auth.alias || 'UNK';
     const uuid = auth.uuid || socket.id;
+    const requestedBotFlag = Boolean(auth.isBot);
     const ip = socket.handshake.address;
 
     console.log(`Pilot "${alias}" connected:`, socket.id);
 
     // Fail-safe: If they bypassed the API, force validate on the socket connection
-    const verify = authDB.validateOrClaim(alias, uuid, SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval);
+    const verify = authDB.validateOrClaim(alias, uuid, SERVER_CONFIG.allowNewRegistrations, SERVER_CONFIG.requireManualApproval, requestedBotFlag);
     if (!verify.success) {
         if (SERVER_CONFIG.allowNewRegistrations && !SERVER_CONFIG.requireManualApproval) {
             alias = authDB.generateRandom(); // Assign a random alias if they tried to steal one
-            authDB.validateOrClaim(alias, uuid, true, false);
+            authDB.validateOrClaim(alias, uuid, true, false, requestedBotFlag);
         } else {
             socket.disconnect(); // Kick unauthorized bypass attempts
             return;
@@ -218,9 +242,12 @@ io.on('connection', (socket) => {
         score: 0,
         uuid: uuid,
         alias: alias,
+        isBot: authDB.isBotPilot(alias),
         shipType: useClassicPhysics ? 'classic' : 'modern',
         ip: ip,
-        lives: SERVER_CONFIG.defaultLives
+        lives: SERVER_CONFIG.defaultLives,
+        streakStartLevel: initialLevel,
+        streakLastLevel: initialLevel
     };
     playerSessionStats.set(socket.id, stats);
 
@@ -481,14 +508,19 @@ io.on('connection', (socket) => {
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
         const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
+        const isBotPilot = Boolean(stats?.isBot || authDB.isBotPilot(alias));
         const mode = room ? room.getRoomMode() : 'SP';
+        const botCount = room ? room.getBotCount() : 0;
         const physicsHash = room ? room.getPhysicsHash() : getActivePhysicsHash(0);
 
         let boards;
         if (room && room.category === 'race') {
-            boards = buildRaceLeaderboards(pLevel, mode, physicsHash, uuid, alias);
+            boards = buildRaceLeaderboards(pLevel, mode, physicsHash, uuid, alias, botCount, isBotPilot);
+        } else if (room && room.category === 'dogfight') {
+            boards = [{ title: 'TOP GUN', description: `DOGFIGHT COMBAT STANDINGS${botCount > 0 ? ` [WITH BOTS: ${botCount}]` : ''}`, entries: buildLeaderboardContext('dogfight_wins', pLevel, mode, physicsHash, uuid, false, undefined, x => `${x.value} WINS`, 10, undefined, isBotPilot) }];
         } else {
-            boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias);
+            // Arcade / missions
+            boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias, undefined, undefined, undefined, botCount, isBotPilot);
         }
         socket.emit('show_leaderboard', boards, true);
     });

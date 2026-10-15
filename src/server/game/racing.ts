@@ -44,6 +44,8 @@ export function sysRacing(ecs: Registry, room: Room) {
             } else if (p.race.state === 1 && hitCheckpoint === p.race.nextCheckpoint) {
                 const mode = room.getRoomMode();
                 const physicsHash = room.getPhysicsHash();
+                const botCount = room.getBotCount();
+                const isBotPilot = Boolean(p.isBotPilot);
                 const isBot = ecs.bots.has(pe);
                 const elapsedInLap = now - p.race.startTime - p.race.lapTimes.reduce((a, b) => a + b, 0);
                 if (!p.race.currentLapSplits) p.race.currentLapSplits = {};
@@ -66,8 +68,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                             playerId: p.uuid,
                             alias: p.alias,
                             value: lapTime,
-                            metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps, replayId: room.tracker.uuid, splits: completedSplits }
-                        });
+                            metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps, replayId: room.tracker.uuid, splits: completedSplits, botCount }
+                        }, 100, isBotPilot);
                         if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
                         if (!p.race.bestLapResult || lapTime < p.race.bestLapResult.value) {
                             p.race.bestLapResult = { value: lapTime, rank: rLap.rank, isNewPb: rLap.isNewPb, timestamp: rLap.timestamp || Date.now() };
@@ -78,8 +80,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                     let rFlying = null;
                     if (p.race.currentLap > 1 && !isBot && !room.isReplayMode) {
                         rFlying = recordDB.submitRecord('flying_lap', room.levelIndex, mode, physicsHash, 'asc', {
-                            playerId: p.uuid, alias: p.alias, value: lapTime, metadata: { ship: p.type, lapNum: p.race.currentLap, replayId: room.tracker.uuid }
-                        });
+                            playerId: p.uuid, alias: p.alias, value: lapTime, metadata: { ship: p.type, lapNum: p.race.currentLap, replayId: room.tracker.uuid, botCount }
+                        }, 100, isBotPilot);
                         if (rFlying.rank !== -1) room.tracker.logHighscore(p.id, 'flying_lap', lapTime, rFlying.isNewPb);
                         if (!p.race.bestFlyingResult || lapTime < p.race.bestFlyingResult.value) {
                             p.race.bestFlyingResult = { value: lapTime, rank: rFlying.rank, isNewPb: rFlying.isNewPb, timestamp: rFlying.timestamp || Date.now() };
@@ -119,8 +121,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                                 playerId: p.uuid,
                                 alias: p.alias,
                                 value: now - p.race.startTime,
-                                metadata: { ship: p.type, laps: p.race.totalLaps, replayId: room.tracker.uuid }
-                            });
+                                metadata: { ship: p.type, laps: p.race.totalLaps, replayId: room.tracker.uuid, botCount }
+                            }, 100, isBotPilot);
                             if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
                             if (rRace.rank === 1) {
                                 room.broadcastGlobalAnnouncement(`${p.alias} TOOK #1 RACE RECORD ON ${room.level.name} (${formatTimeMs(now - p.race.startTime)})!`);
@@ -137,13 +139,14 @@ export function sysRacing(ecs: Registry, room: Room) {
 
                         let boards: any[] = [];
                         if (room.isReplayMode) {
-                            boards = buildRaceLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias);
+                            boards = buildRaceLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias, botCount, isBotPilot);
                         } else {
+                            const tag = `${botCount > 0 ? ` [WITH BOTS: ${botCount}]` : ''}${isBotPilot ? ' [BOT LEAGUE]' : ''}`;
                             const bestLap = p.race.bestLapResult || { value: Math.min(...p.race.lapTimes), isNewPb: rLap.isNewPb, timestamp: rLap.timestamp || now };
                             const bestFly = p.race.bestFlyingResult;
-                            const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value), 10, { value: now - p.race.startTime, alias: p.alias });
-                            const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, bestLap.isNewPb, bestLap.timestamp, x => formatTimeMs(x.value), 10, { value: bestLap.value, alias: p.alias });
-                            const ctxFlying = buildLeaderboardContext('flying_lap', room.levelIndex, mode, physicsHash, p.uuid, bestFly?.isNewPb ?? false, bestFly?.timestamp, x => formatTimeMs(x.value), 10, bestFly ? { value: bestFly.value, alias: p.alias } : undefined);
+                            const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value), 10, { value: now - p.race.startTime, alias: p.alias }, isBotPilot);
+                            const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, bestLap.isNewPb, bestLap.timestamp, x => formatTimeMs(x.value), 10, { value: bestLap.value, alias: p.alias }, isBotPilot);
+                            const ctxFlying = buildLeaderboardContext('flying_lap', room.levelIndex, mode, physicsHash, p.uuid, bestFly?.isNewPb ?? false, bestFly?.timestamp, x => formatTimeMs(x.value), 10, bestFly ? { value: bestFly.value, alias: p.alias } : undefined, isBotPilot);
 
                             if (mode === 'MP') {
                                 const sessionRaces = [];
@@ -177,11 +180,14 @@ export function sysRacing(ecs: Registry, room: Room) {
                                     { rankLabel: 'FUEL', alias: 'USED', displayValue: `${Math.floor(room.ecs.fuelTanks.get(pe)?.consumed || 0)}F`, isMe: true, isNewPb: false },
                                     { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
                                 ];
+                            if (botCount > 0 && mode !== 'MP') {
+                                raceSummaryEntries.push({ rankLabel: 'BOTS', alias: 'WITH BOTS', displayValue: `${botCount} AI`, isMe: true, isNewPb: false });
+                            }
 
-                            boards.push({ title: 'RACE RUN SUMMARY', entries: raceSummaryEntries });
-                            boards.push({ title: `TOP ${mode} RACE TIMES`, entries: ctxRaces });
-                            boards.push({ title: `TOP ${mode} LAP TIMES`, entries: ctxLaps });
-                            if (p.race.totalLaps > 1) boards.push({ title: `TOP ${mode} FLYING LAPS`, entries: ctxFlying });
+                            boards.push({ title: botCount > 0 ? `RACE RUN SUMMARY [WITH BOTS: ${botCount}]` : 'RACE RUN SUMMARY', entries: raceSummaryEntries });
+                            boards.push({ title: `TOP ${mode} RACE TIMES`, description: tag ? tag.trim() : undefined, entries: ctxRaces });
+                            boards.push({ title: `TOP ${mode} LAP TIMES`, description: tag ? tag.trim() : undefined, entries: ctxLaps });
+                            if (p.race.totalLaps > 1) boards.push({ title: `TOP ${mode} FLYING LAPS`, description: tag ? tag.trim() : undefined, entries: ctxFlying });
                         }
 
                         if (room.isReplayMode) {
@@ -200,7 +206,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                     }
                 } else {
                     ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
-                    const pbRec = !isBot ? recordDB.getPlayerBestLapRecord(room.levelIndex, mode, physicsHash, p.uuid) : undefined;
+                    const pbRec = !isBot ? recordDB.getPlayerBestLapRecord(room.levelIndex, mode, physicsHash, p.uuid, isBotPilot) : undefined;
                     const pbSplit = pbRec?.metadata?.splits?.[hitCheckpoint];
                     if (typeof pbSplit === 'number') {
                         const diffMs = elapsedInLap - pbSplit;
@@ -217,10 +223,11 @@ export function sysRacing(ecs: Registry, room: Room) {
     }
 }
 
-export function buildRaceLeaderboards(pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string, alias: string) {
+export function buildRaceLeaderboards(pLevel: number, mode: 'SP' | 'MP', physicsHash: string, uuid: string, alias: string, botCount: number = 0, isBotPilot: boolean = false) {
+    const tag = `${botCount > 0 ? `[WITH BOTS: ${botCount}]` : ''}${isBotPilot ? ' [BOT LEAGUE]' : ''}`.trim();
     return [
-        { title: `TOP ${mode} RACE TIMES`, entries: buildLeaderboardContext('race_time', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) },
-        { title: `TOP ${mode} LAP TIMES`, entries: buildLeaderboardContext('fastest_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) },
-        { title: `TOP ${mode} FLYING LAPS`, entries: buildLeaderboardContext('flying_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10) }
+        { title: `TOP ${mode} RACE TIMES`, description: tag || undefined, entries: buildLeaderboardContext('race_time', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10, undefined, isBotPilot) },
+        { title: `TOP ${mode} LAP TIMES`, description: tag || undefined, entries: buildLeaderboardContext('fastest_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10, undefined, isBotPilot) },
+        { title: `TOP ${mode} FLYING LAPS`, description: tag || undefined, entries: buildLeaderboardContext('flying_lap', pLevel, mode, physicsHash, uuid, false, undefined, x => formatTimeMs(x.value), 10, undefined, isBotPilot) }
     ];
 }

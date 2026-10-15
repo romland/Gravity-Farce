@@ -41,6 +41,7 @@ export class Room {
     public floraBurns = new Map<number, FloraBurnRecord>();
     public floraHeat = new Map<number, number>();
     public lastClientViews = new Map<string, { x: number; y: number }>();
+    public assignedHomes = new Map<string, { x: number; y: number }>();
     private gameOverResetTimer: any = null;
 
     constructor(
@@ -100,6 +101,9 @@ export class Room {
             }
         }
         if (!anyHumanAliveOrHasLives && !this.gameOverResetTimer) {
+            this.tracker.finishAndSave(); // Save replay instantly before the 4s Game Over timer!
+            this.tracker.isCompleted = true;
+            this.tracker.finishAndSave();
             this.gameOverResetTimer = setTimeout(() => {
                 this.gameOverResetTimer = null;
                 if (this.activeClientIds.size === 0) return;
@@ -112,10 +116,15 @@ export class Room {
                             score: 0,
                             uuid: oldP.uuid,
                             alias: oldP.alias,
+                            isBot: oldP.isBotPilot,
                             lives: SERVER_CONFIG.defaultLives,
                             joinedAtTick: this.globalWaveTimer,
                             shotsFired: 0,
-                            fuelConsumed: 0
+                            fuelConsumed: 0,
+                            streakStartLevel: this.levelIndex,
+                            streakLastLevel: this.levelIndex,
+                            homeSpawnX: oldP.homeSpawnX,
+                            homeSpawnY: oldP.homeSpawnY
                         });
                     }
                     this.emitToPlayer(clientId, 'hide_game_over', {});
@@ -279,28 +288,47 @@ export class Room {
             candidateSpots = [{ x: 100, y: 100 }]; // Failsafe
         }
 
-        let freeSpots = [];
-        for (let pt of candidateSpots) {
+        // TODO 4: Lock each pilot/bot to the exact home base they first spawned at for the duration of the room
+        const existingEnt = this.ecs.getPlayerEntity(id);
+        const existingP = existingEnt !== undefined ? this.ecs.players.get(existingEnt) : undefined;
+        let homeSpot = this.assignedHomes.get(id)
+            || (existingP ? { x: existingP.homeSpawnX, y: existingP.homeSpawnY } : undefined)
+            || (stats?.homeSpawnX !== undefined && stats?.homeSpawnY !== undefined ? { x: stats.homeSpawnX, y: stats.homeSpawnY } : undefined);
+
+        if (!homeSpot) {
+            let freeSpots = [];
+            for (let pt of candidateSpots) {
+                let clear = true;
+                for (const [, p] of this.ecs.players.entries()) {
+                    if (p.id !== id && Math.hypot(p.homeSpawnX - pt.x, p.homeSpawnY - pt.y) < 30) {
+                        clear = false;
+                    }
+                }
+                if (clear) freeSpots.push(pt);
+            }
+            homeSpot = freeSpots.length > 0 ? freeSpots[0] : candidateSpots[this.assignedHomes.size % candidateSpots.length];
+            this.assignedHomes.set(id, { x: homeSpot.x, y: homeSpot.y });
+        }
+
+        // Vary horizontal position slightly along the home pad if another living ship is currently sitting on it
+        chosenX = homeSpot.x;
+        chosenY = homeSpot.y;
+        for (const offset of [0, -18, 18, -32, 32]) {
+            const testX = homeSpot.x + offset;
             let clear = true;
             for (const [e, p] of this.ecs.players.entries()) {
                 if (p.id !== id && !p.isDead) {
                     const t = this.ecs.transforms.get(e)!;
-                    if (Math.hypot(t.x - pt.x, t.y - pt.y) < 30) {
+                    if (Math.hypot(t.x - testX, t.y - homeSpot.y) < 24) {
                         clear = false;
+                        break;
                     }
                 }
             }
-            if (clear) freeSpots.push(pt);
-        }
-
-        if (freeSpots.length > 0) {
-            chosenX = freeSpots[0].x;
-            chosenY = freeSpots[0].y;
-        } else if (candidateSpots.length >= 1) {
-            // If all spots are blocked, force a spawn on a valid pad so the entity is never missing
-            const spot = candidateSpots[Math.floor(this.prng() * candidateSpots.length)];
-            chosenX = spot.x;
-            chosenY = spot.y;
+            if (clear) {
+                chosenX = testX;
+                break;
+            }
         }
 
         if (chosenX !== null) {
@@ -320,14 +348,22 @@ export class Room {
                         race: stats ? stats.race : oldP.race,
                         uuid: stats?.uuid ?? oldP.uuid,
                         alias: stats?.alias ?? oldP.alias,
+                        isBot: stats?.isBot ?? oldP.isBotPilot,
                         joinedAt: stats?.joinedAt ?? oldP.joinedAt,
                         joinedAtTick: stats?.joinedAtTick ?? oldP.joinedAtTick,
                         shotsFired: stats?.shotsFired ?? (oldW?.shotsFired || 0),
                         fuelConsumed: stats?.fuelConsumed ?? (oldF?.consumed || 0),
-                        lives: stats?.lives ?? oldP.lives
+                        lives: stats?.lives ?? oldP.lives,
+                        streakStartLevel: stats?.streakStartLevel ?? oldP.streakStartLevel,
+                        homeSpawnX: homeSpot.x,
+                        homeSpawnY: homeSpot.y
                     };
                 }
                 this.ecs.destroy(existing);
+            } else if (spawnStats) {
+                if (spawnStats.streakStartLevel === undefined) spawnStats.streakStartLevel = this.levelIndex;
+                spawnStats.homeSpawnX = homeSpot.x;
+                spawnStats.homeSpawnY = homeSpot.y;
             }
 
             if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
