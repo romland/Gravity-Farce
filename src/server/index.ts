@@ -11,6 +11,7 @@ import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
 import { buildRaceLeaderboards } from './game/racing';
+import { buildDogfightLeaderboards } from './game/dogfight';
 import { spawnDogfightBot } from './game/bot-dogfighting';
 import { spawnRacingBot } from './game/bot-racing';
 import { spawnMissionBot } from './game/bot-mission';
@@ -229,6 +230,22 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         stats.streakLastLevel = actualLevel;
     } else {
         stats.streakLastLevel = actualLevel;
+        // TODO 4: Every 10 caverns survived on a 5-lives sequential mission streak awards +1 Extra Life!
+        const cavernsSurvived = actualLevel - (stats.streakStartLevel ?? actualLevel);
+        if (cavernsSurvived > 0 && cavernsSurvived % 10 === 0) {
+            stats.lives = (stats.lives ?? SERVER_CONFIG.defaultLives) + 1;
+            setTimeout(() => {
+                newRoom.emitToPlayer(id, 'playfield_announce', {
+                    text: `${cavernsSurvived}-CAVERN STREAK! +1 EXTRA LIFE!`,
+                    color: '#ffd700'
+                });
+                const pe = newRoom.ecs.getPlayerEntity(id);
+                const pt = pe !== undefined ? newRoom.ecs.transforms.get(pe) : undefined;
+                if (pt) {
+                    newRoom.ecs.events.push({ type: 'floating_text', text: '+1 EXTRA LIFE!', color: '#ffd700', x: pt.x, y: pt.y - 42 });
+                }
+            }, 600);
+        }
     }
     playerSessionStats.set(id, stats);
 
@@ -276,6 +293,9 @@ function handleTransition(actorOrSocketId: string) {
                         oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
                     }
                 }
+            } else if (oldRoom.category === 'dogfight' && oldRoom.isReplayMode) {
+                const boards = buildDogfightLeaderboards(oldRoom.levelIndex, oldRoom.getRoomMode(), oldRoom.getPhysicsHash(), p.uuid, p.alias, oldRoom.getBotCount(), Boolean(p.isBotPilot));
+                for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
             } else {
                 if (oldRoom.isReplayMode) {
                     const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.getRoomMode(), oldRoom.getPhysicsHash(), p.uuid, p.alias, undefined, undefined, undefined, oldRoom.getBotCount(), Boolean(p.isBotPilot));
@@ -428,7 +448,7 @@ io.on('connection', (socket) => {
                         } else if (room.category === 'mission') {
                             spawnMissionBot(room.ecs, sx, sy, botAlias, room.level);
                         } else {
-                            spawnDogfightBot(room.ecs, sx, sy, botAlias, room.level);
+                            spawnDogfightBot(room.ecs, sx, sy, botAlias, room.level, 'E3');
                         }
                     }
                 }
@@ -544,7 +564,8 @@ io.on('connection', (socket) => {
                 const p = pe !== undefined ? currentRoom.ecs.players.get(pe) : undefined;
                 const canAdvanceMission = currentRoom.category === 'mission' && Boolean(p?.advancing);
                 const canAdvanceRace = currentRoom.category === 'race' && p?.race?.state === 2;
-                if (!canAdvanceMission && !canAdvanceRace) {
+                const canAdvanceDogfight = currentRoom.category === 'dogfight' && Boolean(currentRoom.dogfightCompleted);
+                if (!canAdvanceMission && !canAdvanceRace && !canAdvanceDogfight) {
                     return;
                 }
             }
@@ -649,7 +670,7 @@ io.on('connection', (socket) => {
         if (room && room.category === 'race') {
             boards = buildRaceLeaderboards(pLevel, mode, physicsHash, uuid, alias, botCount, isBotPilot);
         } else if (room && room.category === 'dogfight') {
-            boards = [{ title: 'TOP GUN', description: `DOGFIGHT COMBAT STANDINGS${botCount > 0 ? ` [WITH BOTS: ${botCount}]` : ''}`, entries: buildLeaderboardContext('dogfight_wins', pLevel, mode, physicsHash, uuid, false, undefined, x => `${x.value} WINS`, 10, undefined, isBotPilot) }];
+            boards = buildDogfightLeaderboards(pLevel, mode, physicsHash, uuid, alias, botCount, isBotPilot);
         } else {
             // Arcade / missions
             boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias, undefined, undefined, undefined, botCount, isBotPilot);

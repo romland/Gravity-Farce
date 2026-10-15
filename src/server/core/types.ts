@@ -69,6 +69,8 @@ export interface PlayerStats {
     streakScore?: number;
     streakStartLevel?: number;
     streakLastLevel?: number;
+    streakId?: string;
+    team?: 'E2' | 'E3';
     sessionMode?: 'SP' | 'MP';
     roomCode?: string;
 }

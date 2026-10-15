@@ -23,10 +23,18 @@ interface SharedTargetPath {
 const sharedTargetPaths = new Map<string, SharedTargetPath>();
 let globalTickCounter = 0;
 
-export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
-    const safePos = findSafePadPosition(level, x, y, alias);
+export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData, team: 'E2' | 'E3' = 'E3'): Entity {
+    const safePos = findSafePadPosition(level, x, y);
     const botId = BOT_UUID_PREFIX + alias;
-    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: SERVER_CONFIG.defaultLives });
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, {
+        uuid: botId,
+        alias,
+        shipType: 'classic',
+        lives: SERVER_CONFIG.defaultLives,
+        team,
+        homeSpawnX: safePos.x,
+        homeSpawnY: safePos.y
+    });
 
     // Ensure initial physics state is upright and resting cleanly on pad
     const t = ecs.transforms.get(e);
@@ -79,7 +87,11 @@ export function sysBotAI(ecs: Registry, room: Room) {
         }
     }
 
-    const hostiles: { id: string, e: Entity, isHuman: boolean }[] = humans.map(([e, p]) => ({ id: p.id, e, isHuman: true }));
+    const hostiles: { id: string, e: Entity, isHuman: boolean, team?: 'E2' | 'E3' }[] = [];
+    for (const [pe, p] of ecs.players.entries()) {
+        if (p.isDead) continue;
+        hostiles.push({ id: p.id, e: pe, isHuman: !ecs.bots.has(pe), team: p.team });
+    }
 
     for (const [ee, turret] of ecs.turrets.entries()) {
         if (!turret.active || turret.hp <= 0) continue;
@@ -105,7 +117,7 @@ export function sysBotAI(ecs: Registry, room: Room) {
 // Squad Role Assignment
 // ----------------------------------------------------------------------------
 
-function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hostiles: { id: string, e: Entity, isHuman: boolean }[], ecs: Registry) {
+function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], hostiles: { id: string, e: Entity, isHuman: boolean, team?: 'E2' | 'E3' }[], ecs: Registry) {
     if (hostiles.length === 0) return;
 
     const targetCounts = new Map<string, number>();
@@ -117,10 +129,14 @@ function assignSquadRoles(bots: [Entity, import('../core/types').BotState][], ho
         }
 
         const myPos = ecs.transforms.get(e)!;
+        const myPlayer = ecs.players.get(e);
+        const myTeam = myPlayer?.team || 'E3';
         let closestHuman: string | undefined;
         let minDist = Infinity;
 
         for (const target of hostiles) {
+            if (target.e === e) continue;
+            if (target.team && target.team === myTeam) continue; // Never target same-team pilots/bots
             const hPos = getEntityPos(ecs, target.e);
             if (!hPos) continue;
             const d = Math.hypot(hPos.x - myPos.x, hPos.y - myPos.y);

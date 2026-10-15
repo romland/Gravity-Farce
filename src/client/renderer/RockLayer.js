@@ -326,6 +326,8 @@ export class RockLayer {
         this.builtForLevel = null;
         this.cataclysms = [];
         this.cataclysmDebris = [];
+        this.recessedFlatPlatforms = [];
+        this.ghostShip = null;
     }
 
     buildLevelCache(level) {
@@ -334,6 +336,8 @@ export class RockLayer {
         this.builtForLevel = level;
         this.cataclysms = [];
         this.cataclysmDebris = [];
+        this.recessedFlatPlatforms = [];
+        this.ghostShip = null;
 
         const w = level.width;
         const h = level.height;
@@ -533,6 +537,23 @@ export class RockLayer {
         bCtx.restore();
 
         this.recessedCanvas = backCanvas;
+
+        // Extract flat horizontal ledges on the sibling recessed walls for TODO 1 (faded background ghost ship)
+        for (const wall of siblingWalls) {
+            for (let i = 0; i < wall.length - 1; i++) {
+                const p1 = wall[i];
+                const p2 = wall[i + 1];
+                const dx = (p2.x - p1.x) * scaleX;
+                const dy = (p2.y - p1.y) * scaleY;
+                // In screen space (+Y down), outward normal is (dy, -dx). Flat floor has dy ~ 0 and dx > 0 (ny < 0)
+                if (dx >= 28 && Math.abs(dy) <= 2.0) {
+                    this.recessedFlatPlatforms.push({
+                        x: (p1.x + p2.x) * 0.5 * scaleX,
+                        y: (p1.y + p2.y) * 0.5 * scaleY
+                    });
+                }
+            }
+        }
     }
 
     drawRecessed(ctx, camera, viewW, viewH, level) {
@@ -549,6 +570,9 @@ export class RockLayer {
         ctx.drawImage(this.recessedCanvas, ox, oy);
         if (cfg.recessedCataclysmsEnabled !== false) {
             this.updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg);
+        }
+        if (cfg.recessedGhostShipEnabled !== false) {
+            this.updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg);
         }
         ctx.restore();
     }
@@ -727,6 +751,99 @@ export class RockLayer {
             ctx.fill();
         }
 
+        ctx.restore();
+    }
+
+    updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg) {
+        if (this.recessedFlatPlatforms.length === 0) return;
+        const maxAlpha = cfg.recessedGhostShipMaxAlpha ?? 0.14;
+        const spawnChance = cfg.recessedGhostShipSpawnChance ?? 0.0005;
+
+        if (!this.ghostShip && Math.random() < spawnChance) {
+            // Pick a flat platform visible within the current camera view
+            const visiblePads = this.recessedFlatPlatforms.filter(p => {
+                const wx = p.x + ox;
+                const wy = p.y + oy;
+                return wx > camera.x + 120 && wx < camera.x + viewW - 120 &&
+                       wy > camera.y + 140 && wy < camera.y + viewH - 80;
+            });
+            if (visiblePads.length > 0) {
+                const pad = visiblePads[Math.floor(Math.random() * visiblePads.length)];
+                this.ghostShip = {
+                    padX: pad.x,
+                    padY: pad.y - 8,
+                    x: pad.x + (Math.random() - 0.5) * 40,
+                    y: pad.y - 95,
+                    angle: -Math.PI / 2,
+                    state: 'landing', // 'landing' -> 'idling' -> 'logging_out'
+                    timer: 0,
+                    idleDuration: 180 + Math.floor(Math.random() * 140),
+                    alpha: 0
+                };
+            }
+        }
+
+        if (!this.ghostShip) return;
+        const g = this.ghostShip;
+        g.timer++;
+
+        if (g.state === 'landing') {
+            g.alpha = Math.min(maxAlpha, g.alpha + 0.003);
+            g.x += (g.padX - g.x) * 0.04;
+            g.y += (g.padY - g.y) * 0.035;
+            g.angle = -Math.PI / 2 + (g.padX - g.x) * 0.015;
+            if (Math.abs(g.y - g.padY) < 1.2) {
+                g.y = g.padY;
+                g.angle = -Math.PI / 2;
+                g.state = 'idling';
+                g.timer = 0;
+            }
+        } else if (g.state === 'idling') {
+            g.alpha = maxAlpha;
+            if (g.timer >= g.idleDuration) {
+                g.state = 'logging_out';
+                g.timer = 0;
+            }
+        } else if (g.state === 'logging_out') {
+            g.alpha = Math.max(0, maxAlpha * (1 - g.timer / 45));
+            if (g.timer >= 45) {
+                this.ghostShip = null;
+                return;
+            }
+        }
+
+        ctx.save();
+        ctx.translate(ox + g.x, oy + g.y);
+        ctx.scale(0.55, 0.55); // Background depth scale
+        ctx.globalAlpha = g.alpha;
+
+        if (g.state === 'logging_out') {
+            // Faint vertical quantum-despawn beam ("log out" effect)
+            ctx.fillStyle = 'rgba(130, 210, 255, 0.45)';
+            ctx.fillRect(-10 * (1 - g.timer / 45), -70, 20 * (1 - g.timer / 45), 82);
+        }
+
+        ctx.rotate(g.angle);
+        ctx.strokeStyle = '#7f9eb2';
+        ctx.fillStyle = '#121822';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(16, 0);
+        ctx.lineTo(-16, 11.2);
+        ctx.lineTo(-8, 0);
+        ctx.lineTo(-16, -11.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        if (g.state === 'landing') {
+            ctx.fillStyle = 'rgba(130, 210, 255, 0.65)';
+            ctx.beginPath();
+            ctx.moveTo(-8, -2);
+            ctx.lineTo(-18 - Math.random() * 6, 0);
+            ctx.lineTo(-8, 2);
+            ctx.fill();
+        }
         ctx.restore();
     }
 

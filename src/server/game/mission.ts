@@ -73,14 +73,17 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.consumed || 0), secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
     const rBest = recordDB.submitRecord('sp_level_best', room.levelIndex, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: levelPoints, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
 
-    // Bank 5-Lives Sequential Streak Score automatically upon completing each cavern in the sequence
+    // Bank 5-Lives Sequential Streak Score automatically upon completing each cavern in the sequence.
+    // Why maxEntriesPerPlayer = 1 (TODO 5): A single 9-level streak or multiple attempts should never
+    // flood the 5-Lives Streak leaderboard with multiple slots for the same pilot; only their single
+    // highest streak run is retained on the board.
     const rStreak = recordDB.submitRecord('arcade_score', 0, mode, physicsHash, 'desc_asc', {
         playerId: p.uuid,
         alias: p.alias,
         value: p.score,
         secondaryValue: timeTaken,
         metadata: { replayId: room.tracker.uuid, botCount, startLevel: startLvl, endLevel: room.levelIndex }
-    }, 100, isBotPilot);
+    }, 100, isBotPilot, 1);
 
     // Update 50-Cavern Campaign Mastery Aggregates (Levels 0-49)
     const campaignRes = recordDB.recalculateCampaignMastery(mode, physicsHash, p.uuid, p.alias, isBotPilot, botCount);

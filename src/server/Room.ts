@@ -14,6 +14,7 @@ import { spawnCargo, sysCargo } from './game/cargo';
 import { spawnPowerup, sysPowerups } from './game/powerups';
 import { sysRacing } from './game/racing';
 import { sysMission } from './game/mission';
+import { sysDogfight, assignDogfightTeam } from './game/dogfight';
 import type { PlayerStats } from './core/types';
 import { getLevelCategory, type LevelCategory } from './levels';
 import { TILE_DICTIONARY } from './core/tiles';
@@ -43,6 +44,7 @@ export class Room {
     public lastClientViews = new Map<string, { x: number; y: number }>();
     public assignedHomes = new Map<string, { x: number; y: number }>();
     private gameOverResetTimer: any = null;
+    public dogfightCompleted: boolean = false;
 
     constructor(
         public roomId: number,
@@ -94,6 +96,7 @@ export class Room {
 
     public checkAllPlayersOutOfLives() {
         if (this.isReplayMode || this.activeClientIds.size === 0) return;
+        if (this.category === 'dogfight') return; // Dogfight round completion is handled by sysDogfight
         let anyHumanAliveOrHasLives = false;
         for (const [e, p] of this.ecs.players.entries()) {
             if (this.ecs.bots.has(e)) continue;
@@ -206,6 +209,7 @@ export class Room {
             sysPowerups(this.ecs, this);
             sysRacing(this.ecs, this);
             sysMission(this.ecs, this);
+            sysDogfight(this.ecs, this);
             sysBullets(this.ecs, this);
             FloraBurnSystem.update(this.ecs, this);
         }
@@ -294,6 +298,7 @@ export class Room {
         if (!this.activeClientIds.has(id) && !isBot) return;
         let chosenX: number | null = null;
         let chosenY: number | null = null;
+        const assignedTeam = stats?.team || assignDogfightTeam(this, id, isBot);
 
         const spawnEntities = this.level.entities
             .filter(e => e.type === 'spawn')
@@ -312,17 +317,21 @@ export class Room {
             || (stats?.homeSpawnX !== undefined && stats?.homeSpawnY !== undefined ? { x: stats.homeSpawnX, y: stats.homeSpawnY } : undefined);
 
         if (!homeSpot) {
-            let freeSpots = [];
-            for (let pt of candidateSpots) {
-                let clear = true;
-                for (const [, p] of this.ecs.players.entries()) {
-                    if (p.id !== id && Math.hypot(p.homeSpawnX - pt.x, p.homeSpawnY - pt.y) < 30) {
-                        clear = false;
+            if (this.category === 'dogfight' && candidateSpots.length >= 2) {
+                homeSpot = assignedTeam === 'E3' ? candidateSpots[1] : candidateSpots[0];
+            } else {
+                let freeSpots = [];
+                for (let pt of candidateSpots) {
+                    let clear = true;
+                    for (const [, p] of this.ecs.players.entries()) {
+                        if (p.id !== id && Math.hypot(p.homeSpawnX - pt.x, p.homeSpawnY - pt.y) < 30) {
+                            clear = false;
+                        }
                     }
+                    if (clear) freeSpots.push(pt);
                 }
-                if (clear) freeSpots.push(pt);
+                homeSpot = freeSpots.length > 0 ? freeSpots[0] : candidateSpots[this.assignedHomes.size % candidateSpots.length];
             }
-            homeSpot = freeSpots.length > 0 ? freeSpots[0] : candidateSpots[this.assignedHomes.size % candidateSpots.length];
             this.assignedHomes.set(id, { x: homeSpot.x, y: homeSpot.y });
         }
 
@@ -372,7 +381,8 @@ export class Room {
                         lives: stats?.lives ?? oldP.lives,
                         streakStartLevel: stats?.streakStartLevel ?? oldP.streakStartLevel,
                         homeSpawnX: homeSpot.x,
-                        homeSpawnY: homeSpot.y
+                        homeSpawnY: homeSpot.y,
+                        team: oldP.team || assignedTeam
                     };
                 }
                 this.ecs.destroy(existing);
@@ -380,6 +390,7 @@ export class Room {
                 if (spawnStats.streakStartLevel === undefined) spawnStats.streakStartLevel = this.levelIndex;
                 spawnStats.homeSpawnX = homeSpot.x;
                 spawnStats.homeSpawnY = homeSpot.y;
+                spawnStats.team = assignedTeam;
             }
 
             if (type === 'classic') spawnClassicPlayer(this.ecs, id, chosenX, chosenY!, spawnStats);
@@ -395,6 +406,11 @@ export class Room {
                 }
                 const p = this.ecs.players.get(playerEntity);
                 if (p) {
+                    if (existingP) {
+                        p.kills = existingP.kills || 0;
+                        p.deaths = existingP.deaths || 0;
+                        p.unforcedErrors = existingP.unforcedErrors || 0;
+                    }
                     p.isLanded = true;
                     const v = this.ecs.velocities.get(playerEntity);
                     if (v) {
@@ -465,6 +481,7 @@ export class Room {
         this.floraBurns.clear();
         this.floraHeat.clear();
         this.assignedHomes.clear();
+        this.dogfightCompleted = false;
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }

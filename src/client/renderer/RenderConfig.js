@@ -47,6 +47,9 @@ export const RENDER_CONFIG = {
         recessedCataclysmTrailLength: 34,     // Long smoldering tail segment count
         recessedCataclysmBurnGlowMultiplier: 3.4, // Radius multiplier for the outer atmospheric burn halo
         recessedCataclysmEmberShedChance: 0.48,   // Chance per frame to shed a slow-burning ember into the tail wake
+        recessedGhostShipEnabled: true,
+        recessedGhostShipSpawnChance: 0.0015, // rare background event on sibling level flat platforms
+        recessedGhostShipMaxAlpha: 0.14,      // Extremely faded so it is NEVER mistaken for an opponent
         bedrockColor: '#261a14',
         strataColor: 'rgba(18, 11, 8, 0.45)',
         strataStepY: 28,
@@ -208,7 +211,14 @@ export const RENDER_CONFIG = {
         shockwaveRingsEnabled: true,
         shockwaveMaxRadius: 280,
         shockwaveDurationTicks: 70,    // Guaranteed frame lifetime before cleanup
-        gravityArcsEnabled: true
+        gravityArcsEnabled: true,
+        rockWormsEnabled: true,
+        maxRockWormsPerLevel: 2,
+        rockWormEmergeChance: 0.0001,  // Rare surprise event on interior ground tiles
+        rockTricklesEnabled: true,
+        rockTrickleLevelChance: 0.55,  // ~once per level (55% of levels get 1 subterranean fissure waterfall)
+        rockTrickleCascadeLenPx: 72,   // Straight-down vertical plunge distance
+        rockTrickleMistCount: 8        // Number of CPU-cheated procedural mist/droplet nodes
     }
 };
 

@@ -40,6 +40,7 @@ export interface SubmitResult {
 export class RecordManager {
     private dbPath: string;
     private db: Record<string, Leaderboard> = {};
+    private pvpPairHistory: Record<string, number[]> = {};
 
     constructor(filename: string = 'data/server_records.json') {
         this.dbPath = path.resolve(process.cwd(), filename);
@@ -69,6 +70,11 @@ export class RecordManager {
 
     /**
      * Submits a new record. If it qualifies for the top N of its category, it is saved.
+     * NOTE ON maxEntriesPerPlayer (TODO 5):
+     * For individual level speedruns/laps, we allow up to 3 entries per pilot so they can see
+     * their consistency. However, for 5-Lives Streaks and 50-Cavern Campaign runs, we enforce
+     * maxEntriesPerPlayer = 1 so a single long 9-level streak does not flood the leaderboard
+     * with 3 separate entries from the same pilot/run.
      */
     public submitRecord(
         metric: string, 
@@ -78,7 +84,8 @@ export class RecordManager {
         sort: SortOrder,
         entry: Omit<RecordEntry, 'timestamp'>,
         limit: number = 100,
-        isBotPilot: boolean = false
+        isBotPilot: boolean = false,
+        maxEntriesPerPlayer: number = 3
     ): SubmitResult {
         const key = this.getCompositeKey(metric, level, mode, physicsHash, isBotPilot);
         
@@ -121,7 +128,7 @@ export class RecordManager {
         const newTimestamp = Date.now();
         const newEntry: RecordEntry = { ...entry, timestamp: newTimestamp };
 
-        if (playerEntries.length < 3) {
+        if (playerEntries.length < maxEntriesPerPlayer) {
             board.entries.push(newEntry);
         } else {
             playerEntries.sort((a, b) => {
@@ -134,8 +141,15 @@ export class RecordManager {
                 if (board.sort.endsWith('_desc')) return secB - secA;
                 return a.timestamp - b.timestamp;
             });
+            const bestPlayerEntry = playerEntries[0];
             const worstPlayerEntry = playerEntries[playerEntries.length - 1];
-            if (isBetterThan(entry, worstPlayerEntry)) {
+            if (maxEntriesPerPlayer === 1) {
+                // Keep strictly ONE entry per player on Campaign & Streak leaderboards
+                if (isBetterThan(entry, bestPlayerEntry)) {
+                    board.entries = board.entries.filter(e => e.playerId !== entry.playerId);
+                    board.entries.push(newEntry);
+                }
+            } else if (isBetterThan(entry, worstPlayerEntry)) {
                 const idx = board.entries.indexOf(worstPlayerEntry);
                 if (idx !== -1) board.entries.splice(idx, 1);
                 board.entries.push(newEntry);
@@ -246,27 +260,119 @@ export class RecordManager {
             ? this.submitRecord('campaign_score', 0, mode, physicsHash, 'desc_asc', {
                 playerId, alias, value: totalBestScore, secondaryValue: totalTimeForScore,
                 metadata: { cavernsCleared: cavernsScored, botCount }
-            }, 100, isBotPilot)
+            }, 100, isBotPilot, 1)
             : { isNewPb: false, rank: -1, timestamp: undefined };
 
         const rCampTime = cavernsTimed > 0
             ? this.submitRecord('campaign_time', 0, mode, physicsHash, 'desc_asc', {
                 playerId, alias, value: cavernsTimed, secondaryValue: totalFastestTime,
                 metadata: { cavernsCleared: cavernsTimed, botCount }
-            }, 100, isBotPilot)
+            }, 100, isBotPilot, 1)
             : { isNewPb: false, rank: -1, timestamp: undefined };
 
         const rCampFuel = cavernsEco > 0
             ? this.submitRecord('campaign_fuel', 0, mode, physicsHash, 'desc_asc', {
                 playerId, alias, value: cavernsEco, secondaryValue: totalLeastFuel,
                 metadata: { cavernsCleared: cavernsEco, botCount }
-            }, 100, isBotPilot)
+            }, 100, isBotPilot, 1)
             : { isNewPb: false, rank: -1, timestamp: undefined };
 
         return {
             score: { ...rCampScore, totalScore: totalBestScore, totalTime: totalTimeForScore, caverns: cavernsScored },
             time: { ...rCampTime, caverns: cavernsTimed, totalTime: totalFastestTime },
             fuel: { ...rCampFuel, caverns: cavernsEco, totalFuel: totalLeastFuel }
+        };
+    }
+
+    /**
+     * Computes a pilot's display Combat Rating with gentle time-decay after 14 days of inactivity
+     * toward the 1000 CR baseline so the Top Gun board stays fresh over months/years.
+     */
+    public getDecayedCombatRating(rawRating: number, lastActiveTimestamp: number): number {
+        const daysInactive = (Date.now() - (lastActiveTimestamp || Date.now())) / (1000 * 60 * 60 * 24);
+        if (daysInactive <= 14) return Math.round(rawRating);
+        const decayDays = Math.min(90, daysInactive - 14);
+        const decayed = 1000 + (rawRating - 1000) * Math.pow(0.992, decayDays);
+        return Math.round(decayed);
+    }
+
+    /**
+     * Updates anti-rigging PvP Dogfight Combat Rating (Elo-lite with 24h pairwise diminishing returns
+     * and minimum engagement floor).
+     */
+    public processDogfightPvpOutcome(
+        winnerId: string,
+        winnerAlias: string,
+        loserId: string,
+        loserAlias: string,
+        engaged: boolean,
+        physicsHash: string,
+        replayId: string,
+        winnerIsBotPilot: boolean = false,
+        loserIsBotPilot: boolean = false
+    ): { winnerRating: number; loserRating: number; winnerDelta: number; loserDelta: number; note?: string } {
+        const keyW = this.getCompositeKey('dogfight_rating', 0, 'MP', physicsHash, winnerIsBotPilot);
+        const keyL = this.getCompositeKey('dogfight_rating', 0, 'MP', physicsHash, loserIsBotPilot);
+        if (!this.db[keyW]) this.db[keyW] = { sort: 'desc', entries: [] };
+        if (!this.db[keyL]) this.db[keyL] = { sort: 'desc', entries: [] };
+
+        const findOrInit = (board: Leaderboard, pid: string, alias: string): RecordEntry => {
+            let rec = board.entries.find(e => e.playerId === pid);
+            if (!rec) {
+                rec = { playerId: pid, alias, value: 1000, timestamp: Date.now(), metadata: { wins: 0, losses: 0, replayId } };
+                board.entries.push(rec);
+            }
+            return rec;
+        };
+
+        const recW = findOrInit(this.db[keyW], winnerId, winnerAlias);
+        const recL = findOrInit(this.db[keyL], loserId, loserAlias);
+        const curW = this.getDecayedCombatRating(recW.value, recW.timestamp);
+        const curL = this.getDecayedCombatRating(recL.value, recL.timestamp);
+
+        if (!engaged || winnerId === loserId) {
+            return {
+                winnerRating: curW,
+                loserRating: curL,
+                winnerDelta: 0,
+                loserDelta: 0,
+                note: 'UNRATED: OPPONENT DID NOT MEET COMBAT ENGAGEMENT FLOOR'
+            };
+        }
+
+        const now = Date.now();
+        const windowMs = 24 * 60 * 60 * 1000;
+        const pairKey = `${winnerId}_vs_${loserId}`;
+        const recent = (this.pvpPairHistory[pairKey] || []).filter(ts => now - ts < windowMs);
+        const scales = [1.0, 0.5, 0.25, 0.1, 0.0];
+        const mult = scales[Math.min(recent.length, scales.length - 1)];
+        recent.push(now);
+        this.pvpPairHistory[pairKey] = recent;
+
+        const expectedW = 1 / (1 + Math.pow(10, (curL - curW) / 400));
+        const rawDelta = Math.max(2, Math.round(32 * (1 - expectedW) * mult));
+        const delta = mult === 0 ? 0 : rawDelta;
+
+        recW.alias = winnerAlias;
+        recW.value = curW + delta;
+        recW.timestamp = now;
+        recW.metadata = { ...(recW.metadata || {}), wins: (recW.metadata?.wins || 0) + 1, replayId };
+
+        recL.alias = loserAlias;
+        recL.value = Math.max(800, curL - delta);
+        recL.timestamp = now;
+        recL.metadata = { ...(recL.metadata || {}), losses: (recL.metadata?.losses || 0) + 1, replayId };
+
+        this.db[keyW].entries.sort((a, b) => b.value - a.value);
+        this.db[keyL].entries.sort((a, b) => b.value - a.value);
+        this.save();
+
+        return {
+            winnerRating: recW.value,
+            loserRating: recL.value,
+            winnerDelta: delta,
+            loserDelta: -delta,
+            note: mult === 0 ? 'DIMINISHING RETURNS: 24H CAP REACHED AGAINST THIS OPPONENT' : undefined
         };
     }
 

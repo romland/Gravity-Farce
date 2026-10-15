@@ -6,6 +6,7 @@ import { getTurretSpecByTile } from './turret-defs';
 import { spawnExplosionFragments } from './debris';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { recordDB, getActivePhysicsHash } from '../core/records';
+import { tagPlayerDamage, attributeDogfightDeath } from './dogfight';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -101,6 +102,9 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     if (room) {
         const t = ecs.transforms.get(e);
         room.tracker.logEvent(p.id, { type: 'death', x: t?.x || 0, y: t?.y || 0 });
+        if (room.category === 'dogfight') {
+            attributeDogfightDeath(ecs, e, room);
+        }
     }
 
     p.inputs = { up: false, left: false, right: false, shoot: false };
@@ -118,13 +122,14 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
         if (room && room.category === 'mission' && p.score > 0 && !ecs.bots.has(e) && !room.isReplayMode) {
             const mode = room.getRoomMode();
             const startLvl = p.streakStartLevel ?? room.levelIndex;
+            // Enforce maxEntriesPerPlayer = 1 so a pilot only occupies a single slot on the 5-Lives Streak leaderboard
             const rScore = recordDB.submitRecord('arcade_score', 0, mode, room.getPhysicsHash(), 'desc_asc', {
                 playerId: p.uuid,
                 alias: p.alias,
                 value: p.score,
                 secondaryValue: Math.round((room.globalWaveTimer - p.joinedAtTick) * (1000 / 60)),
                 metadata: { replayId: room.tracker.uuid, botCount: room.getBotCount(), startLevel: startLvl, endLevel: room.levelIndex }
-            }, 100, Boolean(p.isBotPilot));
+            }, 100, Boolean(p.isBotPilot), 1);
             if (rScore.rank !== -1) room.tracker.logHighscore(p.id, 'arcade_score', p.score, rScore.isNewPb);
             if (rScore.rank === 1) {
                 room.broadcastGlobalAnnouncement(`${p.alias} SET #1 ARCADE SCORE: ${p.score}!`);
@@ -142,10 +147,15 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
 
 export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18, room?: Room): boolean {
     let crashed = false;
+    const me = ecs.players.get(e);
     for (const [oe, op] of ecs.players.entries()) {
         if (oe === e || op.isDead) continue;
         const ot = ecs.transforms.get(oe)!;
         if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { 
+            if (room && me) {
+                tagPlayerDamage(ecs, e, op.id, room.globalWaveTimer);
+                tagPlayerDamage(ecs, oe, me.id, room.globalWaveTimer);
+            }
             crashed = true; 
             killPlayer(ecs, oe, room);
         }
@@ -208,6 +218,15 @@ export function sysBullets(ecs: Registry, room: Room) {
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {
                 if (b.ownerId !== p.id || b.life < 390) {
+                    if (b.isPlayer && room.category === 'dogfight') {
+                        const shooterEnt = ecs.getPlayerEntity(b.ownerId);
+                        const shooter = shooterEnt !== undefined ? ecs.players.get(shooterEnt) : undefined;
+                        if (shooter && shooter.team && p.team && shooter.team === p.team && shooter.id !== p.id) {
+                            // Friendly-fire protection on the same team in dogfights
+                            continue;
+                        }
+                        tagPlayerDamage(ecs, pe, b.ownerId, room.globalWaveTimer);
+                    }
                     hit = true;
                     if (room.category === 'race' && !room.isLethalRacing) {
                         bumpPlayer(ecs, room, pe, t.x, t.y, 4.0); // Lighter bullet bonk

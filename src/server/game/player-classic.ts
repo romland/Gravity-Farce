@@ -39,7 +39,11 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         streakStartLevel: stats?.streakStartLevel ?? 0,
         race: stats?.race,
         lives: stats?.lives ?? 5,
-        ping: 0
+        ping: 0,
+        team: stats?.team,
+        kills: 0,
+        deaths: 0,
+        unforcedErrors: 0
     });
     ecs.fuelTanks.set(e, { current: 76464, max: 99999, consumed: stats?.fuelConsumed ?? 0 });
     ecs.cargoBays.set(e, { stack: [], unloadTimer: 0, maxWeight: 3 });
@@ -146,7 +150,9 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
             land(landY);
         });
 
-        if (crashed && !p.advancing) {
+        const pvpHit = room.category === 'dogfight' && !p.isLanded && checkPvPCollisions(ecs, e, t, 20, room);
+
+        if ((crashed || pvpHit) && !p.advancing) {
             killPlayer(ecs, e, room);
         }
     }

@@ -63,6 +63,11 @@ export interface Player {
     race?: PlayerRaceState;
     lives: number;
     ping: number;
+    team?: 'E2' | 'E3';
+    kills: number;
+    deaths: number;
+    unforcedErrors: number;
+    lastDamagedBy?: { attackerId: string; tick: number };
 }
 
 export interface FuelTank {

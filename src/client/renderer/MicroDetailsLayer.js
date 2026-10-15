@@ -32,6 +32,8 @@ export class MicroDetailsLayer {
         this.stalactites = [];
         this.fallingShards = [];
         this.shockwaves = [];
+        this.rockWorms = [];
+        this.rockTrickles = [];
         this.shipPrev = new Map();
         this.turretPrevCooldown = new Map();
     }
@@ -49,6 +51,8 @@ export class MicroDetailsLayer {
         this.stalactites = [];
         this.fallingShards = [];
         this.shockwaves = [];
+        this.rockWorms = [];
+        this.rockTrickles = [];
         this.shipPrev.clear();
         this.turretPrevCooldown.clear();
 
@@ -111,6 +115,136 @@ export class MicroDetailsLayer {
         const isRaceLevel = level.rawMap && level.rawMap.some(row => row.some(t => t >= 0xDA && t <= 0xE1));
         if (cfg.stalactitesEnabled !== false && (!isRaceLevel || cfg.stalactiteInRacesEnabled === true) && level.walls && level.rawMap) {
             this.initHangingStalactites(level, cfg);
+        }
+
+        // 5. Seed Rare Interior Ground-Tile Rock Worms (TODO 2) & Downward Water Trickles (TODO 3)
+        if (level.rawMap) {
+            this.initInteriorRockLifeAndTrickles(level, cfg);
+        }
+    }
+
+    initInteriorRockLifeAndTrickles(level, cfg) {
+        const map = level.rawMap;
+        const h = map.length;
+        const w = h > 0 ? map[0].length : 0;
+        const interiorGroundSet = new Set([0x16, 0x21, 0x22, 0x0D, 0x0F, 0x11, 0x14, 0x17]);
+
+        let seed = (level.name ? level.name.charCodeAt(level.name.length - 1) : 7) * 4177 + 193;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        const wormCandidates = [];
+        const trickleCandidates = [];
+
+        for (let y = 2; y < h - 2; y++) {
+            for (let x = 2; x < w - 2; x++) {
+                const t = map[y][x];
+                if (!interiorGroundSet.has(t)) continue;
+
+                const nUp = map[y - 1][x];
+                const nDn = map[y + 1][x];
+                const nLt = map[y][x - 1];
+                const nRt = map[y][x + 1];
+                const allCardinalSolid = interiorGroundSet.has(nUp) && interiorGroundSet.has(nDn) &&
+                                         interiorGroundSet.has(nLt) && interiorGroundSet.has(nRt);
+
+                // TODO 2: Interior ground tile (NOT an edge) for ship-sized burrow worm
+                if (allCardinalSolid) {
+                    wormCandidates.push({ x: x * 32 + 16, y: y * 32 + 16 });
+                }
+
+                // TODO 3: Subterranean Fissure Stream & Mini-Waterfall
+                // Look for an overhang lip (open air 0x00 below at y+1 AND y+2) with 2 to 4 solid ground tiles above it
+                if (nDn === 0x00 && map[y + 2]?.[x] === 0x00 && interiorGroundSet.has(nLt) && interiorGroundSet.has(nRt)) {
+                    let rockDepthTiles = 1;
+                    while (rockDepthTiles < 4 &&
+                           y - rockDepthTiles >= 1 &&
+                           interiorGroundSet.has(map[y - rockDepthTiles][x]) &&
+                           interiorGroundSet.has(map[y - rockDepthTiles][x - 1]) &&
+                           interiorGroundSet.has(map[y - rockDepthTiles][x + 1])) {
+                        rockDepthTiles++;
+                    }
+                    if (rockDepthTiles >= 2) {
+                        const baseX = Math.round(x * 32 + 10 + rng() * 12);
+                        const tileLipY = (y + 1) * 32;
+
+                        // Find the EXACT smoothed rock contour Y at baseX so the rock seep never sticks out past the visual rock edge!
+                        let exactLipY = tileLipY - 6;
+                        if (level.walls) {
+                            let bestDistY = 28;
+                            for (const wall of level.walls) {
+                                for (let i = 0; i < wall.length - 1; i++) {
+                                    const p1 = wall[i];
+                                    const p2 = wall[i + 1];
+                                    if ((p1.x <= baseX && p2.x >= baseX) || (p2.x <= baseX && p1.x >= baseX)) {
+                                        const tSeg = Math.abs(p2.x - p1.x) > 0.01 ? (baseX - p1.x) / (p2.x - p1.x) : 0.5;
+                                        const wy = p1.y + (p2.y - p1.y) * tSeg;
+                                        const dy = Math.abs(wy - tileLipY);
+                                        if (dy < bestDistY) {
+                                            bestDistY = dy;
+                                            exactLipY = wy;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        const startY = exactLipY - (rockDepthTiles * 24 + Math.floor(rng() * 14));
+                        const rockNodes = [];
+                        const steps = 6;
+                        for (let s = 0; s <= steps; s++) {
+                            const t = s / steps;
+                            const ny = startY + (exactLipY - startY) * t;
+                            // Subtle 1.5px organic rock crack jitter, strictly zero at the lip so it exits straight down
+                            const wobble = s === steps ? 0 : Math.sin(s * 1.9 + rng() * 4.0) * 1.6 * (1 - t * 0.5);
+                            rockNodes.push({ x: baseX + wobble, y: ny });
+                        }
+                        trickleCandidates.push({
+                            x: baseX,
+                            startY,
+                            lipY: exactLipY,
+                            rockNodes,
+                            cascadeLen: (cfg.rockTrickleCascadeLenPx ?? 64) * (0.85 + rng() * 0.3),
+                            seed: rng() * 100
+                        });
+                    }
+                }
+            }
+        }
+
+        if (cfg.rockWormsEnabled !== false && wormCandidates.length > 0) {
+            const maxWorms = cfg.maxRockWormsPerLevel ?? 2;
+            for (let i = 0; i < maxWorms && wormCandidates.length > 0; i++) {
+                const idx = Math.floor(rng() * wormCandidates.length);
+                const c = wormCandidates.splice(idx, 1)[0];
+                this.rockWorms.push({
+                    x: c.x,
+                    y: c.y,
+                    state: 'hidden', // 'hidden' -> 'peeking' -> 'looking' -> 'retreating'
+                    ext: 0,          // 0.0 to 1.0 extension
+                    timer: 0,
+                    lookAngle: -Math.PI * 0.35 + rng() * 0.7,
+                    targetLook: 0,
+                    seed: rng() * 100
+                });
+            }
+        }
+
+        if (cfg.rockTricklesEnabled !== false && trickleCandidates.length > 0 && rng() < (cfg.rockTrickleLevelChance ?? 0.75)) {
+            const chosen = trickleCandidates[Math.floor(rng() * trickleCandidates.length)];
+            // Pre-allocate a fixed pool of 18 tiny vertical falling streaks (zero GC allocations)
+            const streaks = Array.from({ length: 18 }, (_, idx) => ({
+                offsetX: ((idx % 4) - 1.5) * 0.75,
+                y: chosen.lipY + (idx / 14) * chosen.cascadeLen,
+                vy: 1.2 + (idx % 4) * 0.22,
+                len: 5 + (idx % 3) * 2.5
+            }));
+            this.rockTrickles.push({
+                ...chosen,
+                streaks
+            });
         }
     }
 
@@ -670,6 +804,207 @@ export class MicroDetailsLayer {
         }
 
         ctx.save();
+
+        // 0.A. Update & Draw Rare Interior Ground-Tile Rock Worms (TODO 2)
+        if (cfg.rockWormsEnabled !== false && this.rockWorms.length > 0) {
+            const activeShips = players ? Object.values(players).filter(s => !s.isDead) : [];
+            const emergeChance = cfg.rockWormEmergeChance ?? 0.0005;
+            for (const w of this.rockWorms) {
+                if (w.x < camera.x - 60 || w.x > camera.x + viewW + 60 ||
+                    w.y < camera.y - 60 || w.y > camera.y + viewH + 60) {
+                    continue;
+                }
+
+                // Startle check: if any ship roars close by, retreat immediately
+                let startled = false;
+                for (const s of activeShips) {
+                    if (Math.hypot(s.x - w.x, s.y - w.y) < 150) {
+                        startled = true;
+                        break;
+                    }
+                }
+
+                if (w.state === 'hidden') {
+                    if (!startled && Math.random() < emergeChance) {
+                        w.state = 'peeking';
+                        w.timer = 0;
+                        w.targetLook = (Math.random() - 0.5) * 0.9;
+                    } else {
+                        continue;
+                    }
+                } else if (w.state === 'peeking') {
+                    w.ext = Math.min(1.0, w.ext + 0.022);
+                    if (startled) w.state = 'retreating';
+                    else if (w.ext >= 1.0) {
+                        w.state = 'looking';
+                        w.timer = 140 + Math.floor(Math.random() * 120);
+                    }
+                } else if (w.state === 'looking') {
+                    w.timer--;
+                    if (w.timer % 45 === 0) w.targetLook = (Math.random() - 0.5) * 1.1;
+                    w.lookAngle += (w.targetLook - w.lookAngle) * 0.06;
+                    if (startled || w.timer <= 0) w.state = 'retreating';
+                } else if (w.state === 'retreating') {
+                    w.ext = Math.max(0.0, w.ext - (startled ? 0.08 : 0.03));
+                    if (w.ext <= 0.0) {
+                        w.state = 'hidden';
+                        continue;
+                    }
+                }
+
+                // Render burrow hole & articulated ship-sized chitinous worm head poking out
+                ctx.save();
+                ctx.translate(w.x, w.y);
+                // Dark subterranean burrow socket
+                ctx.fillStyle = 'rgba(6, 4, 3, 0.88)';
+                ctx.beginPath();
+                ctx.ellipse(0, 3, 9.5, 5.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(92, 60, 38, 0.65)';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+
+                // Clip below burrow rim so worm emerges cleanly from inside the hole
+                ctx.beginPath();
+                ctx.rect(-28, -36, 56, 41);
+                ctx.clip();
+
+                const segs = 5;
+                const maxReach = 22 * w.ext;
+                let hx = 0;
+                let hy = 3;
+                for (let s = 1; s <= segs; s++) {
+                    const t = s / segs;
+                    const bend = w.lookAngle * t * t + Math.sin(timeSec * 3.5 + w.seed + t * 2) * 0.08;
+                    hx = Math.sin(bend) * maxReach * t;
+                    hy = 3 - Math.cos(bend) * maxReach * t;
+                    const rad = (7.2 - t * 2.0) * (0.4 + 0.6 * w.ext);
+                    ctx.fillStyle = s % 2 === 0 ? '#4a2e1b' : '#6b4428';
+                    ctx.strokeStyle = '#1f120b';
+                    ctx.lineWidth = 1.1;
+                    ctx.beginPath();
+                    ctx.arc(hx, hy, rad, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Chitinous mandibles & tiny bioluminescent eyes at head segment
+                if (w.ext > 0.35) {
+                    const jawOpen = 0.25 + 0.15 * Math.sin(timeSec * 6 + w.seed);
+                    ctx.strokeStyle = '#c89664';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(hx - 3, hy - 2);
+                    ctx.lineTo(hx - 6 - jawOpen * 4, hy - 7);
+                    ctx.moveTo(hx + 3, hy - 2);
+                    ctx.lineTo(hx + 6 + jawOpen * 4, hy - 7);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#7dffaa';
+                    ctx.beginPath();
+                    ctx.arc(hx - 2.2, hy - 1.5, 1.1, 0, Math.PI * 2);
+                    ctx.arc(hx + 2.2, hy - 1.5, 1.1, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        // 0.B. Update & Draw Subterranean Rock-Face Trickle & Straight-Down Evaporating Waterfall (TODO 3)
+        if (cfg.rockTricklesEnabled !== false && this.rockTrickles.length > 0) {
+            for (const tr of this.rockTrickles) {
+                if (tr.x < camera.x - 40 || tr.x > camera.x + viewW + 40 ||
+                    tr.lipY + tr.cascadeLen < camera.y - 40 || tr.startY > camera.y + viewH + 40) {
+                    continue;
+                }
+
+                const nodes = tr.rockNodes;
+                const nLen = nodes.length;
+
+                // 1. Subtle wet rock stain on the interior ground tiles (tapers from 0.5px at top crack to 2.2px at lip)
+                ctx.fillStyle = 'rgba(10, 26, 36, 0.42)';
+                ctx.beginPath();
+                ctx.moveTo(nodes[0].x, nodes[0].y);
+                for (let i = 1; i < nLen; i++) {
+                    const halfW = 0.6 + (i / (nLen - 1)) * 2.0;
+                    ctx.lineTo(nodes[i].x - halfW, nodes[i].y);
+                }
+                for (let i = nLen - 1; i >= 1; i--) {
+                    const halfW = 0.6 + (i / (nLen - 1)) * 2.0;
+                    ctx.lineTo(nodes[i].x + halfW, nodes[i].y);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // 2. Thin tapered water film on the rock face (no dashed lines or color cycling)
+                const rockGrad = ctx.createLinearGradient(tr.x, tr.startY, tr.x, tr.lipY);
+                rockGrad.addColorStop(0, 'rgba(120, 210, 245, 0.0)');
+                rockGrad.addColorStop(0.25, 'rgba(120, 210, 245, 0.28)');
+                rockGrad.addColorStop(1, 'rgba(155, 232, 255, 0.48)');
+                ctx.fillStyle = rockGrad;
+                ctx.beginPath();
+                ctx.moveTo(nodes[0].x, nodes[0].y);
+                for (let i = 1; i < nLen; i++) {
+                    const halfW = 0.25 + (i / (nLen - 1)) * 1.15;
+                    ctx.lineTo(nodes[i].x - halfW, nodes[i].y);
+                }
+                for (let i = nLen - 1; i >= 1; i--) {
+                    const halfW = 0.25 + (i / (nLen - 1)) * 1.15;
+                    ctx.lineTo(nodes[i].x + halfW, nodes[i].y);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. Wider straight-down vertical waterfall core from exact rock lip into playfield
+                const pulseLen = tr.cascadeLen * (0.88 + 0.12 * Math.sin(timeSec * 2.3 + tr.seed));
+                const fallGrad = ctx.createLinearGradient(tr.x, tr.lipY, tr.x, tr.lipY + pulseLen);
+                fallGrad.addColorStop(0, 'rgba(185, 240, 255, 0.68)');
+                fallGrad.addColorStop(0.5, 'rgba(140, 222, 255, 0.35)');
+                fallGrad.addColorStop(1, 'rgba(140, 222, 255, 0.0)');
+
+                ctx.fillStyle = fallGrad;
+                ctx.beginPath();
+                ctx.moveTo(tr.x - 2.4, tr.lipY);
+                ctx.lineTo(tr.x + 2.4, tr.lipY);
+                ctx.lineTo(tr.x, tr.lipY + pulseLen);
+                ctx.closePath();
+                ctx.fill();
+
+                // 4. Fine vertical gravity-accelerated water filaments
+                for (let i = 0; i < tr.streaks.length; i++) {
+                    const st = tr.streaks[i];
+                    st.vy += 0.04;
+                    st.y += st.vy;
+                    const fallDist = st.y - tr.lipY;
+                    if (fallDist >= pulseLen) {
+                        st.y = tr.lipY + (Math.random() * 4);
+                        st.vy = 0.85 + (i % 4) * 0.2;
+                        continue;
+                    }
+                    const progress = Math.max(0, fallDist / pulseLen);
+                    const alpha = (1.0 - progress) * (1.0 - progress) * 0.72;
+                    const streakH = st.len * (1.0 - progress * 0.5);
+                    ctx.fillStyle = `rgba(205, 245, 255, ${alpha})`;
+                    ctx.fillRect(tr.x + st.offsetX * (1.0 - progress * 0.5) - 0.5, st.y, 1.0, streakH);
+                }
+
+                // 5. CPU-Cheated Procedural Evaporation Mist & Micro-Droplets at the Bottom (Zero GC / Zero Arrays!)
+                const mistCount = cfg.rockTrickleMistCount ?? 8;
+                for (let m = 0; m < mistCount; m++) {
+                    const phase = timeSec * (2.2 + m * 0.35) + tr.seed + m * 0.78;
+                    const cycle = (phase % 1.0); // 0.0 to 1.0 lifecycle loop
+                    const mx = tr.x + Math.sin(phase * 4.2) * (4.5 + m * 1.5);
+                    const my = tr.lipY + pulseLen * (0.65 + cycle * 0.35);
+                    const alpha = (1.0 - cycle) * 0.45;
+                    const radius = 1.2 + cycle * 1.8; // Expands outward as it evaporates into thin air
+
+                    ctx.fillStyle = `rgba(175, 238, 255, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(mx, my, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
 
         // 0. Render Clipped Blast Soot Decals on Metal Pads / Base Structures
         if (this.prefabScorches.length > 0) {

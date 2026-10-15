@@ -865,9 +865,10 @@
             ctx.lineTo(-8, 0); 
             ctx.lineTo(-16, -11.2);
              
+            const shipStroke = isMe ? '#4facfe' : (p.team === 'E2' ? '#00f2fe' : '#ff4b2b');
             ctx.shadowBlur = isMe ? 10 : 0;
-            ctx.shadowColor = isMe ? '#4facfe' : 'transparent';
-            ctx.strokeStyle = isMe ? '#4facfe' : '#ff4b2b';
+            ctx.shadowColor = isMe ? shipStroke : 'transparent';
+            ctx.strokeStyle = shipStroke;
             ctx.lineWidth = 1.5; 
             ctx.fillStyle = '#1a1a24';
             
@@ -1235,6 +1236,8 @@
                     r.cargoStack = s.cargoStack;
                     r.race = s.race;
                         r.alias = s.alias;
+                        r.team = s.team;
+                        r.kills = s.kills; r.deaths = s.deaths; r.unforcedErrors = s.unforcedErrors;
                         r.isBot = s.isBot; r.botState = s.botState; r.botPath = s.botPath;
                 }
             }
@@ -1274,8 +1277,10 @@
                         raceUI += ` &nbsp;|&nbsp; NET: <span style="color:#2ecc71">↓${bytesInKb}KB (${metrics.packetsIn})</span> <span style="color:#e74c3c">↑${bytesOutKb}KB (${metrics.packetsOut})</span>`;
                     }
                     const isRaceMode = Boolean(myServerPlayer.race || raceLights.length > 0);
-                    const cargoSeg = isRaceMode ? '' : ` &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>`;
-                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; LIVES: <span style="color:#e74c3c">${myServerPlayer.lives}</span> &nbsp;|&nbsp; PING: <span style="color:#95a5a6">${myServerPlayer.ping || 0}ms</span>${cargoSeg}${raceUI}</div>`;
+                    const isDogfightMode = Boolean(myServerPlayer.team);
+                    const dogfightSeg = isDogfightMode ? ` &nbsp;|&nbsp; TEAM: <span style="color:${myServerPlayer.team === 'E2' ? '#4facfe' : '#ff4b2b'}">${myServerPlayer.team}</span> &nbsp;|&nbsp; KILLS: <span style="color:#2ecc71">${myServerPlayer.kills || 0}</span> &nbsp;|&nbsp; ERR: <span style="color:#e67e22">${myServerPlayer.unforcedErrors || 0}</span>` : '';
+                    const cargoSeg = (isRaceMode || isDogfightMode) ? '' : ` &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>`;
+                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; LIVES: <span style="color:#e74c3c">${myServerPlayer.lives}</span> &nbsp;|&nbsp; PING: <span style="color:#95a5a6">${myServerPlayer.ping || 0}ms</span>${dogfightSeg}${cargoSeg}${raceUI}</div>`;
                     if (newHudHTML !== lastHudHTML) {
                         hud.innerHTML = newHudHTML;
                         lastHudHTML = newHudHTML;
