@@ -40,6 +40,7 @@ export class Room {
     public replayFrames: any[] = [];
     public floraBurns = new Map<number, FloraBurnRecord>();
     public floraHeat = new Map<number, number>();
+    public lastClientViews = new Map<string, { x: number; y: number }>();
 
     constructor(
         public roomId: number,
@@ -195,6 +196,7 @@ export class Room {
 
     removeClient(id: string) {
         this.activeClientIds.delete(id);
+        this.lastClientViews.delete(id);
         const e = this.ecs.getPlayerEntity(id);
         if (e !== undefined) {
             const w = this.ecs.weaponMounts.get(e);
@@ -240,8 +242,8 @@ export class Room {
         if (freeSpots.length > 0) {
             chosenX = freeSpots[0].x;
             chosenY = freeSpots[0].y;
-        } else if (candidateSpots.length > 1) {
-            // If all spots are blocked on a multi-spawn map, force a spawn instead of queuing
+        } else if (candidateSpots.length >= 1) {
+            // If all spots are blocked, force a spawn on a valid pad so the entity is never missing
             const spot = candidateSpots[Math.floor(this.prng() * candidateSpots.length)];
             chosenX = spot.x;
             chosenY = spot.y;

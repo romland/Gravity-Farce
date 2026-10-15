@@ -282,8 +282,9 @@
             
             // Dev-reload quality-of-life mechanism
             const savedLevel = localStorage.getItem('gf_dev_level');
-            if (savedLevel !== null) {
-                socket.emit('debug_action', 'jump', { levelIndex: parseInt(savedLevel) });
+            const parsedLevel = savedLevel !== null ? parseInt(savedLevel, 10) : 0;
+            if (!isNaN(parsedLevel) && parsedLevel > 0) {
+                socket.emit('debug_action', 'jump', { levelIndex: parsedLevel });
             }
         });
 
@@ -681,6 +682,55 @@
                 ctx.lineTo(-8, 2); 
                 ctx.lineTo(-8, -2); 
                 ctx.fill();
+            }
+
+            // Attitude Control (RCS) Side-Thrusters when rotating in flight (zero fuel cost)
+            if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right)) {
+                const rcsLen = 6 + Math.random() * 6;
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                if (p.inputs.left) {
+                    // Counter-clockwise torque: Nose port-side fires +Y, Rear starboard wing fires -Y
+                    ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
+                    ctx.beginPath();
+                    ctx.moveTo(9, 3.2);
+                    ctx.lineTo(10.5, 3.2 + rcsLen);
+                    ctx.lineTo(12, 2.2);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -8.4);
+                    ctx.lineTo(-13.5, -8.4 - rcsLen * 0.85);
+                    ctx.lineTo(-9.5, -6.7);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(10, 3, 1.5, 2.2);
+                    ctx.fillRect(-12, -8.5, 1.5, 2.0);
+                } else if (p.inputs.right) {
+                    // Clockwise torque: Nose starboard-side fires -Y, Rear port wing fires +Y
+                    ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
+                    ctx.beginPath();
+                    ctx.moveTo(9, -3.2);
+                    ctx.lineTo(10.5, -3.2 - rcsLen);
+                    ctx.lineTo(12, -2.2);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 8.4);
+                    ctx.lineTo(-13.5, 8.4 + rcsLen * 0.85);
+                    ctx.lineTo(-9.5, 6.7);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(10, -5.2, 1.5, 2.2);
+                    ctx.fillRect(-12, 6.5, 1.5, 2.0);
+                }
+                ctx.restore();
             }
             ctx.restore();
             if (debugMode) {

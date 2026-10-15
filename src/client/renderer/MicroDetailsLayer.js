@@ -838,6 +838,30 @@ export class MicroDetailsLayer {
                         }
                     }
 
+                    // Subtle RCS attitude-thruster micro-sparks when rotating in flight
+                    if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right) && Math.random() < 0.45 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                        const cos = Math.cos(p.angle);
+                        const sin = Math.sin(p.angle);
+                        const localX = 10.5;
+                        const localY = p.inputs.left ? 3.5 : -3.5;
+                        const jetDirY = p.inputs.left ? 1 : -1;
+                        const wx = p.x + cos * localX - sin * localY;
+                        const wy = p.y + sin * localX + cos * localY;
+                        const jvx = (p.vx || 0) * 0.3 - sin * jetDirY * (1.4 + Math.random() * 0.9);
+                        const jvy = (p.vy || 0) * 0.3 + cos * jetDirY * (1.4 + Math.random() * 0.9);
+                        this.sparks.push({
+                            x: wx,
+                            y: wy,
+                            vx: jvx,
+                            vy: jvy,
+                            gravity: 0,
+                            life: 6 + Math.floor(Math.random() * 5),
+                            maxLife: 11,
+                            size: 1.2,
+                            color: 'rgba(165, 235, 255, 0.65)'
+                        });
+                    }
+
                     // Check Thruster Exhaust Plume against Walls/Floors/Pads
                     const isThrusting = Boolean(p.inputs && p.inputs.up && (p.fuel === undefined || p.fuel > 0));
                     if (isThrusting && (cfg.thrusterDustEnabled !== false || cfg.thrusterScorchEnabled !== false)) {

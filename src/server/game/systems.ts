@@ -135,7 +135,12 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
         let e = ecs.getPlayerEntity(clientId);
         let t = e !== undefined ? ecs.transforms.get(e) : null;
 
-        if (!t) {
+        if (t) {
+            room.lastClientViews.set(clientId, { x: t.x, y: t.y });
+        } else if (room.lastClientViews.has(clientId)) {
+            const lastView = room.lastClientViews.get(clientId)!;
+            t = { x: lastView.x, y: lastView.y, angle: 0 };
+        } else {
             const firstPlayerEnt = Array.from(ecs.players.keys())[0];
             t = firstPlayerEnt !== undefined ? ecs.transforms.get(firstPlayerEnt)! : { x: 0, y: 0, angle: 0 };
         }

@@ -111,6 +111,11 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
 
+    const currentRoomId = playerRooms.get(id);
+    if (!forceReset && currentRoomId === targetLevel && rooms.has(targetLevel)) {
+        return;
+    }
+
     const { pType, stats } = leaveCurrentRoom(id);
 
     const newRoom = getOrCreateRoom(targetLevel);
