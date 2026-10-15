@@ -6,6 +6,18 @@ const METAL_TILES = new Set([
     0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8F
 ]);
 
+const DEFAULT_GROUND_BASIN_TILES = [
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F,
+    0x11, 0x12, 0x14, 0x16, 0x17, 0x19, 0x1A, 0x22, 0x23,
+    0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
+    0x73, 0x74, 0x76, 0x84, 0x85
+];
+
+const DEFAULT_TREE_BASIN_TILES = [
+    0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31,
+    0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A
+];
+
 export class MicroDetailsLayer {
     constructor() {
         this.builtForLevel = null;
@@ -16,6 +28,10 @@ export class MicroDetailsLayer {
         this.prefabScorches = [];
         this.gravStreams = [];
         this.crystals = [];
+        this.waterPools = [];
+        this.stalactites = [];
+        this.fallingShards = [];
+        this.shockwaves = [];
         this.shipPrev = new Map();
         this.turretPrevCooldown = new Map();
     }
@@ -29,6 +45,10 @@ export class MicroDetailsLayer {
         this.prefabScorches = [];
         this.gravStreams = [];
         this.crystals = [];
+        this.waterPools = [];
+        this.stalactites = [];
+        this.fallingShards = [];
+        this.shockwaves = [];
         this.shipPrev.clear();
         this.turretPrevCooldown.clear();
 
@@ -41,9 +61,13 @@ export class MicroDetailsLayer {
                 for (let x = 0; x < level.rawMap[y].length; x++) {
                     const t = level.rawMap[y][x];
                     if (t >= 0xCC && t <= 0xCF) {
+                        // IMPNOTE 5: Respect transposed force directions (0xCC=Right, 0xCD=Down, 0xCE=Left, 0xCF=Up)
                         const vx = t === 0xCC ? 1 : (t === 0xCE ? -1 : 0);
                         const vy = t === 0xCD ? 1 : (t === 0xCF ? -1 : 0);
                         this.gravStreams.push({
+                            tileX: x,
+                            tileY: y,
+                            tileId: t,
                             x: x * 32 + 16,
                             y: y * 32 + 16,
                             vx,
@@ -77,6 +101,206 @@ export class MicroDetailsLayer {
                 }
             }
         }
+
+        // 3. Seed Interactive Subterranean Water Pools in Floor Basins
+        if (cfg.waterPoolsEnabled !== false && level.rawMap) {
+            this.initWaterPools(level, cfg);
+        }
+
+        // 4. Seed Atmospheric Hanging Ceiling Stalactites
+        const isRaceLevel = level.rawMap && level.rawMap.some(row => row.some(t => t >= 0xDA && t <= 0xE1));
+        if (cfg.stalactitesEnabled !== false && (!isRaceLevel || cfg.stalactiteInRacesEnabled === true) && level.walls && level.rawMap) {
+            this.initHangingStalactites(level, cfg);
+        }
+    }
+
+    initWaterPools(level, cfg) {
+        const map = level.rawMap;
+        const h = map.length;
+        const w = h > 0 ? map[0].length : 0;
+        const maxPools = cfg.maxWaterPools ?? 6;
+        const minSpan = cfg.waterMinSpanTiles ?? 2;
+        const maxSpan = cfg.waterMaxSpanTiles ?? 10;
+        const minBankRise = cfg.waterMinBankRiseTiles ?? 1;
+        const rarityChance = cfg.waterRarityChance ?? 0.85;
+        const depthPx = cfg.waterDepthPx ?? 18;
+        const used = new Set();
+
+        const allowedSet = new Set(cfg.waterAllowedGroundTiles || DEFAULT_GROUND_BASIN_TILES);
+        if (cfg.waterAllowTreeBases !== false) {
+            for (const tid of (cfg.waterAllowedTreeTiles || DEFAULT_TREE_BASIN_TILES)) {
+                allowedSet.add(tid);
+            }
+        }
+
+        const isValidBasinTile = (tx, ty) => {
+            if (ty < 0 || ty >= h || tx < 0 || tx >= w) return false;
+            const t = map[ty][tx];
+            return allowedSet.has(t);
+        };
+
+        const hasDryEntityOrPadAt = (tx, ty) => {
+            const t = map[ty]?.[tx] ?? 0;
+            if (METAL_TILES.has(t)) return true;
+            if (t >= 0x3B && t <= 0x4E) return true; // Race checkpoints
+            if (t >= 0x7D && t <= 0x83) return true; // Antenna masts
+            if (t >= 0xAE) return true;              // Turrets, pickups, spawns, triggers
+            return false;
+        };
+
+        // Verify that a rock/tree bank on the left or right rises above the water surface and has a solid bottom corner
+        const hasHighBank = (bankX, basinY) => {
+            if (!isValidBasinTile(bankX, basinY + 1)) return false;
+            for (let r = 0; r < minBankRise; r++) {
+                if (!isValidBasinTile(bankX, basinY - r)) return false;
+            }
+            return true;
+        };
+
+        let seed = 8191;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        // Scan bottom-up for enclosed natural ground / tree-root basins
+        for (let y = h - 2; y >= 2 && this.waterPools.length < maxPools; y--) {
+            for (let x = 1; x < w - 2 && this.waterPools.length < maxPools; x++) {
+                if (used.has(`${x},${y}`)) continue;
+                if (map[y][x] !== 0 || !isValidBasinTile(x, y + 1) || !hasHighBank(x - 1, y)) continue;
+
+                let span = 0;
+                let valid = true;
+                while (x + span < w - 1 && map[y][x + span] === 0 && span <= maxSpan) {
+                    const cx = x + span;
+                    if (!isValidBasinTile(cx, y + 1) || hasDryEntityOrPadAt(cx, y) || hasDryEntityOrPadAt(cx, y - 1)) {
+                        valid = false;
+                        break;
+                    }
+                    span++;
+                }
+
+                if (valid && span >= minSpan && span <= maxSpan && hasHighBank(x + span, y)) {
+                    for (let dy = -2; dy <= 2; dy++) {
+                        for (let k = -1; k <= span; k++) used.add(`${x + k},${y + dy}`);
+                    }
+                    if (rng() > rarityChance) continue;
+
+                    const px = x * 32;
+                    const pw = span * 32;
+                    const surfaceY = (y + 1) * 32 - depthPx;
+                    const nodeCount = Math.max(8, Math.min(24, span * 3));
+                    this.waterPools.push({
+                        x: px,
+                        y: surfaceY,
+                        w: pw,
+                        bottomY: (y + 1) * 32,
+                        nodes: new Float32Array(nodeCount),
+                        vels: new Float32Array(nodeCount),
+                        nodeCount
+                    });
+                }
+            }
+        }
+    }
+
+    initHangingStalactites(level, cfg) {
+        const maxCount = cfg.maxHangingStalactites ?? 55;
+        const minLen = cfg.stalactiteMinLength ?? 22;
+        const maxLen = cfg.stalactiteMaxLength ?? 48;
+        const minHW = cfg.stalactiteMinHalfWidth ?? 4.2;
+        const maxHW = cfg.stalactiteMaxHalfWidth ?? 8.0;
+        const map = level.rawMap;
+        let seed = 7319;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        for (const wall of level.walls) {
+            const n = wall.length;
+            if (n < 6) continue;
+            for (let i = 0; i < n - 1 && this.stalactites.length < maxCount; i += 4) {
+                const p1 = wall[i];
+                const p2 = wall[i + 1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const segLen = Math.hypot(dx, dy);
+                if (segLen < 2.5) continue;
+
+                // Outward normal into cavern air: (dy, -dx) / segLen. Ceiling has ny > 0.72 (pointing down)
+                const ny = -dx / segLen;
+                if (ny < 0.72) continue;
+                if (rng() > 0.30) continue;
+
+                const wx = (p1.x + p2.x) * 0.5;
+                const wy = (p1.y + p2.y) * 0.5;
+                const tx = Math.floor(wx / 32);
+                const ty = Math.floor((wy + 20) / 32);
+                const belowTid = map[ty]?.[tx] ?? 1;
+                if (belowTid !== 0) continue;
+
+                // Avoid overlapping closely with previously placed stalactites
+                if (this.stalactites.some(s => Math.hypot(s.x - wx, s.y - wy) < 26)) continue;
+
+                const length = minLen + rng() * Math.max(2, maxLen - minLen);
+                const halfW = minHW + rng() * Math.max(0.5, maxHW - minHW);
+                this.stalactites.push({
+                    x: wx,
+                    y: wy,
+                    length,
+                    halfW,
+                    intact: true,
+                    shake: 0,
+                    skew: (rng() - 0.5) * 3.2
+                });
+            }
+        }
+    }
+
+    splashWaterAt(x, y, impulse = 3.5) {
+        for (const pool of this.waterPools) {
+            if (x >= pool.x && x <= pool.x + pool.w && Math.abs(y - pool.y) <= 22) {
+                const idx = Math.floor(((x - pool.x) / pool.w) * (pool.nodeCount - 1));
+                for (let k = -2; k <= 2; k++) {
+                    const ni = idx + k;
+                    if (ni >= 0 && ni < pool.nodeCount) {
+                        pool.vels[ni] += impulse * (1 - Math.abs(k) * 0.3);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    shatterStalactite(st, impactVx = 0) {
+        if (!st || !st.intact) return;
+        st.intact = false;
+        this.fallingShards.push({
+            x: st.x,
+            y: st.y + st.length * 0.45,
+            vx: impactVx * 0.15 + (Math.random() - 0.5) * 0.9,
+            vy: 0.6,
+            angle: 0,
+            spin: (Math.random() - 0.5) * 0.14,
+            length: st.length * 0.78,
+            halfW: st.halfW * 0.85,
+            life: 180
+        });
+        for (let i = 0; i < 7 && this.sparks.length < 110; i++) {
+            this.sparks.push({
+                x: st.x + (Math.random() - 0.5) * 8,
+                y: st.y + 8 + Math.random() * 12,
+                vx: (Math.random() - 0.5) * 2.2,
+                vy: 0.4 + Math.random() * 1.8,
+                gravity: 0.08,
+                life: 24 + Math.floor(Math.random() * 16),
+                maxLife: 40,
+                size: 1.8 + Math.random() * 1.6,
+                color: i % 2 === 0 ? '#b98250' : '#5c3c26'
+            });
+        }
     }
 
     onBulletImpact(x, y, level, rockLayer, floraLayer) {
@@ -85,6 +309,49 @@ export class MicroDetailsLayer {
 
         if (floraLayer && cfg.shyFloraEnabled !== false) {
             floraLayer.triggerShock(x, y, cfg.shyBulletRadius ?? 85, 0.85);
+        }
+
+        // Check if bullet impacted or grazed a hanging ceiling stalactite
+        if (cfg.stalactiteShatterEnabled !== false && this.stalactites.length > 0) {
+            for (const st of this.stalactites) {
+                if (!st.intact) continue;
+                const dist = Math.hypot(x - st.x, y - (st.y + st.length * 0.5));
+                if (dist < 22) {
+                    this.shatterStalactite(st, 0);
+                } else if (dist < 95) {
+                    st.shake = Math.min(1.0, st.shake + (1 - dist / 95) * 0.75);
+                    if (this.sparks.length < (cfg.maxSparks ?? 90)) {
+                        this.sparks.push({
+                            x: st.x + (Math.random() - 0.5) * 6,
+                            y: st.y + st.length * 0.7,
+                            vx: (Math.random() - 0.5) * 0.4,
+                            vy: 0.6 + Math.random() * 0.9,
+                            gravity: 0.04,
+                            life: 28,
+                            maxLife: 28,
+                            size: 1.5,
+                            color: 'rgba(185, 130, 80, 0.75)'
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check if bullet splashed into a water pool
+        if (this.splashWaterAt(x, y, 4.5)) {
+            for (let i = 0; i < 5 && this.sparks.length < (cfg.maxSparks ?? 90); i++) {
+                this.sparks.push({
+                    x: x + (Math.random() - 0.5) * 6,
+                    y,
+                    vx: (Math.random() - 0.5) * 1.8,
+                    vy: -1.4 - Math.random() * 1.6,
+                    gravity: 0.09,
+                    life: 20,
+                    maxLife: 20,
+                    size: 1.9,
+                    color: 'rgba(110, 235, 255, 0.85)'
+                });
+            }
         }
 
         if (cfg.bulletImpactsEnabled === false) return false;
@@ -188,6 +455,43 @@ export class MicroDetailsLayer {
             floraLayer.charInRadius(impactX, impactY, (cfg.crashFloraCharRadius ?? 68) * scale);
         }
 
+        // 4.5. Spawn High-Visibility Supersonic Shockwave Condensation Ring & Shatter Nearby Stalactites
+        if (cfg.shockwaveRingsEnabled !== false) {
+            const maxR = (cfg.shockwaveMaxRadius ?? 280) * scale;
+            const maxLife = Math.max(18, Math.round((cfg.shockwaveDurationTicks ?? 38) * scale));
+            if (this.shockwaves.length >= 6) this.shockwaves.shift();
+            this.shockwaves.push({
+                x: impactX,
+                y: impactY,
+                r: 12,
+                prevR: 0,
+                maxR,
+                life: 0,
+                maxLife,
+                alpha: 0.95
+            });
+        }
+
+        if (cfg.stalactitesEnabled !== false && cfg.stalactiteShatterEnabled !== false && this.stalactites.length > 0) {
+            for (const st of this.stalactites) {
+                if (!st.intact) continue;
+                const d = Math.hypot(st.x - impactX, (st.y + st.length * 0.5) - impactY);
+                if (d < 135 * scale) {
+                    this.shatterStalactite(st, (st.x - impactX) * 0.08);
+                } else if (d < 280 * scale) {
+                    st.shake = 1.0;
+                }
+            }
+        }
+
+        for (const pool of this.waterPools) {
+            const cx = Math.max(pool.x, Math.min(pool.x + pool.w, impactX));
+            const d = Math.hypot(cx - impactX, pool.y - impactY);
+            if (d < 180 * scale) {
+                this.splashWaterAt(cx, pool.y, 7.5 * (1 - d / (180 * scale)));
+            }
+        }
+
         // 5. Spawn a lingering dark smoke plume emitter if the explosion touched a wall, floor, or prefab
         if (cfg.crashSmokeEnabled !== false) {
             let nearSurface = false;
@@ -218,6 +522,138 @@ export class MicroDetailsLayer {
                 });
             }
         }
+    }
+
+    // Rendered BEFORE RockLayer so water edges tuck seamlessly behind the foreground rock contour!
+    drawWaterPools(ctx, camera, viewW, viewH, level, players, bullets, timeSec) {
+        const cfg = RENDER_CONFIG.details;
+        if (!cfg || !cfg.enabled || cfg.waterPoolsEnabled === false) return;
+        if (level && this.builtForLevel !== level) {
+            this.initLevel(level);
+        }
+        if (this.waterPools.length === 0) return;
+
+        const activeShips = players ? Object.values(players).filter(s => !s.isDead) : [];
+        const bulletList = Array.isArray(bullets) ? bullets : [];
+        const padPx = cfg.waterOverlapPx ?? 24;
+
+        ctx.save();
+        for (const pool of this.waterPools) {
+            if (pool.x + pool.w < camera.x - 40 || pool.x > camera.x + viewW + 40 ||
+                pool.bottomY < camera.y - 40 || pool.y > camera.y + viewH + 40) {
+                continue;
+            }
+
+            const n = pool.nodeCount;
+            const totalW = pool.w + padPx * 2;
+            const startX = pool.x - padPx;
+            const stepX = totalW / (n - 1);
+
+            // Ship hull skimming & thruster exhaust depression
+            for (let sIdx = 0; sIdx < activeShips.length; sIdx++) {
+                const s = activeShips[sIdx];
+                if (s.x < pool.x - 50 || s.x > pool.x + pool.w + 50) continue;
+                const dy = pool.y - s.y;
+                const isThrusting = Boolean(!s.isLanded && s.inputs && s.inputs.up && (s.fuel === undefined || s.fuel > 0));
+
+                if (Math.abs(dy) < 22 && s.x >= pool.x && s.x <= pool.x + pool.w) {
+                    const idx = Math.max(1, Math.min(n - 2, Math.floor(((s.x - startX) / totalW) * (n - 1))));
+                    pool.vels[idx] += Math.min(2.8, Math.max(-2.8, (s.vy || 0) * 0.4 + 0.7));
+                    if (Math.random() < 0.22 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                        this.sparks.push({
+                            x: s.x + (Math.random() - 0.5) * 12,
+                            y: pool.y,
+                            vx: -(s.vx || 0) * 0.25 + (Math.random() - 0.5) * 1.4,
+                            vy: -1.0 - Math.random() * 1.2,
+                            gravity: 0.08,
+                            life: 15,
+                            maxLife: 15,
+                            size: 1.7,
+                            color: 'rgba(110, 242, 255, 0.8)'
+                        });
+                    }
+                }
+
+                if (isThrusting && dy > -8 && dy < 90) {
+                    const backX = -Math.cos(s.angle);
+                    const backY = -Math.sin(s.angle);
+                    if (backY > 0.2) {
+                        const hitX = s.x + backX * (dy / backY);
+                        if (hitX >= pool.x && hitX <= pool.x + pool.w) {
+                            const idx = Math.max(1, Math.min(n - 2, Math.floor(((hitX - startX) / totalW) * (n - 1))));
+                            const strength = (1 - dy / 90) * 1.9;
+                            for (let k = -2; k <= 2; k++) {
+                                const ni = idx + k;
+                                if (ni > 0 && ni < n - 1) {
+                                    pool.vels[ni] += (Math.abs(k) === 2 ? -strength * 0.5 : strength * (1 - Math.abs(k) * 0.3));
+                                }
+                            }
+                            if (Math.random() < 0.28 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                                const side = Math.random() > 0.5 ? 1 : -1;
+                                this.sparks.push({
+                                    x: hitX + side * (6 + Math.random() * 8),
+                                    y: pool.y + 1,
+                                    vx: side * (1.1 + Math.random() * 1.6),
+                                    vy: -1.1 - Math.random() * 1.2,
+                                    gravity: 0.09,
+                                    life: 14,
+                                    maxLife: 14,
+                                    size: 1.6,
+                                    color: 'rgba(135, 245, 255, 0.78)'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (let b = 0; b < bulletList.length; b++) {
+                const bul = bulletList[b];
+                if (bul.x >= pool.x && bul.x <= pool.x + pool.w && Math.abs(bul.y - pool.y) < 12) {
+                    const idx = Math.max(1, Math.min(n - 2, Math.floor(((bul.x - startX) / totalW) * (n - 1))));
+                    pool.vels[idx] += 2.0;
+                }
+            }
+
+            // Fast 1D spring integration (zero object allocations)
+            for (let i = 1; i < n - 1; i++) {
+                const neighborAvg = (pool.nodes[i - 1] + pool.nodes[i + 1]) * 0.5;
+                const accel = -0.045 * pool.nodes[i] + (neighborAvg - pool.nodes[i]) * 0.24;
+                pool.vels[i] = (pool.vels[i] + accel) * 0.91;
+            }
+            pool.nodes[0] = 0;
+            pool.nodes[n - 1] = 0;
+            for (let i = 1; i < n - 1; i++) {
+                pool.nodes[i] = Math.max(-8, Math.min(8, pool.nodes[i] + pool.vels[i]));
+            }
+
+            // Draw water body extended by padPx into left, right, and bottom rock (RockLayer masks the edges!)
+            const deepBottomY = pool.bottomY + padPx;
+            ctx.fillStyle = 'rgba(10, 82, 118, 0.62)';
+            ctx.beginPath();
+            ctx.moveTo(startX, deepBottomY);
+            for (let i = 0; i < n; i++) {
+                const wx = startX + i * stepX;
+                const wy = pool.y + pool.nodes[i] + Math.sin(timeSec * 2.4 + i * 0.6) * 0.7;
+                ctx.lineTo(wx, wy);
+            }
+            ctx.lineTo(startX + totalW, deepBottomY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Crisp glowing cyan surface meniscus
+            ctx.strokeStyle = 'rgba(120, 245, 255, 0.72)';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            for (let i = 0; i < n; i++) {
+                const wx = startX + i * stepX;
+                const wy = pool.y + pool.nodes[i] + Math.sin(timeSec * 2.4 + i * 0.6) * 0.7;
+                if (i === 0) ctx.moveTo(wx, wy);
+                else ctx.lineTo(wx, wy);
+            }
+            ctx.stroke();
+        }
+        ctx.restore();
     }
 
     updateAndDraw(ctx, camera, viewW, viewH, level, players, turrets, bullets, timeSec, rockLayer, floraLayer) {
@@ -273,6 +709,84 @@ export class MicroDetailsLayer {
             ctx.globalAlpha = 1.0;
         }
 
+        // 1.5. Magnetic Anomaly Plasma Arcs (Gravity Wells 0xCC - 0xCF locking onto ships!)
+        if (cfg.gravityArcsEnabled !== false && players && this.gravStreams.length > 0) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            for (const id in players) {
+                const p = players[id];
+                if (p.isDead) continue;
+                if (p.x < camera.x - 120 || p.x > camera.x + viewW + 120 || p.y < camera.y - 120 || p.y > camera.y + viewH + 120) continue;
+
+                // Find all gravity well tiles within range of the ship
+                const nearbyWells = [];
+                for (let i = 0; i < this.gravStreams.length; i++) {
+                    const gs = this.gravStreams[i];
+                    const d = Math.hypot(gs.x - p.x, gs.y - p.y);
+                    if (d < 135) {
+                        nearbyWells.push({ gs, d });
+                    }
+                }
+                if (nearbyWells.length === 0) continue;
+
+                nearbyWells.sort((a, b) => a.d - b.d);
+                const primary = nearbyWells[0].gs;
+
+                // Draw pulsing magnetic containment corona around the ship hull
+                const pulse = 0.65 + 0.35 * Math.sin(timeSec * 18 + p.x * 0.1);
+                const grad = ctx.createRadialGradient(p.x, p.y, 6, p.x, p.y, 34);
+                grad.addColorStop(0, `rgba(195, 110, 255, ${0.42 * pulse})`);
+                grad.addColorStop(0.6, `rgba(0, 242, 254, ${0.22 * pulse})`);
+                grad.addColorStop(1, 'rgba(180, 90, 255, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 34, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw directional pull chevrons on the ship showing the active magnet force vector
+                for (let c = 0; c < 3; c++) {
+                    const ct = ((timeSec * 3.5 + c * 0.33) % 1);
+                    const cx = p.x + primary.vx * (10 + ct * 24);
+                    const cy = p.y + primary.vy * (10 + ct * 24);
+                    const perpX = -primary.vy * 6;
+                    const perpY = primary.vx * 6;
+                    ctx.strokeStyle = `rgba(0, 242, 254, ${(1 - ct) * 0.85})`;
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.moveTo(cx - primary.vx * 5 + perpX, cy - primary.vy * 5 + perpY);
+                    ctx.lineTo(cx, cy);
+                    ctx.lineTo(cx - primary.vx * 5 - perpX, cy - primary.vy * 5 - perpY);
+                    ctx.stroke();
+                }
+
+                // Draw crackling jagged plasma lightning tendrils from the closest gravity tiles to the ship hull
+                const arcCount = Math.min(3, nearbyWells.length);
+                for (let a = 0; a < arcCount; a++) {
+                    const well = nearbyWells[a].gs;
+                    const segs = 6;
+                    const dx = p.x - well.x;
+                    const dy = p.y - well.y;
+                    const nx = -dy / (Math.hypot(dx, dy) || 1);
+                    const ny = dx / (Math.hypot(dx, dy) || 1);
+
+                    ctx.strokeStyle = a % 2 === 0 ? 'rgba(205, 130, 255, 0.85)' : 'rgba(90, 245, 255, 0.85)';
+                    ctx.lineWidth = a === 0 ? 2.2 : 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(well.x, well.y);
+                    for (let s = 1; s < segs; s++) {
+                        const t = s / segs;
+                        const jitter = Math.sin(timeSec * 42 + s * 7.3 + a * 3.1) * 11 * Math.sin(t * Math.PI);
+                        ctx.lineTo(well.x + dx * t + nx * jitter, well.y + dy * t + ny * jitter);
+                    }
+                    ctx.lineTo(p.x, p.y);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
         // 2. Ship Thruster Surface Dust/Scorch & Landing Touchdown Effects
         if (players && level?.rawMap) {
             for (const id in players) {
@@ -284,20 +798,43 @@ export class MicroDetailsLayer {
                     if (cfg.landingEffectsEnabled !== false && prev && !prev.isLanded && p.isLanded) {
                         const impactVy = Math.max(0, prev.vy || 0.8);
                         const hardLanding = impactVy >= (cfg.hardLandingVyThreshold ?? 1.25);
-                        const puffCount = hardLanding ? 8 : 5;
+                        const puffCount = hardLanding ? 7 : 4;
                         for (let i = 0; i < puffCount && this.sparks.length < (cfg.maxSparks ?? 90); i++) {
                             const dir = i % 2 === 0 ? -1 : 1;
                             this.sparks.push({
-                                x: p.x + dir * (8 + Math.random() * 6),
+                                x: p.x + dir * (6 + Math.random() * 5),
                                 y: p.y + 12,
-                                vx: dir * (0.8 + Math.random() * 1.8),
-                                vy: -0.2 - Math.random() * 0.6,
-                                gravity: hardLanding ? 0.08 : -0.01,
-                                life: 16 + Math.floor(Math.random() * 10),
-                                maxLife: 26,
+                                vx: dir * (0.35 + Math.random() * 0.55),
+                                vy: -0.10 - Math.random() * 0.35,
+                                gravity: hardLanding ? 0.06 : -0.02,
+                                life: 22 + Math.floor(Math.random() * 14),
+                                maxLife: 36,
                                 size: hardLanding ? 1.8 : 2.5,
                                 color: hardLanding ? '#ffd260' : 'rgba(190, 200, 215, 0.55)'
                             });
+                        }
+                        // Slow, lingering cryo-frost mist that stays near the landing gear and dissolves gradually
+                        const ventCount = cfg.padVentCountPerSide ?? 4;
+                        const ventSpdX = cfg.padVentSpeedX ?? 0.42;
+                        const ventLife = cfg.padVentLifeTicks ?? 88;
+                        const ventAlpha = cfg.padVentAlpha ?? 0.34;
+                        const ventGrow = cfg.padVentGrowRate ?? 0.06;
+                        for (let side of [-1, 1]) {
+                            for (let k = 0; k < ventCount && this.smokePuffs.length < 75; k++) {
+                                const lifeTicks = ventLife + Math.floor((Math.random() - 0.5) * 20);
+                                this.smokePuffs.push({
+                                    x: p.x + side * (5 + k * 3.5),
+                                    y: p.y + 13.5,
+                                    vx: side * (ventSpdX * (0.55 + Math.random() * 0.65)),
+                                    vy: -0.04 - Math.random() * 0.09,
+                                    r: 3.4 + Math.random() * 1.8,
+                                    grow: ventGrow,
+                                    life: lifeTicks,
+                                    maxLife: lifeTicks,
+                                    rgb: '220, 248, 255',
+                                    peakAlpha: ventAlpha
+                                });
+                            }
                         }
                     }
 
@@ -357,6 +894,131 @@ export class MicroDetailsLayer {
                     isLanded: Boolean(p.isLanded),
                     vy: p.vy || 0
                 });
+            }
+        }
+
+        // 2.8. Update & Draw Atmospheric Hanging Ceiling Stalactites & Tumbling Rock Shards
+        if (cfg.stalactitesEnabled !== false && this.stalactites.length > 0) {
+            const activeShips = players ? Object.values(players).filter(s => !s.isDead) : [];
+            const stAlpha = cfg.stalactiteAlpha ?? 0.88;
+            const rimAlpha = cfg.stalactiteRimAlpha ?? 0.55;
+            for (const st of this.stalactites) {
+                if (st.x < camera.x - 40 || st.x > camera.x + viewW + 40 ||
+                    st.y + st.length < camera.y - 40 || st.y > camera.y + viewH + 40) {
+                    continue;
+                }
+
+                // Check direct ship collision or close thruster resonance
+                if (st.intact) {
+                    for (const s of activeShips) {
+                        const d = Math.hypot(s.x - st.x, s.y - (st.y + st.length * 0.5));
+                        if (d < 20) {
+                            this.shatterStalactite(st, s.vx || 0);
+                            break;
+                        } else if (d < 75 && s.inputs?.up) {
+                            st.shake = Math.min(1.0, st.shake + 0.12);
+                            if (Math.random() < 0.25 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                                this.sparks.push({
+                                    x: st.x + (Math.random() - 0.5) * 5,
+                                    y: st.y + st.length * 0.85,
+                                    vx: (Math.random() - 0.5) * 0.35,
+                                    vy: 0.7 + Math.random() * 0.8,
+                                    gravity: 0.04,
+                                    life: 24,
+                                    maxLife: 24,
+                                    size: 1.4,
+                                    color: 'rgba(185, 130, 80, 0.7)'
+                                });
+                            }
+                        }
+                    }
+                }
+
+                const jitterX = st.shake > 0 ? Math.sin(timeSec * 55 + st.x) * st.shake * 2.4 : 0;
+                if (st.shake > 0) st.shake = Math.max(0, st.shake - 0.03);
+
+                const drawLen = st.intact ? st.length : st.length * 0.28;
+                const tipX = st.x + st.skew + jitterX;
+                const tipY = st.y + drawLen;
+
+                // West warm lit rock facet
+                ctx.fillStyle = `rgba(122, 79, 48, ${stAlpha})`;
+                ctx.beginPath();
+                ctx.moveTo(st.x - st.halfW, st.y);
+                ctx.lineTo(st.x, st.y);
+                ctx.lineTo(tipX, tipY);
+                ctx.closePath();
+                ctx.fill();
+
+                // East deep shadow rock facet
+                ctx.fillStyle = `rgba(56, 34, 21, ${stAlpha})`;
+                ctx.beginPath();
+                ctx.moveTo(st.x, st.y);
+                ctx.lineTo(st.x + st.halfW, st.y);
+                ctx.lineTo(tipX, tipY);
+                ctx.closePath();
+                ctx.fill();
+
+                // Ochre mineral ridge highlight so stalactites stand out against the dark cavern
+                if (rimAlpha > 0) {
+                    ctx.strokeStyle = `rgba(185, 130, 80, ${rimAlpha})`;
+                    ctx.lineWidth = 1.1;
+                    ctx.beginPath();
+                    ctx.moveTo(st.x - st.halfW, st.y);
+                    ctx.lineTo(tipX, tipY);
+                    ctx.stroke();
+                }
+            }
+
+            // Update & render tumbling shattered stalactite shards
+            for (let i = this.fallingShards.length - 1; i >= 0; i--) {
+                const sh = this.fallingShards[i];
+                sh.vy += 0.14;
+                sh.x += sh.vx;
+                sh.y += sh.vy;
+                sh.angle += sh.spin;
+                sh.life--;
+
+                if (this.splashWaterAt(sh.x, sh.y, 6.5)) {
+                    this.fallingShards.splice(i, 1);
+                    continue;
+                }
+
+                const tx = Math.floor(sh.x / 32);
+                const ty = Math.floor(sh.y / 32);
+                const tid = level?.rawMap?.[ty]?.[tx] ?? 0;
+                if (sh.life <= 0 || (tid > 0 && tid < 0x90 && tid !== 0x20)) {
+                    for (let k = 0; k < 5 && this.sparks.length < (cfg.maxSparks ?? 90); k++) {
+                        this.sparks.push({
+                            x: sh.x,
+                            y: sh.y,
+                            vx: (Math.random() - 0.5) * 2.6,
+                            vy: -0.8 - Math.random() * 1.8,
+                            gravity: 0.09,
+                            life: 18,
+                            maxLife: 18,
+                            size: 1.9,
+                            color: k % 2 === 0 ? '#b98250' : '#5c3c26'
+                        });
+                    }
+                    this.fallingShards.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.translate(sh.x, sh.y);
+                ctx.rotate(sh.angle);
+                ctx.fillStyle = '#6e472b';
+                ctx.strokeStyle = '#b98250';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(-sh.halfW, -sh.length * 0.5);
+                ctx.lineTo(sh.halfW, -sh.length * 0.5);
+                ctx.lineTo(0, sh.length * 0.5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
             }
         }
 
@@ -501,6 +1163,70 @@ export class MicroDetailsLayer {
                 ctx.fill();
             }
             ctx.globalAlpha = 1.0;
+        }
+
+        // 6.5. Update & Draw Supersonic Shockwave Condensation Rings & Ceiling Dust Curtain
+        if (cfg.shockwaveRingsEnabled !== false && this.shockwaves.length > 0) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+                const sw = this.shockwaves[i];
+                sw.prevR = sw.r;
+                sw.life++;
+                const progress = sw.life / sw.maxLife;
+                if (progress >= 1.0) {
+                    this.shockwaves.splice(i, 1);
+                    continue;
+                }
+
+                // Smooth ease-out expansion and quadratic fade-out so rings always vanish cleanly
+                const easeOut = 1.0 - Math.pow(1.0 - progress, 2.2);
+                sw.r = 12 + (sw.maxR - 12) * easeOut;
+                const alpha = Math.pow(1.0 - progress, 1.8) * sw.alpha;
+
+                // Outer refractive Mach condensation ring
+                ctx.strokeStyle = `rgba(165, 238, 255, ${alpha * 0.85})`;
+                ctx.lineWidth = Math.max(1.5, 6.5 * (1.0 - progress));
+                ctx.beginPath();
+                ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Inner thermal pressure wave
+                ctx.strokeStyle = `rgba(255, 195, 95, ${alpha * 0.55})`;
+                ctx.lineWidth = Math.max(1.0, 3.0 * (1.0 - progress));
+                ctx.beginPath();
+                ctx.arc(sw.x, sw.y, sw.r * 0.84, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Shake loose a curtain of mineral dust from ceiling contours crossed by the shockwave front
+                if (level?.walls) {
+                    for (const wall of level.walls) {
+                        for (let w = 0; w < wall.length - 1; w += 3) {
+                            const pt = wall[w];
+                            if (pt.y > sw.y + 40) continue; // Prefer ceilings & upper walls
+                            const d = Math.hypot(pt.x - sw.x, pt.y - sw.y);
+                            if (d >= sw.prevR && d <= sw.r) {
+                                const nextPt = wall[w + 1];
+                                const segDx = nextPt.x - pt.x;
+                                if (segDx < -0.5 && this.sparks.length < 130) { // Ceiling segment
+                                    this.sparks.push({
+                                        x: pt.x + (Math.random() - 0.5) * 8,
+                                        y: pt.y + 4,
+                                        vx: (Math.random() - 0.5) * 0.6,
+                                        vy: 0.9 + Math.random() * 1.6,
+                                        gravity: 0.05,
+                                        life: 32 + Math.floor(Math.random() * 20),
+                                        maxLife: 52,
+                                        size: 1.8 + Math.random() * 1.4,
+                                        color: 'rgba(205, 155, 105, 0.78)'
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ctx.restore();
         }
 
         // 7. Crystalline Glints on the Rock Rim (Triggered by Camera Motion or Ship Proximity)

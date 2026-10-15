@@ -357,6 +357,15 @@ export class FloraLayer {
                 continue;
             }
 
+            // Check if droplet lands in an interactive subterranean water pool
+            if (window.gfRenderer?.details?.splashWaterAt) {
+                if (window.gfRenderer.details.splashWaterAt(d.x, d.y, 2.6)) {
+                    if (spawnParticlesFn) spawnParticlesFn(d.x, d.y, 0, -0.7, 'rgba(0, 242, 254, 0.75)', 3, 14);
+                    this.drips.splice(i, 1);
+                    continue;
+                }
+            }
+
             // Check Solid Floor / Pad Hit for Puddle Ripples
             let hitFloor = d.life <= 0;
             if (!hitFloor && level?.rawMap) {

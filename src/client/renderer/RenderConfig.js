@@ -133,6 +133,11 @@ export const RENDER_CONFIG = {
         maxSmokePuffs: 35,
         landingEffectsEnabled: true,
         hardLandingVyThreshold: 1.25,
+        padVentCountPerSide: 4,        // Number of slow vapor puffs per side on touchdown
+        padVentSpeedX: 0.42,           // Gentle horizontal drift speed so vapor stays near the ship
+        padVentLifeTicks: 88,          // Long, slow dissolve time (in frames)
+        padVentAlpha: 0.34,            // Soft, subtle mist opacity
+        padVentGrowRate: 0.06,         // Slow expansion rate as mist dissolves
         padWeightInteractionEnabled: true,
         shyFloraEnabled: true,
         shySpeedThreshold: 4.2,
@@ -158,7 +163,42 @@ export const RENDER_CONFIG = {
         crashSmokeAlpha: 0.75,        // High-visibility peak opacity for dark crash smoke
         maxCrashPlumes: 12,           // Max concurrent smoking crash sites
         smokePushRadius: 75,          // Radius where ships push smoke particles aside
-        smokePushForce: 0.85          // Strength of ship thruster wash deflection on smoke
+        smokePushForce: 0.85,          // Strength of ship thruster wash deflection on smoke
+        waterPoolsEnabled: true,
+        maxWaterPools: 6,              // Max subterranean pools per level
+        waterRarityChance: 0.85,       // Chance for a qualifying basin to hold water
+        waterMinSpanTiles: 2,          // Minimum width (in 32px tiles) of a rock/tree basin
+        waterMaxSpanTiles: 10,         // Maximum width (in 32px tiles) of a rock/tree basin
+        waterMinBankRiseTiles: 1,      // Left & right banks must rise at least this many tiles above the pool floor
+        waterDepthPx: 18,              // Depth of water surface inside the bottom of the rock basin
+        waterOverlapPx: 24,            // How far water extends into surrounding solid tiles (clipped by RockLayer)
+        waterAllowTreeBases: true,     // Allow water to pool against Ground->Tree transitions and tree roots
+        waterAllowedGroundTiles: [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0F,
+            0x11, 0x12, 0x14, 0x16, 0x17, 0x19, 0x1A, 0x22, 0x23,
+            0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
+            0x73, 0x74, 0x76, 0x84, 0x85
+        ],
+        waterAllowedTreeTiles: [
+            // Ground->Tree base transitions:
+            0x2A, 0x31, 0x34, 0x39, 0x3A,
+            // Solid Tree trunks & vine bases:
+            0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x35, 0x36, 0x37, 0x38
+        ],
+        stalactitesEnabled: true,      // Master toggle for hanging ceiling stalactites
+        stalactiteInRacesEnabled: false, // Disabled in race levels so pilots never mistake them for solid obstacles
+        stalactiteShatterEnabled: true,
+        stalactiteAlpha: 0.88,         // Opacity of hanging ceiling stalactites
+        stalactiteRimAlpha: 0.55,      // Opacity of the ochre mineral ridge line
+        stalactiteMinLength: 22,       // Minimum stalactite spike length (px)
+        stalactiteMaxLength: 48,       // Maximum stalactite spike length (px)
+        stalactiteMinHalfWidth: 4.2,   // Minimum stalactite base half-width (px)
+        stalactiteMaxHalfWidth: 8.0,   // Maximum stalactite base half-width (px)
+        maxHangingStalactites: 55,
+        shockwaveRingsEnabled: true,
+        shockwaveMaxRadius: 280,
+        shockwaveDurationTicks: 38,    // Guaranteed frame lifetime before cleanup
+        gravityArcsEnabled: true
     }
 };
 

@@ -962,6 +962,9 @@
                         r.angle = lerpAngle(r.angle, s.angle, 0.3);
                     }
                     r.isDead = s.isDead; 
+                    r.isLanded = s.isLanded;
+                    r.vx = s.vx;
+                    r.vy = s.vy;
                     r.inputs = s.inputs;
                     r.score = s.score;
                     r.fuel = s.fuel;
@@ -1029,6 +1032,9 @@
             // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs
             if (window.gfRenderer) {
                 window.gfRenderer.rock.drawRecessed(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level);
+                if (window.gfRenderer.details) {
+                    window.gfRenderer.details.drawWaterPools(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level, renderState.players, serverState.bullets, timeSec);
+                }
                 window.gfRenderer.rock.draw(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H);
                 window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
             }
