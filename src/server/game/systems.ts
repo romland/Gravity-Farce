@@ -161,7 +161,7 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
             const oBot = ecs.bots.get(oe);
             
             if (Math.abs(ot.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ot.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: oInv?.stack || [], fuel: oFuel?.current || 0, race: op.race, alias: op.alias, lives: op.lives, ping: op.ping, isBot: !!oBot, botState: oBot?.state, botPath: oBot?.path ? oBot.path.slice(0, 3) : undefined };
+                 state.players[op.id] = { x: ot.x, y: ot.y, vx: ov.vx, vy: ov.vy, angle: ot.angle, angleStep: op.angleStep, isDead: op.isDead, isLanded: op.isLanded, inputs: op.inputs, score: op.score, cargoStack: oInv?.stack || [], fuel: oFuel?.current || 0, race: op.race, alias: op.alias, lives: op.lives, ping: op.ping, isBot: !!oBot, botState: SERVER_CONFIG.debugMode ? oBot?.state : undefined, botPath: (SERVER_CONFIG.debugMode && oBot?.path) ? oBot.path.slice(0, 3) : undefined };
             }
         }
         for (const [te, turret] of ecs.turrets.entries()) {
