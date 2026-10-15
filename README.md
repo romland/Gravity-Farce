@@ -1,7 +1,7 @@
 # Gravity Farce
 
 #### **There are many gravity games, a bunch of copy-cats and some predecessors.**  
-### But `Gravity-Force` by Stephan Wenzler was simply the best.  
+### But `Gravity-Force` on the Amiga by Stephan Wenzler was simply the best.  
 <img width="300px" src="./.github/gf2026.jpg" align="right">
 
 ...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
@@ -22,7 +22,7 @@ with latency differences. To this day I have not done _much_ to even out the pla
 but it is definitely on the list of things to add. The primary reason it's not in there yet is because it is a 
 bit of a conflict with what the original Gravity-Force was: You _felt_ like you had full control, down to the pixel.
 I mean, I know I counted on the nose of my ship literally being pixel-to-pixel against the wall in turns. So, yeah, I 
-am worried that I will lose a bit of that feeling then! But, would have to test it and see!
+am worried that I will lose a bit of that feeling then! But, would have to test it and see!  
 
 [1]: SOME types of cheating is close to impossible to fix in code due to the nature of networked play. Server admins can make their decisions on a case-by-case basis.
 
@@ -85,7 +85,7 @@ I (and my good friend, the LLM) have tried to document as much of the weirder de
 There was replay functionality at least partially implemented in the original Gravity-Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
 
 ### Disclaimer
-Generative models were obviously used. I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
+Generative models were obviously used. I had fun creating it. _Creating things_ was always the fun part, the tools 
 used were always rather secondary.  
 
 At the end of the day, nothing changed: Shit still takes time.
