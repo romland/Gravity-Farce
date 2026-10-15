@@ -58,15 +58,17 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
          const weight = inv ? inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0) : 0;
          const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
          const weightThrust = THRUST_IMPULSE * (1.0 - (weight * 0.15));
+        const thrustScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
 
         if (p.isLanded) {
+         const thrustScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
             v.vx = 0; 
             v.vy = 0; 
             p.angleAcc = 54000; 
             p.angleStep = 27; 
             t.angle = -Math.PI / 2;
             
-            if (p.inputs.up) {
+            if (thrustScale > 0.5) { // Needs sufficient thrust to lift off
                 p.isLanded = false;
                 v.vy = -1.2;
             } else {
@@ -74,22 +76,27 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
             }
         }
 
-        if (p.inputs.left) {
-            p.angleAcc = (p.angleAcc - ROTATION_SPEED + 72000) % 72000;
-        }
-        if (p.inputs.right) {
-            p.angleAcc = (p.angleAcc + ROTATION_SPEED) % 72000;
+        if (p.inputs.analogX) {
+            const rot = Math.round(ROTATION_SPEED * p.inputs.analogX);
+            p.angleAcc = (p.angleAcc + rot + 72000) % 72000;
+        } else {
+            if (p.inputs.left) {
+                p.angleAcc = (p.angleAcc - ROTATION_SPEED + 72000) % 72000;
+            }
+            if (p.inputs.right) {
+                p.angleAcc = (p.angleAcc + ROTATION_SPEED) % 72000;
+            }
         }
 
         p.angleStep = Math.floor(p.angleAcc / 2000) % 36;
         t.angle = (p.angleStep * (Math.PI * 2)) / 36;
 
-        if (p.inputs.up && f && f.current > 0) {
-             const drain = Math.min(15, f.current);
+        if (thrustScale > 0 && f && f.current > 0) {
+             const drain = Math.min(15 * thrustScale, f.current);
              f.current -= drain;
              f.consumed += drain;
-             v.vx += Math.cos(t.angle) * weightThrust;
-             v.vy += Math.sin(t.angle) * weightThrust;
+             v.vx += Math.cos(t.angle) * weightThrust * thrustScale;
+             v.vy += Math.sin(t.angle) * weightThrust * thrustScale;
         }
         
         // Gravity Wells / Magnets (0xCC - 0xCF)

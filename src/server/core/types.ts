@@ -5,6 +5,8 @@ import type { PlayerRaceState } from './ecs';
 export interface Inputs {
     up: boolean; left: boolean;
     right: boolean; shoot: boolean;
+    analogX?: number;
+    analogUp?: number;
 }
 
 export interface LevelEntity {

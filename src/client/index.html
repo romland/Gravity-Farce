@@ -138,6 +138,7 @@
     </style>
     <script src="/socket.io/socket.io.js"></script>
     <script src="AssetManager.js"></script>
+    <script src="InputManager.js"></script>
 </head>
 <body>
     <div id="loading-screen" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#050505; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#4facfe; font-weight:bold; letter-spacing:2px;">
@@ -281,85 +282,28 @@
         let cameraShake = 0;
         let metrics = { bytesIn: 0, bytesOut: 0, packetsIn: 0, packetsOut: 0 };
 
-        const inputs = { up: false, left: false, right: false, shoot: false };
-        
-        function emitInputs() { socket.emit('input', inputs); }
-
-        function bindTouch(id, key) {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('touchstart', (e) => { e.preventDefault(); inputs[key] = true; emitInputs(); }, {passive: false});
-            el.addEventListener('touchend', (e) => { e.preventDefault(); inputs[key] = false; emitInputs(); }, {passive: false});
-            el.addEventListener('touchcancel', (e) => { e.preventDefault(); inputs[key] = false; emitInputs(); }, {passive: false});
-        }
-        bindTouch('btn-left', 'left');
-        bindTouch('btn-right', 'right');
-        bindTouch('btn-thrust', 'up');
-        bindTouch('btn-fire', 'shoot');
-
         let freecam = false;
         let debugMode = false;
         let showDebugLines = false;
-        const camKeys = { up: false, down: false, left: false, right: false };
 
-        window.addEventListener('keydown', (e) => {
-            if (document.activeElement.tagName === 'INPUT') return;
-            
-            if (e.code === 'Escape') {
-                socket.emit('leave_replay');
-                return;
-            }
-            if (e.code === 'KeyR') {
-                socket.emit('watch_latest_replay');
-                return;
-            }
-
-            if (debugMode) {
-                if (e.code === 'KeyP') { socket.emit('debug_action', 'pause'); return; }
-                if (e.code === 'KeyV') { showDebugLines = !showDebugLines; return; }
-                if (e.code === 'KeyC') { freecam = !freecam; return; }
-                if (e.code === 'KeyU') { socket.emit('debug_action', 'powerup-0xD6'); return; }
-                if (e.code === 'KeyI') { socket.emit('debug_action', 'powerup-0xD7'); return; }
-                if (e.code === 'KeyO') { socket.emit('debug_action', 'powerup-0xD8'); return; }
-                if (e.code === 'KeyB') { socket.emit('debug_action', 'spawn_bot'); return; }
-                if (e.code === 'KeyN') { socket.emit('debug_action', 'dump_bots'); return; }
-                if (e.code === 'KeyL' || e.code === 'KeyJ') {
+        const inputManager = new InputManager(null, (inputs) => {
+            if (!freecam) socket.emit('input', inputs);
+        }, (action) => {
+            if (action === 'leaveReplay') socket.emit('leave_replay');
+            else if (action === 'watchReplay') socket.emit('watch_latest_replay');
+            else if (debugMode) {
+                if (action === 'pause') socket.emit('debug_action', 'pause');
+                else if (action === 'toggleDebugLines') showDebugLines = !showDebugLines;
+                else if (action === 'toggleFreecam') freecam = !freecam;
+                else if (action === 'powerup2x') socket.emit('debug_action', 'powerup-0xD6');
+                else if (action === 'powerup3x') socket.emit('debug_action', 'powerup-0xD7');
+                else if (action === 'powerupRear') socket.emit('debug_action', 'powerup-0xD8');
+                else if (action === 'spawnBot') socket.emit('debug_action', 'spawn_bot');
+                else if (action === 'dumpBots') socket.emit('debug_action', 'dump_bots');
+                else if (action === 'jumpLevel') {
                     const lvl = prompt("Jump to level (0-99):");
-                    if (lvl !== null && !isNaN(parseInt(lvl))) {
-                        socket.emit('debug_action', 'jump', { levelIndex: parseInt(lvl) });
-                    }
-                    return;
+                    if (lvl !== null && !isNaN(parseInt(lvl))) socket.emit('debug_action', 'jump', { levelIndex: parseInt(lvl) });
                 }
-            }
-            
-            if (e.code === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyS' || e.code === 'Numpad5') inputs.up = true;
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'Numpad4') inputs.left = true;
-            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Numpad6') inputs.right = true;
-            if (e.code === 'Return' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Numpad8') inputs.shoot = true;
-
-            if (freecam) {
-                if (e.code === 'ArrowUp') camKeys.up = true;
-                if (e.code === 'ArrowDown') camKeys.down = true;
-                if (e.code === 'ArrowLeft') camKeys.left = true;
-                if (e.code === 'ArrowRight') camKeys.right = true;
-            } else {
-                emitInputs();
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyS' || e.code === 'Numpad5') inputs.up = false;
-            if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'Numpad4') inputs.left = false;
-            if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Numpad6') inputs.right = false;
-            if (e.code === 'Return' || e.code === 'Enter' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Numpad8') inputs.shoot = false;
-
-            if (freecam) {
-                if (e.code === 'ArrowUp') camKeys.up = false;
-                if (e.code === 'ArrowDown') camKeys.down = false;
-                if (e.code === 'ArrowLeft') camKeys.left = false;
-                if (e.code === 'ArrowRight') camKeys.right = false;
-            } else {
-                emitInputs();
             }
         });
 
@@ -624,7 +568,7 @@
                         spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
                         let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
-                        if (dist < 800) cameraShake = Math.max(cameraShake, 10 * (1 - dist / 800));
+                        if (dist < 800) { cameraShake = Math.max(cameraShake, 10 * (1 - dist / 800)); inputManager.vibrate(150, 0.4 * (1 - dist / 800), 0.4 * (1 - dist / 800)); }
                         window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 160, 1.0);
                         window.gfRenderer?.details?.onExplosion(
                             ev.x, ev.y, 0, 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 0.85
@@ -632,13 +576,17 @@
                     } else if (ev.type === 'large_explosion') {
                         spawnLargeExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0);
                         let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
-                        if (dist < 800) cameraShake = Math.max(cameraShake, 18 * (1 - dist / 800));
+                        if (dist < 800) { cameraShake = Math.max(cameraShake, 18 * (1 - dist / 800)); inputManager.vibrate(300, 0.8 * (1 - dist / 800), 0.8 * (1 - dist / 800)); }
                         window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 200, 1.0);
                         window.gfRenderer?.details?.onExplosion(
                             ev.x, ev.y, ev.vx || 0, ev.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
                         );
                     } else if (ev.type === 'sound') {
                         playTurretSound(ev.soundId);
+                        if (ev.soundId === 10) {
+                            let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
+                            if (dist < 800) inputManager.vibrate(100, 0.5 * (1 - dist / 800), 0.2 * (1 - dist / 800));
+                        }
                     } else if (ev.type === 'floating_text') {
                         floatingTexts.push({ text: ev.text, x: ev.x, y: ev.y, color: ev.color || '#fff', life: 60, maxLife: 60 });
                     }
@@ -662,8 +610,8 @@
 
                     // Force reset local inputs so we don't hold thrust/fire while dead
                     if (id === myId) {
-                        inputs.up = inputs.left = inputs.right = inputs.shoot = false;
-                        emitInputs();
+                        inputManager.vibrate(600, 1.0, 1.0);
+                        inputManager.forceReset();
                     }
                 }
             }
@@ -929,13 +877,14 @@
             
             ctx.shadowBlur = 0;
 
-            if (p.inputs && p.inputs.up && p.fuel > 0) {
+            if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && p.fuel > 0) {
+                const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
                 ctx.fillStyle = '#4facfe';
                 ctx.beginPath();
                 ctx.moveTo(-8, 0); 
-                ctx.lineTo(-16 - Math.random() * 15, 0);
-                ctx.lineTo(-8, 2); 
-                ctx.lineTo(-8, -2); 
+                ctx.lineTo(-16 - Math.random() * 15 * scale, 0);
+                ctx.lineTo(-8, 2 * scale); 
+                ctx.lineTo(-8, -2 * scale); 
                 ctx.fill();
             }
 
@@ -1236,13 +1185,17 @@
             console.log(out);
         };
 
+        let _gameLoopCrashed = false;
         function gameLoop() {
+            if (_gameLoopCrashed) return;
             requestAnimationFrame(gameLoop);
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            const timeSec = performance.now() * 0.001;
-            let renderCamX = camera.x;
-            let renderCamY = camera.y;
+            inputManager.updateGamepad();
+            try {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                const timeSec = performance.now() * 0.001;
+                 let renderCamX = camera.x;
+                 let renderCamY = camera.y;
             if (cameraShake > 0.1) {
                 renderCamX += (Math.random() - 0.5) * cameraShake;
                 renderCamY += (Math.random() - 0.5) * cameraShake;
@@ -1299,10 +1252,10 @@
 
             if (freecam) {
                 const camSpeed = 15;
-                if (camKeys.up) camera.y -= camSpeed;
-                if (camKeys.down) camera.y += camSpeed;
-                if (camKeys.left) camera.x -= camSpeed;
-                if (camKeys.right) camera.x += camSpeed;
+                if (inputManager.state.cam.up) camera.y -= camSpeed;
+                if (inputManager.state.cam.down) camera.y += camSpeed;
+                if (inputManager.state.cam.left) camera.x -= camSpeed;
+                if (inputManager.state.cam.right) camera.x += camSpeed;
             } else {
                 if (myPlayer && myServerPlayer) {
                     let raceUI = '';
@@ -1330,9 +1283,9 @@
                     let targetX = myPlayer.x - VIEW_W / 2;
                     let targetY = myPlayer.y - VIEW_H / 2;
                     
-                    // Clamp camera strictly to map bounds
-                    targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
-                    targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
+                     // Clamp camera strictly to map bounds
+                     targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
+                     targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
 
                     camera.x += (targetX - camera.x) * 0.1;
                     camera.y += (targetY - camera.y) * 0.1;
@@ -1532,6 +1485,10 @@
 
             updateAndDrawFireworks(ctx);
             ctx.restore();
+            } catch (e) {
+                _gameLoopCrashed = true;
+                console.error("CLIENT LOOP CRASH:", e);
+            }
         }
 
         const loginModal = document.getElementById('login-modal');

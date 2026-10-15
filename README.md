@@ -1,7 +1,7 @@
-# Gravity Farce
+# Gravity-Farce
 
 #### **There are many gravity games, a bunch of copy-cats and some predecessors.**  
-### But `Gravity-Force` on the Amiga by Stephan Wenzler was simply the best.  
+### But `Gravity-Force` by Stephan Wenzler was simply the best.  
 <img width="300px" src="./.github/gf2026.jpg" align="right">
 
 ...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
@@ -45,7 +45,7 @@ _But obviously, multi-player is the way to go!_ `:D`
 I also added _optional_ bots to the single-player disciplines. I'm quite pleased with them as they're dumb enough, and not too dumb.
 
 ### 4. Bump bump
-Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies`.
+Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies` (bumping is default).
 
 ### Not really a port
 I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the 68K assembly code. There are a LOT of clones of Gravity-Force out there, but all of them have their own levels, pathing, missions. I wanted to get the original feeling back, but yeah, absolutely, there are subtle and not so subtle differences _everywhere_ in this version too! Hopefully all for the better!
@@ -66,6 +66,11 @@ original game. For instance, all enemies and turrets should move pretty much exa
 in the original game. This is also why there is no map editor. There is documentation on some of
 the funky stuff in the `doc` dir.
 
+### Gamepads & Analog Precision
+It was fun with a joystick but you had to master both the stick and the keyboard or you'd be screwed if some bespoke challenge came up. Due to this, I decided to add support for gamepads (only tested with an Xbox controller for now). First of all, it was absolutely horrible to have the old "joystick up" to fire with it, so other buttons to shoot are supported too. Second, I decided to add support for `analog thrust and steering`. Oh boy. Holy moly, did the game get easier in some cases. So, yeah:  
+
+**Server Admins:** Analog precision gives players a competitive advantage, by default I have it `disabled` -- for that sweet digital experience. But you can set `"allowAnalogControl": true` in `server_config.json` if you want it differently. Regardless of that setting, gamepads/controllers will still work perfectly fine without analog controls, but will then require the same amount of work as a keyboard.
+
 ### Amiga
 Oh how awesome you were. I have not used any emulator or a real Amiga in decades,
 and what really surprised me was that while digging around in the 68k code
@@ -84,12 +89,6 @@ Luckily, if you're old enough to remember Amiga fondly, you have no hair any mor
 I (and my good friend, the LLM) have tried to document as much of the weirder details as I could in `doc`, but some were lost along the way.  
 There was replay functionality at least partially implemented in the original Gravity-Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
 
-### Disclaimer
-Generative models were obviously used. I had fun creating it. _Creating things_ was always the fun part, the tools 
-used were always rather secondary.  
-
-At the end of the day, nothing changed: Shit still takes time.
-
 ## Your own server
 ... todo ...   
 You can run Gravity-Farce on your own hardware or server. You need a bit of CPU since all physics run on the server.
@@ -104,3 +103,9 @@ You can also set a limit of number of simultaneous players you want to allow.
 - highscore reset
 - player caps
 - ...other server settings
+
+### Disclaimer
+Generative models were obviously used. I had fun creating it. _Creating things_ was always the fun part, the tools 
+used were always rather secondary.  
+
+At the end of the day, nothing changed: Shit still takes time.

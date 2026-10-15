@@ -155,7 +155,7 @@ export class PrefabLayer {
             for (const id in players) {
                 const p = players[id];
                 if (p.isDead) continue;
-                const isThrusting = Boolean(p.inputs && p.inputs.up && p.fuel > 0);
+                const isThrusting = Boolean(p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && p.fuel > 0);
                 const rad = isThrusting ? (lCfg.shipThrustRadius ?? 90) : (lCfg.shipIdleRadius ?? 44);
                 const alpha = isThrusting ? (lCfg.shipThrustIntensity ?? 0.20) : (lCfg.shipIdleIntensity ?? 0.08);
                 if (rad <= 0 || alpha <= 0) continue;

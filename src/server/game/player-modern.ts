@@ -52,16 +52,18 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         const inv = ecs.cargoBays.get(e);
         const f = ecs.fuelTanks.get(e);
 
-         const weight = inv ? inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0) : 0;
-         const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
-         const weightThrust = THRUST * (1.0 - (weight * 0.15));
+        const weight = inv ? inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0) : 0;
+        const weightGravity = GRAVITY * (1.0 + (weight * 0.40));
+        const weightThrust = THRUST * (1.0 - (weight * 0.15));
+        const thrustScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
 
         if (p.isLanded) {
+            const thrustScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
             v.vx = 0; 
             v.vy = 0; 
             v.angularVelocity = 0; 
             t.angle = -Math.PI / 2;
-            if (p.inputs.up) {
+            if (thrustScale > 0.5) {
                 p.isLanded = false;
                 v.vy = -1.2;
             } else {
@@ -69,21 +71,25 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
             }
         }
 
-        if (p.inputs.left) {
-            v.angularVelocity -= 0.004;
-        }
-        if (p.inputs.right) {
-            v.angularVelocity += 0.004;
+        if (p.inputs.analogX) {
+            v.angularVelocity += 0.004 * p.inputs.analogX;
+        } else {
+            if (p.inputs.left) {
+                v.angularVelocity -= 0.004;
+            }
+            if (p.inputs.right) {
+                v.angularVelocity += 0.004;
+            }
         }
         v.angularVelocity *= 0.93; 
         t.angle += v.angularVelocity;
 
-        if (p.inputs.up && f && f.current > 0) {
-             const drain = Math.min(15, f.current);
+        if (thrustScale > 0 && f && f.current > 0) {
+             const drain = Math.min(15 * thrustScale, f.current);
              f.current -= drain;
              f.consumed += drain;
-             v.vx += Math.cos(t.angle) * weightThrust;
-             v.vy += Math.sin(t.angle) * weightThrust;
+             v.vx += Math.cos(t.angle) * weightThrust * thrustScale;
+             v.vy += Math.sin(t.angle) * weightThrust * thrustScale;
         }
         
         // Gravity Wells / Magnets (0xCC - 0xCF)

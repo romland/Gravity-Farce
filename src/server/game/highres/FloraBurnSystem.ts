@@ -27,19 +27,20 @@ export class FloraBurnSystem {
         const rawMap = room.level?.rawMap;
 
         for (const [pe, p] of ecs.players.entries()) {
-            if (p.isDead || p.isLanded || !p.inputs.up) continue;
+            if (p.isDead || p.isLanded || (!p.inputs.up && !(p.inputs.analogUp && p.inputs.analogUp > 0))) continue;
             const f = ecs.fuelTanks.get(pe);
             if (!f || f.current <= 0) continue;
             const t = ecs.transforms.get(pe);
             if (!t) continue;
 
+            const thrustScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
             // Exhaust points opposite to ship nose angle
             const backX = -Math.cos(t.angle);
             const backY = -Math.sin(t.angle);
-            const buttX = t.x + backX * cfg.nozzleOffsetPx;
-            const buttY = t.y + backY * cfg.nozzleOffsetPx;
-            const plumeEndX = buttX + backX * cfg.jetLengthPx;
-            const plumeEndY = buttY + backY * cfg.jetLengthPx;
+            const buttX = t.x + backX * cfg.nozzleOffsetPx * thrustScale;
+            const buttY = t.y + backY * cfg.nozzleOffsetPx * thrustScale;
+            const plumeEndX = buttX + backX * cfg.jetLengthPx * thrustScale;
+            const plumeEndY = buttY + backY * cfg.jetLengthPx * thrustScale;
 
             for (let idx = 0; idx < flora.length; idx++) {
                 if (room.floraBurns.has(idx)) continue;
@@ -79,7 +80,7 @@ export class FloraBurnSystem {
 
                 if (bestDist <= cfg.jetRadiusPx) {
                     const prevHeat = room.floraHeat.get(idx) || 0;
-                    const nextHeat = prevHeat + cfg.thrustHeatPerTick;
+                    const nextHeat = prevHeat + (cfg.thrustHeatPerTick * thrustScale);
                     if (nextHeat >= cfg.igniteThresholdTicks) {
                         const rawT = Math.abs(hitY - a.y) / Math.max(1, a.length);
                         const originT = Number(Math.max(0.05, Math.min(0.95, rawT)).toFixed(2));

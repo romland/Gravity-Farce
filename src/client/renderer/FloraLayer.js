@@ -176,7 +176,7 @@ export class FloraLayer {
                 const dy = clampedY - s.y;
                 const dist = Math.hypot(dx, dy * 0.75);
 
-                const isThrusting = Boolean(!s.isLanded && s.inputs && s.inputs.up && (s.fuel === undefined || s.fuel > 0));
+                const isThrusting = Boolean(!s.isLanded && s.inputs && (s.inputs.up || s.inputs.analogUp > 0) && (s.fuel === undefined || s.fuel > 0));
                 const radius = isThrusting ? cfg.thrustRadius : cfg.proxRadius;
                 if (dist < radius) {
                     const proximity = Math.pow(1.0 - (dist / radius), cfg.proxExponent);

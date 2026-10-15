@@ -869,7 +869,7 @@ export class MicroDetailsLayer {
                     }
 
                     // Check Thruster Exhaust Plume against Walls/Floors/Pads
-                    const isThrusting = Boolean(p.inputs && p.inputs.up && (p.fuel === undefined || p.fuel > 0));
+                    const isThrusting = Boolean(p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && p.fuel > 0);
                     if (isThrusting && (cfg.thrusterDustEnabled !== false || cfg.thrusterScorchEnabled !== false)) {
                         const backX = -Math.cos(p.angle);
                         const backY = -Math.sin(p.angle);

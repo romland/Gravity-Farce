@@ -147,6 +147,8 @@ export class Room {
                     if (p.inputs.left) mask |= 2;
                     if (p.inputs.right) mask |= 4;
                     if (p.inputs.shoot) mask |= 8;
+                    if (p.inputs.analogX) mask |= ((Math.round(p.inputs.analogX * 127) & 0xFF) << 8);
+                    if (p.inputs.analogUp) mask |= ((Math.round(p.inputs.analogUp * 255) & 0xFF) << 16);
                     if (this.lastInputMasks.get(p.id) !== mask) {
                         frameInputs[p.id] = mask;
                         this.lastInputMasks.set(p.id, mask);
@@ -166,6 +168,18 @@ export class Room {
                             p.inputs.left = ((mask as number) & 2) !== 0;
                             p.inputs.right = ((mask as number) & 4) !== 0;
                             p.inputs.shoot = ((mask as number) & 8) !== 0;
+                            const analogByte = ((mask as number) >> 8) & 0xFF;
+                            if (analogByte !== 0) {
+                                p.inputs.analogX = ((analogByte << 24) >> 24) / 127.0; // Bitwise sign extension
+                            } else {
+                                p.inputs.analogX = undefined;
+                            }
+                            const analogUpByte = ((mask as number) >> 16) & 0xFF;
+                            if (analogUpByte !== 0) {
+                                p.inputs.analogUp = analogUpByte / 255.0;
+                            } else {
+                                p.inputs.analogUp = undefined;
+                            }                            
                             if (p.inputs.shoot) {
                                 const w = this.ecs.weaponMounts.get(e);
                                 if (w) w.shootLatch = true;

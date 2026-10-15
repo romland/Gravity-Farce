@@ -601,7 +601,9 @@ io.on('connection', (socket) => {
                     up: Boolean(rawInputs?.up),
                     left: Boolean(rawInputs?.left),
                     right: Boolean(rawInputs?.right),
-                    shoot: Boolean(rawInputs?.shoot)
+                    shoot: Boolean(rawInputs?.shoot),
+                    analogX: SERVER_CONFIG.allowAnalogControl && typeof rawInputs?.analogX === 'number' ? Math.max(-1, Math.min(1, rawInputs.analogX)) : undefined,
+                    analogUp: SERVER_CONFIG.allowAnalogControl && typeof rawInputs?.analogUp === 'number' ? Math.max(0, Math.min(1, rawInputs.analogUp)) : undefined
                 };
 
                 if (rawInputs?.shoot) {

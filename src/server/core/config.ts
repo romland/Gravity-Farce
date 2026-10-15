@@ -12,6 +12,7 @@ export interface ServerConfig {
     requireManualApproval: boolean;
     maxPlayers: number;
     defaultLives: number;
+    allowAnalogControl: boolean;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -24,7 +25,8 @@ const DEFAULT_CONFIG: ServerConfig = {
     allowNewRegistrations: true, // If false, only known players can connect
     requireManualApproval: false, // If true, new players must be set to 'approved: true' in JSON
     maxPlayers: 50, // Global connection cap
-    defaultLives: 5
+    defaultLives: 5,
+    allowAnalogControl: false // Toggle for variable thrust/steering precision
 };
 
 export class ConfigManager {
