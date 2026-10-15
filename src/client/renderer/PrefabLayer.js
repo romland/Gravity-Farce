@@ -71,7 +71,9 @@ class EnvironmentalLightBaker {
             } else if (p.kind === 'ANTENNA_MAST') {
                 addRadialLight(cx, p.y + 6, lCfg.beaconRadius, 255, 65, 55, lCfg.beaconIntensity ?? 0.22);
             } else if (p.kind === 'RACE_MARKER') {
-                addRadialLight(cx, cy, lCfg.raceMarkerRadius, 0, 245, 255, lCfg.raceMarkerIntensity ?? 0.26);
+                if (p.tileId >= 0x3B && p.tileId <= 0x42) {
+                    addRadialLight(cx, cy, lCfg.raceMarkerRadius, 0, 245, 255, lCfg.raceMarkerIntensity ?? 0.26);
+                }
             }
         }
 
@@ -324,48 +326,45 @@ export class PrefabLayer {
     drawRaceMarker(ctx, p, timeSec) {
         // Strictly 32x32 tile-accurate Colorblind-safe Checkpoint Tile
         ctx.save();
-        const lCfg = RENDER_CONFIG.lighting || {};
-        const cx = p.x + p.w * 0.5;
-        const cy = p.y + p.h * 0.5;
-        const pulse = 0.65 + 0.35 * Math.sin(timeSec * 6.5 + p.x * 0.05);
-
-        // Subtle, configurable local glow that stays tight to the 32x32 tile
-        const auraRadius = lCfg.raceMarkerLocalGlowRadius ?? 24;
-        const auraAlpha = lCfg.raceMarkerLocalGlowAlpha ?? 0.24;
-        if (auraRadius > 0 && auraAlpha > 0) {
-            const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraRadius);
-            g.addColorStop(0, `rgba(0, 245, 255, ${auraAlpha * pulse})`);
-            g.addColorStop(0.6, `rgba(255, 215, 0, ${auraAlpha * 0.4 * pulse})`);
-            g.addColorStop(1, 'rgba(0, 245, 255, 0)');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(cx, cy, auraRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Exact 32x32 tile housing with high-contrast gold & cyan border
-        ctx.fillStyle = '#0b1320';
-        ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2.0;
-        ctx.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
-        ctx.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
-
-        ctx.strokeStyle = '#00f5ff';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(p.x + 4, p.y + 4, Math.max(2, p.w - 8), Math.max(2, p.h - 8));
 
         // If checkpoint number tile (0x3B - 0x42), render crisp high-contrast number badge
         if (p.tileId >= 0x3B && p.tileId <= 0x42) {
+            const lCfg = RENDER_CONFIG.lighting || {};
+            const cx = p.x + p.w * 0.5;
+            const cy = p.y + p.h * 0.5;
+            const pulse = 0.65 + 0.35 * Math.sin(timeSec * 6.5 + p.x * 0.05);
+
+            // Subtle, configurable local glow that stays tight to the 32x32 tile
+            const auraRadius = lCfg.raceMarkerLocalGlowRadius ?? 24;
+            const auraAlpha = lCfg.raceMarkerLocalGlowAlpha ?? 0.24;
+            if (auraRadius > 0 && auraAlpha > 0) {
+                const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraRadius);
+                g.addColorStop(0, `rgba(0, 245, 255, ${auraAlpha * pulse})`);
+                g.addColorStop(0.6, `rgba(255, 215, 0, ${auraAlpha * 0.4 * pulse})`);
+                g.addColorStop(1, 'rgba(0, 245, 255, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(cx, cy, auraRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Exact 32x32 tile housing with high-contrast gold & cyan border
+            ctx.fillStyle = '#0b1320';
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 2.0;
+            ctx.fillRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+            ctx.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+
+            ctx.strokeStyle = '#00f5ff';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(p.x + 4, p.y + 4, Math.max(2, p.w - 8), Math.max(2, p.h - 8));
+
             const cpNum = (p.tileId - 0x3A).toString();
             ctx.fillStyle = '#ffd700';
             ctx.font = 'bold 14px system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(cpNum, cx, cy);
-        } else {
-            // Holder tile (0x43 - 0x4E): crisp internal indicator bar
-            ctx.fillStyle = '#00f5ff';
-            ctx.fillRect(cx - 6, cy - 2, 12, 4);
         }
         ctx.restore();
     }
