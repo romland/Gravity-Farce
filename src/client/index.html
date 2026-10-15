@@ -194,6 +194,8 @@
         let myPing = 0;
         let raceLights = [];
         let spectateTargetId = null;
+        let cameraShake = 0;
+        let metrics = { bytesIn: 0, bytesOut: 0, packetsIn: 0, packetsOut: 0 };
 
         const inputs = { up: false, left: false, right: false, shoot: false };
         
@@ -284,6 +286,29 @@
                 socket.emit('debug_action', 'jump', { levelIndex: parseInt(savedLevel) });
             }
         });
+
+        socket.onAny((eventName, ...args) => {
+            metrics.packetsIn++;
+            let size = eventName.length;
+            for (let i = 0; i < args.length; i++) {
+                if (typeof args[i] === 'string') size += args[i].length;
+                else if (typeof args[i] === 'object') size += JSON.stringify(args[i]).length;
+                else size += 8;
+            }
+            metrics.bytesIn += size;
+        });
+        const originalEmit = socket.emit.bind(socket);
+        socket.emit = function(eventName, ...args) {
+            metrics.packetsOut++;
+            let size = eventName.length;
+            for (let i = 0; i < args.length; i++) {
+                if (typeof args[i] === 'string') size += args[i].length;
+                else if (typeof args[i] === 'object') size += JSON.stringify(args[i]).length;
+                else size += 8;
+            }
+            metrics.bytesOut += size;
+            originalEmit(eventName, ...args);
+        };
         
         socket.on('ping', (serverTime) => {
             socket.emit('pong', serverTime);
@@ -412,12 +437,16 @@
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffaa00', 40, 50);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
                         spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
+                        let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
+                        if (dist < 800) cameraShake = Math.max(cameraShake, 10 * (1 - dist / 800));
                         window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 160, 1.0);
                         window.gfRenderer?.details?.onExplosion(
                             ev.x, ev.y, 0, 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 0.85
                         );
                     } else if (ev.type === 'large_explosion') {
                         spawnLargeExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0);
+                        let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
+                        if (dist < 800) cameraShake = Math.max(cameraShake, 18 * (1 - dist / 800));
                         window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 200, 1.0);
                         window.gfRenderer?.details?.onExplosion(
                             ev.x, ev.y, ev.vx || 0, ev.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
@@ -438,6 +467,8 @@
                 } else if (!r.isDead && s.isDead) {
                     // Trigger explosion the moment the server says a ship died
                     spawnLargeExplosion(s.x, s.y, s.vx, s.vy);
+                    let dist = Math.hypot(s.x - (camera.x + VIEW_W/2), s.y - (camera.y + VIEW_H/2));
+                    if (dist < 800) cameraShake = Math.max(cameraShake, 25 * (1 - dist / 800));
                     window.gfRenderer?.flora?.triggerShock(s.x, s.y, 200, 1.0);
                     window.gfRenderer?.details?.onExplosion(
                         s.x, s.y, r.vx || s.vx || 0, r.vy || s.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
@@ -899,8 +930,15 @@
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             const timeSec = performance.now() * 0.001;
+            let renderCamX = camera.x;
+            let renderCamY = camera.y;
+            if (cameraShake > 0.1) {
+                renderCamX += (Math.random() - 0.5) * cameraShake;
+                renderCamY += (Math.random() - 0.5) * cameraShake;
+                cameraShake *= 0.9;
+            }
             if (window.gfRenderer) {
-                window.gfRenderer.parallax.draw(ctx, camera, timeSec);
+                window.gfRenderer.parallax.draw(ctx, {x: renderCamX, y: renderCamY}, timeSec);
             } else {
                 ctx.fillStyle = '#050505';
                 ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -963,6 +1001,11 @@
                         let color = r.state === 2 ? '#2ecc71' : '#fff';
                         raceUI = ` &nbsp;|&nbsp; LAP: <span style="color:#4facfe">${r.currentLap}/${r.totalLaps}</span> &nbsp;|&nbsp; TIME: <span style="color:${color}">${m}:${s}.${ms}</span>`;
                     }
+                    if (debugMode) {
+                        let bytesInKb = (metrics.bytesIn / 1024).toFixed(1);
+                        let bytesOutKb = (metrics.bytesOut / 1024).toFixed(1);
+                        raceUI += ` &nbsp;|&nbsp; NET: <span style="color:#2ecc71">↓${bytesInKb}KB (${metrics.packetsIn})</span> <span style="color:#e74c3c">↑${bytesOutKb}KB (${metrics.packetsOut})</span>`;
+                    }
                     let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; LIVES: <span style="color:#e74c3c">${myServerPlayer.lives}</span> &nbsp;|&nbsp; PING: <span style="color:#95a5a6">${myServerPlayer.ping || 0}ms</span> &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>${raceUI}</div>`;
                     if (newHudHTML !== lastHudHTML) {
                         hud.innerHTML = newHudHTML;
@@ -981,12 +1024,12 @@
             }
 
             ctx.save();
-            ctx.translate(Math.floor(-camera.x), Math.floor(-camera.y));
+            ctx.translate(Math.floor(-renderCamX), Math.floor(-renderCamY));
 
             // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs
             if (window.gfRenderer) {
-                window.gfRenderer.rock.drawRecessed(ctx, camera, VIEW_W, VIEW_H, level);
-                window.gfRenderer.rock.draw(ctx, camera, VIEW_W, VIEW_H);
+                window.gfRenderer.rock.drawRecessed(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level);
+                window.gfRenderer.rock.draw(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H);
                 window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
             }
 
@@ -1072,7 +1115,7 @@
             if (window.gfRenderer && window.gfRenderer.details) {
                 window.gfRenderer.details.updateAndDraw(
                     ctx,
-                    camera,
+                    {x: renderCamX, y: renderCamY},
                     VIEW_W,
                     VIEW_H,
                     level,
@@ -1088,7 +1131,7 @@
             // Layer +1: Foreground Interactive Flora Canopy (Renders above ships, enemies & bullets for dogfight cover!)
             if (window.gfRenderer) {
                 window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
-                window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, camera, VIEW_W, VIEW_H, level, timeSec, renderState.players);
+                window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level, timeSec, renderState.players);
             }
 
             for (let i = floatingTexts.length - 1; i >= 0; i--) {

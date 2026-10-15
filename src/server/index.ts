@@ -74,7 +74,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0, shipType: 'classic' };
     let pType: 'classic' | 'modern' = stats.shipType || 'classic';
 
-    for (const room of rooms.values()) {
+    for (const [rId, room] of rooms.entries()) {
         const e = room.ecs.getPlayerEntity(id);
         if (e !== undefined) {
             const p = room.ecs.players.get(e)!;
@@ -93,7 +93,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
             room.removePlayer(id);
             if (room.activeClientIds.size === 0) {
                 room.tracker.finishAndSave();
-                rooms.delete(room.levelIndex);
+                rooms.delete(rId);
             }
             break;
         }
@@ -116,9 +116,11 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
 function handleTransition(id: string) {
     let pLevel = playerRooms.get(id) ?? 0;
     let oldRoom = null;
-    for (const room of rooms.values()) {
+    let rIdToRemove: number | null = null;
+    for (const [rId, room] of rooms.entries()) {
         if (room.ecs.getPlayerEntity(id) !== undefined) {
             oldRoom = room;
+            rIdToRemove = rId;
             break;
         }
     }
@@ -166,7 +168,7 @@ function handleTransition(id: string) {
             oldRoom.removePlayer(id);
             if (oldRoom.activeClientIds.size === 0) {
                 oldRoom.tracker.finishAndSave();
-                rooms.delete(oldRoom.levelIndex);
+                if (rIdToRemove !== null) rooms.delete(rIdToRemove);
             }
         }
     }
@@ -451,12 +453,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        for (const room of rooms.values()) {
+        for (const [rId, room] of rooms.entries()) {
             if (room.ecs.getPlayerEntity(socket.id) !== undefined) {
                 room.removePlayer(socket.id);
                 if (room.activeClientIds.size === 0) {
                     room.tracker.finishAndSave();
-                    rooms.delete(room.levelIndex);
+                    rooms.delete(rId);
                 }
             }
         }
