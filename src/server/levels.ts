@@ -58,8 +58,9 @@ export function getLevelData(index: number): LevelData {
     
     if (!compiledLevelCache.has(safeIndex)) {
         const levelJson = orgLevelsData[safeIndex];
+        const cleanGrid = levelJson.map_data.map((row: number[]) => [...row]);
         const siblingGrid = getSiblingLevelRawGrid(safeIndex);
-        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data, siblingGrid);
+        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, cleanGrid, siblingGrid);
         compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
     }
 

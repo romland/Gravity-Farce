@@ -253,8 +253,8 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
             if (!targetT) {
                 bot.state = 'roam';
                 bot.pathPending = true;
-                botPathWorker.syncLevel(room.levelIndex, room.level);
-                botPathWorker.enqueue({ kind: 'roam', levelIndex: room.levelIndex, sx: t.x, sy: t.y }, (res) => {
+                botPathWorker.syncLevel(room.roomId, room.level);
+                botPathWorker.enqueue({ kind: 'roam', roomId: room.roomId, sx: t.x, sy: t.y }, (res) => {
                     bot.pathPending = false;
                     bot.path = res.path;
                 });
@@ -263,10 +263,10 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
                 bot.path = [...stitchedPath];
             } else {
                 bot.pathPending = true;
-                botPathWorker.syncLevel(room.levelIndex, room.level);
+                botPathWorker.syncLevel(room.roomId, room.level);
                 botPathWorker.enqueue({
                     kind: 'target',
-                    levelIndex: room.levelIndex,
+                    roomId: room.roomId,
                     sx: t.x,
                     sy: t.y,
                     tx: targetT.x,
@@ -276,7 +276,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
                     if (!res.reachedTarget && distToTarget > 250 && !hasLOS) {
                         bot.state = 'roam';
                         bot.pathPending = true;
-                        botPathWorker.enqueue({ kind: 'roam', levelIndex: room.levelIndex, sx: t.x, sy: t.y }, (rRes) => {
+                        botPathWorker.enqueue({ kind: 'roam', roomId: room.roomId, sx: t.x, sy: t.y }, (rRes) => {
                             bot.pathPending = false;
                             bot.path = rRes.path;
                         });

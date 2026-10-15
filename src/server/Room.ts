@@ -52,7 +52,9 @@ export class Room {
         private transitionCb: (id: string) => void,
         public isLethalRacing: boolean = false,
         public raceBumpModifier: number = 0.4,
-        public isReplayMode: boolean = false
+        public isReplayMode: boolean = false,
+        public sessionMode: 'SP' | 'MP' = 'SP',
+        public joinCode: string = ''
     ) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
@@ -60,13 +62,13 @@ export class Room {
         this.category = getLevelCategory(levelIndex);
         this.seed = Date.now();
         this.prng = createPRNG(this.seed);
-        this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
+        this.tracker = new GameTracker(levelIndex, this.category, this.sessionMode, getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         if (this.isReplayMode) {
             (this.tracker as any).isActive = false;
         }
         this.tracker['entry'].replayData.seed = this.seed;
         this.spawnEntities();
-        botPathWorker.syncLevel(this.levelIndex, this.level, true);
+        botPathWorker.syncLevel(this.roomId, this.level, true);
         this.printLevelStats();
     }
 
@@ -75,7 +77,7 @@ export class Room {
     }
 
     public getRoomMode(): 'SP' | 'MP' {
-        return this.activeClientIds.size > 1 ? 'MP' : 'SP';
+        return this.sessionMode === 'MP' || this.activeClientIds.size > 1 ? 'MP' : 'SP';
     }
 
     public getBotCount(): number {
@@ -231,7 +233,7 @@ export class Room {
         if (this.ecs.players.size === 0) {
             this.resetLevel();
         }
-        if (this.activeClientIds.size > 1) {
+        if (this.sessionMode === 'MP' || this.activeClientIds.size > 1) {
             this.tracker['entry'].mode = 'MP';
         }
         this.trySpawnPlayer(id, type, { ...stats, joinedAtTick: this.globalWaveTimer });
@@ -409,7 +411,7 @@ export class Room {
 
     broadcastTileUpdate(x: number, y: number, tile: number) {
         this.io.to(this.channel).emit('tile_update', { x, y, tile });
-        botPathWorker.notifyTileUpdate(this.levelIndex, x, y, tile);
+        botPathWorker.notifyTileUpdate(this.roomId, x, y, tile);
     }
 
     broadcastFloraBurn(idx: number, originT: number) {
@@ -430,6 +432,7 @@ export class Room {
         for (const [e] of Array.from(this.ecs.bullets.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.homingMissiles.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.players.entries())) this.ecs.destroy(e);
+        botPathWorker.removeRoom(this.roomId);
     }
 
     resetLevel() {
@@ -447,6 +450,7 @@ export class Room {
         this.lastInputMasks.clear();
         this.floraBurns.clear();
         this.floraHeat.clear();
+        this.assignedHomes.clear();
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }
@@ -459,7 +463,7 @@ export class Room {
         for (const [e] of Array.from(this.ecs.bullets.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.homingMissiles.entries())) this.ecs.destroy(e);
         this.spawnEntities();
-        botPathWorker.syncLevel(this.levelIndex, this.level, true);
+        botPathWorker.syncLevel(this.roomId, this.level, true);
         this.io.to(this.channel).emit('initLevel', this.level);
         this.io.to(this.channel).emit('flora_burn_reset');
     }

@@ -93,10 +93,10 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
 
         bot.pathTimer = 15;
         bot.pathPending = true;
-        botPathWorker.syncLevel(room.levelIndex, room.level);
+        botPathWorker.syncLevel(room.roomId, room.level);
         botPathWorker.enqueue({
             kind: 'gate',
-            levelIndex: room.levelIndex,
+            roomId: room.roomId,
             sx: t.x,
             sy: t.y,
             gate: targetCp,

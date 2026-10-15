@@ -6,7 +6,7 @@ import type { CheckpointGate } from './bot-utils';
 export interface PathJobRequest {
     jobId: number;
     kind: 'target' | 'gate' | 'roam';
-    levelIndex: number;
+    roomId: number;
     sx: number;
     sy: number;
     tx?: number;
@@ -222,11 +222,15 @@ parentPort.on('message', (msg) => {
         return;
     }
     if (msg.type === 'sync_level') {
-        levels.set(msg.levelIndex, { rawMap: msg.rawMap, walls: msg.walls });
+        levels.set(msg.roomId, { rawMap: msg.rawMap, walls: msg.walls });
+        return;
+    }
+    if (msg.type === 'remove_room') {
+        levels.delete(msg.roomId);
         return;
     }
     if (msg.type === 'tile_update') {
-        const lvl = levels.get(msg.levelIndex);
+        const lvl = levels.get(msg.roomId);
         if (lvl && lvl.rawMap && lvl.rawMap[msg.y]) {
             lvl.rawMap[msg.y][msg.x] = msg.tile;
         }
@@ -234,7 +238,7 @@ parentPort.on('message', (msg) => {
     }
     if (msg.type === 'job') {
         const req = msg.req;
-        const lvl = levels.get(req.levelIndex);
+        const lvl = levels.get(req.roomId);
         if (!lvl || !lvl.rawMap) {
             parentPort.postMessage({ jobId: req.jobId, path: [], reachedTarget: false });
             return;
@@ -334,7 +338,7 @@ class BotPathWorkerPool {
     private worker: Worker;
     private nextJobId = 1;
     private callbacks = new Map<number, (res: PathJobResult) => void>();
-    private syncedLevels = new Set<number>();
+    private syncedRooms = new Set<number>();
 
     constructor() {
         this.worker = new Worker(WORKER_SCRIPT, { eval: true });
@@ -352,20 +356,25 @@ class BotPathWorkerPool {
         });
     }
 
-    public syncLevel(levelIndex: number, level: LevelData, force: boolean = false) {
-        if (!force && this.syncedLevels.has(levelIndex)) return;
+    public syncLevel(roomId: number, level: LevelData, force: boolean = false) {
+        if (!force && this.syncedRooms.has(roomId)) return;
         if (!level.rawMap) return;
-        this.syncedLevels.add(levelIndex);
+        this.syncedRooms.add(roomId);
         this.worker.postMessage({
             type: 'sync_level',
-            levelIndex,
+            roomId,
             rawMap: level.rawMap,
             walls: level.walls
         });
     }
 
-    public notifyTileUpdate(levelIndex: number, x: number, y: number, tile: number) {
-        this.worker.postMessage({ type: 'tile_update', levelIndex, x, y, tile });
+    public removeRoom(roomId: number) {
+        this.syncedRooms.delete(roomId);
+        this.worker.postMessage({ type: 'remove_room', roomId });
+    }
+
+    public notifyTileUpdate(roomId: number, x: number, y: number, tile: number) {
+        this.worker.postMessage({ type: 'tile_update', roomId, x, y, tile });
     }
 
     public enqueue(req: Omit<PathJobRequest, 'jobId'>, cb: (res: PathJobResult) => void) {

@@ -67,6 +67,8 @@ export interface PlayerStats {
     streakScore?: number;
     streakStartLevel?: number;
     streakLastLevel?: number;
+    sessionMode?: 'SP' | 'MP';
+    roomCode?: string;
 }
 
 export interface BotState {

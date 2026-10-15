@@ -42,9 +42,11 @@ app.get('/api/auth/random', (req, res) => {
 app.use(express.static('./src/client'));
 
 const rooms = new Map<number, Room>();
+const roomsByCode = new Map<string, number>();
 
 let isServerPaused = false;
 let nextReplayRoomId = -1;
+let nextLiveRoomId = 1;
 
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
 const playerRooms = new Map<string, number>();
@@ -60,19 +62,72 @@ function isValidLevelIndex(index: number): boolean {
     }
 }
 
-function getOrCreateRoom(index: number): Room {
-    if (!rooms.has(index)) {
-        rooms.set(index, new Room(index, index, getLevelData(index), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier, false));
+function generateRoomCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    do {
+        code = '';
+        for (let i = 0; i < 4; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+    } while (roomsByCode.has(code));
+    return code;
+}
+
+function createRoomInstance(levelIndex: number, mode: 'SP' | 'MP', customCode?: string): Room {
+    const rId = nextLiveRoomId++;
+    const code = (customCode && !roomsByCode.has(customCode)) ? customCode : generateRoomCode();
+    const room = new Room(
+        rId,
+        levelIndex,
+        getLevelData(levelIndex),
+        io,
+        handleTransition,
+        SERVER_CONFIG.lethalRacingEnemies,
+        SERVER_CONFIG.raceBumpModifier,
+        false,
+        mode,
+        code
+    );
+    rooms.set(rId, room);
+    roomsByCode.set(code, rId);
+    return room;
+}
+
+function resolveOrCreateTargetRoom(levelIndex: number, mode: 'SP' | 'MP', requestedCode?: string): Room {
+    const cleanCode = typeof requestedCode === 'string' ? requestedCode.trim().toUpperCase() : '';
+    if (cleanCode && roomsByCode.has(cleanCode)) {
+        const existingRId = roomsByCode.get(cleanCode)!;
+        const existingRoom = rooms.get(existingRId);
+        if (existingRoom && !existingRoom.isReplayMode) {
+            // Joining a room by code automatically promotes it to MP if >1 player
+            existingRoom.sessionMode = 'MP';
+            return existingRoom;
+        }
     }
-    return rooms.get(index)!;
+
+    if (mode === 'MP') {
+        // If no specific code was requested (or code doesn't exist yet), join an open MP room on this level or create one
+        if (!cleanCode) {
+            for (const room of rooms.values()) {
+                if (!room.isReplayMode && room.sessionMode === 'MP' && room.levelIndex === levelIndex) {
+                    return room;
+                }
+            }
+        }
+        return createRoomInstance(levelIndex, 'MP', cleanCode.length === 4 ? cleanCode : undefined);
+    }
+
+    // Default SP: 100% isolated private room instance for this pilot!
+    return createRoomInstance(levelIndex, 'SP');
 }
 
 function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classic' | 'modern'; stats: PlayerStats } {
     const socket = io.sockets.sockets.get(id);
     const currentRoomId = playerRooms.get(id);
-    let stats = playerSessionStats.get(id) || { score: 0, uuid: id, alias: 'UNK', shipType: 'classic', lives: SERVER_CONFIG.defaultLives };
+    let stats = playerSessionStats.get(id) || { score: 0, uuid: id, alias: 'UNK', shipType: 'classic', lives: SERVER_CONFIG.defaultLives, sessionMode: 'SP' };
     let pType: 'classic' | 'modern' = stats.shipType || 'classic';
-    let lastActiveLevel = (currentRoomId !== undefined && currentRoomId >= 0) ? currentRoomId : 0;
+    let lastActiveLevel = 0;
 
     if (currentRoomId !== undefined) {
         const room = rooms.get(currentRoomId);
@@ -92,7 +147,9 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
                         lives: p.lives,
                         streakScore: p.score,
                         streakStartLevel: p.streakStartLevel,
-                        streakLastLevel: room.levelIndex
+                        streakLastLevel: room.levelIndex,
+                        sessionMode: stats.sessionMode || room.sessionMode,
+                        roomCode: stats.roomCode
                     };
                     playerSessionStats.set(id, stats);
                 }
@@ -103,6 +160,7 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
             }
             if (room.activeClientIds.size === 0) {
                 room.tracker.finishAndSave();
+                if (room.joinCode) roomsByCode.delete(room.joinCode);
                 rooms.delete(currentRoomId);
             }
         }
@@ -111,46 +169,67 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
     return { lastActiveLevel, pType, stats };
 }
 
-function handleTransitionToLevel(id: string, targetLevel: number, forceReset: boolean = false) {
+function emitRoomInfo(socket: any, room: Room) {
+    socket.emit('room_info', {
+        roomId: room.roomId,
+        joinCode: room.joinCode,
+        mode: room.sessionMode,
+        levelIndex: room.levelIndex,
+        playerCount: room.activeClientIds.size
+    });
+}
+
+function handleTransitionToLevel(id: string, targetLevel: number, forceReset: boolean = false, overrideMode?: 'SP' | 'MP', overrideCode?: string) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
 
     const currentRoomId = playerRooms.get(id);
-    if (!forceReset && currentRoomId === targetLevel && rooms.has(targetLevel)) {
+    const currentRoom = currentRoomId !== undefined ? rooms.get(currentRoomId) : undefined;
+    if (!forceReset && !overrideMode && !overrideCode && currentRoom && currentRoom.levelIndex === targetLevel) {
         return;
     }
 
     const { pType, stats } = leaveCurrentRoom(id);
+    const targetMode = overrideMode || stats.sessionMode || 'SP';
+    stats.sessionMode = targetMode;
+    if (overrideCode !== undefined) stats.roomCode = overrideCode;
+
+    const newRoom = resolveOrCreateTargetRoom(targetLevel, targetMode, overrideCode);
+    const actualLevel = newRoom.levelIndex;
 
     // Enforce 5-Lives Sequential Streak rules on Mission Levels (0-49):
     // Advancing sequentially (lastLevel -> lastLevel + 1) preserves accumulated score & remaining lives.
     // Jumping out of sequence, retrying, or switching categories starts a fresh 5-lives streak.
     const isSequentialMissionAdvance = !forceReset
-        && targetLevel >= 0 && targetLevel <= 49
+        && actualLevel >= 0 && actualLevel <= 49
         && stats.streakLastLevel !== undefined
-        && targetLevel === stats.streakLastLevel + 1
+        && actualLevel === stats.streakLastLevel + 1
         && (stats.lives ?? 0) > 0;
 
     if (!isSequentialMissionAdvance) {
         stats.score = 0;
         stats.lives = SERVER_CONFIG.defaultLives;
-        stats.streakStartLevel = targetLevel;
-        stats.streakLastLevel = targetLevel;
+        stats.streakStartLevel = actualLevel;
+        stats.streakLastLevel = actualLevel;
     } else {
-        stats.streakLastLevel = targetLevel;
+        stats.streakLastLevel = actualLevel;
     }
+    playerSessionStats.set(id, stats);
 
-    const newRoom = getOrCreateRoom(targetLevel);
     if (forceReset && newRoom.ecs.players.size === 0) {
         newRoom.resetLevel();
     }
     socket.join(newRoom.channel);
-    playerRooms.set(id, targetLevel);
+    playerRooms.set(id, newRoom.roomId);
 
     socket.emit('initLevel', newRoom.level);
     socket.emit('flora_burn_reset');
     socket.emit('levelIndex', newRoom.levelIndex);
     newRoom.addPlayer(id, pType, stats);
+    for (const cid of newRoom.activeClientIds) {
+        const s = io.sockets.sockets.get(cid);
+        if (s) emitRoomInfo(s, newRoom);
+    }
 }
 
 function handleTransition(actorOrSocketId: string) {
@@ -236,8 +315,11 @@ io.on('connection', (socket) => {
 
     const requestedLevel = typeof auth.levelIndex === 'number' ? auth.levelIndex : parseInt(auth.levelIndex, 10);
     const initialLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : 0;
+    const initialMode: 'SP' | 'MP' = auth.mode === 'MP' ? 'MP' : 'SP';
+    const initialRoomCode = typeof auth.roomCode === 'string' ? auth.roomCode.trim().toUpperCase() : '';
 
     const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
+    const room = resolveOrCreateTargetRoom(initialLevel, initialMode, initialRoomCode);
     const stats: PlayerStats = {
         score: 0,
         uuid: uuid,
@@ -246,20 +328,24 @@ io.on('connection', (socket) => {
         shipType: useClassicPhysics ? 'classic' : 'modern',
         ip: ip,
         lives: SERVER_CONFIG.defaultLives,
-        streakStartLevel: initialLevel,
-        streakLastLevel: initialLevel
+        streakStartLevel: room.levelIndex,
+        streakLastLevel: room.levelIndex,
+        sessionMode: room.sessionMode,
+        roomCode: room.joinCode
     };
     playerSessionStats.set(socket.id, stats);
 
-    const room = getOrCreateRoom(initialLevel);
-
     socket.join(room.channel);
-    playerRooms.set(socket.id, initialLevel);
+    playerRooms.set(socket.id, room.roomId);
     socket.emit('serverConfig', SERVER_CONFIG);
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     socket.emit('levelIndex', room.levelIndex);
     room.addPlayer(socket.id, stats.shipType || 'classic', stats);
+    for (const cid of room.activeClientIds) {
+        const s = io.sockets.sockets.get(cid);
+        if (s) emitRoomInfo(s, room);
+    }
 
     socket.on('debug_action', (action: string, payload) => {
         if (!SERVER_CONFIG.debugMode) {
@@ -446,13 +532,46 @@ io.on('connection', (socket) => {
                     return;
                 }
             }
-            let nextLvl = current + 1;
+            const curLvlIdx = currentRoom ? currentRoom.levelIndex : 0;
+            let nextLvl = curLvlIdx + 1;
             while (!isValidLevelIndex(nextLvl) && nextLvl < 74) {
                 nextLvl++;
             }
             if (nextLvl >= 74) nextLvl = 0;
             handleTransitionToLevel(socket.id, nextLvl);
         }
+    });
+
+    socket.on('request_room_list', () => {
+        const list = [];
+        for (const r of rooms.values()) {
+            if (r.isReplayMode || r.activeClientIds.size === 0) continue;
+            const pilots = Array.from(r.ecs.players.values()).filter(p => !r.ecs.bots.has(r.ecs.getPlayerEntity(p.id)!)).map(p => p.alias);
+            list.push({
+                joinCode: r.joinCode,
+                mode: r.sessionMode,
+                levelIndex: r.levelIndex,
+                levelName: r.level.name,
+                category: r.category,
+                playerCount: r.activeClientIds.size,
+                botCount: r.getBotCount(),
+                pilots
+            });
+        }
+        socket.emit('room_list', list);
+    });
+
+    socket.on('switch_session_mode', (payload: { mode?: 'SP' | 'MP'; roomCode?: string; levelIndex?: number }) => {
+        const curRId = playerRooms.get(socket.id);
+        const curRoom = curRId !== undefined ? rooms.get(curRId) : undefined;
+        const baseLevel = (typeof payload?.levelIndex === 'number' && isValidLevelIndex(payload.levelIndex))
+            ? payload.levelIndex
+            : (curRoom?.levelIndex ?? 0);
+        const mode: 'SP' | 'MP' = payload?.mode === 'MP' ? 'MP' : 'SP';
+        const code = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        socket.emit('hide_leaderboard');
+        socket.emit('hide_game_over');
+        handleTransitionToLevel(socket.id, baseLevel, true, mode, code);
     });
 
     socket.on('input', (rawInputs) => {
@@ -528,18 +647,28 @@ io.on('connection', (socket) => {
     socket.on('retry_level', () => {
         const current = playerRooms.get(socket.id);
         if (current !== undefined && current >= 0) {
+            const curRoom = rooms.get(current);
+            const targetLvl = curRoom ? curRoom.levelIndex : 0;
             const stats = playerSessionStats.get(socket.id);
             if (stats) {
                 stats.lives = SERVER_CONFIG.defaultLives;
                 stats.score = 0;
             }
             socket.emit('hide_game_over');
-            handleTransitionToLevel(socket.id, current, true);
+            handleTransitionToLevel(socket.id, targetLvl, true);
         }
     });
 
     socket.on('disconnect', () => {
+        const prevRId = playerRooms.get(socket.id);
         leaveCurrentRoom(socket.id);
+        if (prevRId !== undefined && rooms.has(prevRId)) {
+            const remRoom = rooms.get(prevRId)!;
+            for (const cid of remRoom.activeClientIds) {
+                const s = io.sockets.sockets.get(cid);
+                if (s) emitRoomInfo(s, remRoom);
+            }
+        }
         playerSessionStats.delete(socket.id);
         pendingPingTimestamps.delete(socket.id);
     });

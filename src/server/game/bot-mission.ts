@@ -166,10 +166,10 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     if (!bot.pathPending && (bot.pathTimer <= 0 || bot.path.length === 0)) {
         bot.pathTimer = 60;
         bot.pathPending = true;
-        botPathWorker.syncLevel(room.levelIndex, room.level);
+        botPathWorker.syncLevel(room.roomId, room.level);
         botPathWorker.enqueue({
             kind: 'target',
-            levelIndex: room.levelIndex,
+            roomId: room.roomId,
             sx: t.x,
             sy: t.y,
             tx: targetObj.x,
