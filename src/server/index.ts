@@ -53,6 +53,11 @@ const playerRooms = new Map<string, number>();
 const playerSessionStats = new Map<string, PlayerStats>();
 const pendingPingTimestamps = new Map<string, number>();
 
+function sanitizeRoomCode(code?: string): string {
+    if (typeof code !== 'string') return '';
+    return code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
+}
+
 function isValidLevelIndex(index: number): boolean {
     try {
         getLevelCategory(index);
@@ -60,6 +65,16 @@ function isValidLevelIndex(index: number): boolean {
     } catch {
         return false;
     }
+}
+
+function getNextLevel(currentIndex: number, category: string): number {
+    for (let i = currentIndex + 1; i < 74; i++) {
+        if (isValidLevelIndex(i) && getLevelCategory(i) === category) return i;
+    }
+    for (let i = 0; i <= currentIndex; i++) {
+        if (isValidLevelIndex(i) && getLevelCategory(i) === category) return i;
+    }
+    return 0;
 }
 
 function generateRoomCode(): string {
@@ -95,7 +110,7 @@ function createRoomInstance(levelIndex: number, mode: 'SP' | 'MP', customCode?: 
 }
 
 function resolveOrCreateTargetRoom(levelIndex: number, mode: 'SP' | 'MP', requestedCode?: string): Room {
-    const cleanCode = typeof requestedCode === 'string' ? requestedCode.trim().toUpperCase() : '';
+    const cleanCode = sanitizeRoomCode(requestedCode);
     if (cleanCode && roomsByCode.has(cleanCode)) {
         const existingRId = roomsByCode.get(cleanCode)!;
         const existingRoom = rooms.get(existingRId);
@@ -317,7 +332,7 @@ io.on('connection', (socket) => {
     const requestedLevel = typeof auth.levelIndex === 'number' ? auth.levelIndex : parseInt(auth.levelIndex, 10);
     const initialLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : 0;
     const initialMode: 'SP' | 'MP' = auth.mode === 'MP' ? 'MP' : 'SP';
-    const initialRoomCode = typeof auth.roomCode === 'string' ? auth.roomCode.trim().toUpperCase() : '';
+    const initialRoomCode = sanitizeRoomCode(auth.roomCode);
 
     const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
     const room = resolveOrCreateTargetRoom(initialLevel, initialMode, initialRoomCode);
@@ -520,12 +535,7 @@ io.on('connection', (socket) => {
             const curCategory = currentRoom ? currentRoom.category : 'mission';
 
             if (currentRoom?.isReplayMode) {
-                let nextLvl = curLvlIdx + 1;
-                while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
-                if (nextLvl >= 74 || !isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory) {
-                    nextLvl = 0;
-                    while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
-                }
+                const nextLvl = getNextLevel(curLvlIdx, curCategory);
                 handleTransitionToLevel(socket.id, nextLvl, true);
                 return;
             }
@@ -538,14 +548,7 @@ io.on('connection', (socket) => {
                     return;
                 }
             }
-            let nextLvl = curLvlIdx + 1;
-            while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) {
-                nextLvl++;
-            }
-            if (nextLvl >= 74 || !isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory) {
-                nextLvl = 0;
-                while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
-            }
+            const nextLvl = getNextLevel(curLvlIdx, curCategory);
             handleTransitionToLevel(socket.id, nextLvl);
         }
     });
@@ -576,7 +579,7 @@ io.on('connection', (socket) => {
             ? payload.levelIndex
             : (curRoom?.levelIndex ?? 0);
         const mode: 'SP' | 'MP' = payload?.mode === 'MP' ? 'MP' : 'SP';
-        const code = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const code = sanitizeRoomCode(payload?.roomCode);
         socket.emit('hide_leaderboard');
         socket.emit('hide_game_over');
         handleTransitionToLevel(socket.id, baseLevel, true, mode, code);

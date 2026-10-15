@@ -511,7 +511,7 @@
 
         window.joinRoomByCodeInput = function() {
             const inp = document.getElementById('room-code-input');
-            const code = inp ? inp.value.trim().toUpperCase() : '';
+            const code = inp ? inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4) : '';
             if (!code) return;
             window.switchSessionMode('MP', code);
         };
@@ -1542,9 +1542,14 @@
         const loginModeMp = document.getElementById('login-mode-mp');
         const loginRoomCode = document.getElementById('login-room-code');
         if (botPilotCheckbox) botPilotCheckbox.checked = myIsBot;
-        if (mySessionMode === 'MP' && loginModeMp) {
-            loginModeMp.checked = true;
-            if (loginRoomCode) loginRoomCode.style.display = 'block';
+        if (loginModeSp && loginModeMp) {
+            if (mySessionMode === 'MP') {
+                loginModeMp.checked = true;
+                if (loginRoomCode) loginRoomCode.style.display = 'block';
+            } else {
+                loginModeSp.checked = true;
+                if (loginRoomCode) loginRoomCode.style.display = 'none';
+            }
         }
         if (loginModeSp && loginModeMp && loginRoomCode) {
             loginModeSp.onchange = () => { loginRoomCode.style.display = 'none'; };
