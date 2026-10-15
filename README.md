@@ -7,15 +7,15 @@
 ...it was on the backlog for 30-35 years but I finally got around to finding out **why** it was awesome.  
 So, some hours (more than I will admit) thrown at reverse engineering it and ... we have a (in spirit) port that will run in the browser.  
 
-It's awesome to see that a lot of old games are getting a second life these days! To manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. It's very much a labour of love. All levels designs (single/multi/dogfight/racing) come from the original game. More on this below.  
+It's awesome to see that a lot of old games are getting a second life these days! To manage expectations, this is not a direct port or conjured by agents. I've attempted to handpick the things that would help making it fun on modern machines in both multi- and single-player. Ignored some, extended others. It's very much a labour of love. All levels designs (single/multi/dogfight/racing), turret and enemy behaviour come from the original game. More on this below.  
 
 ## Deviations from the original
 
 ### Competitive play
 Not really a deviation from the original game since that was all about competition! But I want to stress that
-Gravity-Farce is _also_ written for competitive play. The intention is to, if not prevent, at least make exploitability
-annoying enough so that it's not worth it. The hi-scores should mean something. Server admins can also review
-games.  
+Gravity-Farce is _also_ written for competitive play. Exploitability (aka cheating) should be annoying enough
+so that it's not worth it. I _will_ fix[1] issues that enable cheating*, please report them. The hi-scores should
+mean something. Server admins can also review games.  
 
 For fair competitiveness, I suggest you start a server with a region in mind since it can be pretty frustrating
 with latency differences. To this day I have not done _much_ to even out the playingfield with differing latencies
@@ -24,6 +24,7 @@ bit of a conflict with what the original Gravity-Force was: You _felt_ like you 
 I mean, I know I counted on the nose of my ship literally being pixel-to-pixel against the wall in turns. So, yeah, I 
 am worried that I will lose a bit of that feeling then! But, would have to test it and see!
 
+[1]: SOME types of cheating is close to impossible to fix in code due to the nature of networked play. Server admins can make their decisions on a case-by-case basis.
 
 ### 1. No split-screen and Server-side
 I did not really fancy the split-screen for multi-player. I went for networked play instead. The server is 
@@ -84,8 +85,9 @@ I (and my good friend, the LLM) have tried to document as much of the weirder de
 There was replay functionality at least partially implemented in the original Gravity-Force, but it did not make it into the final game. I have added it to this version, but only if you get a ranked result.
 
 ### Disclaimer
-I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
-used were always rather secondary.
+Generative models were obviously used. I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
+used were always rather secondary.  
+At the end of the day, nothing changed: Shit still takes time.
 
 ## Your own server
 ... todo ...   
