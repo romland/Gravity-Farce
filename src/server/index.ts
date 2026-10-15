@@ -160,7 +160,7 @@ function handleTransition(actorOrSocketId: string) {
                 }
             } else {
                 if (oldRoom.isReplayMode) {
-                    const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), p.uuid, p.alias);
+                    const boards = buildMissionLeaderboards(oldRoom.levelIndex, oldRoom.getRoomMode(), oldRoom.getPhysicsHash(), p.uuid, p.alias);
                     for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
                 } else {
                     const summary = [
@@ -171,9 +171,7 @@ function handleTransition(actorOrSocketId: string) {
                 }
             }
 
-            if (!oldRoom.isReplayMode) {
-                leaveCurrentRoom(actorOrSocketId);
-            } else {
+            if (oldRoom.isReplayMode) {
                 // Replay completed: remove the replay actor
                 oldRoom.ecs.destroy(e);
                 if (oldRoom.ecs.players.size === 0 && rIdToRemove !== null) {
@@ -212,6 +210,9 @@ io.on('connection', (socket) => {
         }
     }
 
+    const requestedLevel = typeof auth.levelIndex === 'number' ? auth.levelIndex : parseInt(auth.levelIndex, 10);
+    const initialLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : 0;
+
     const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
     const stats: PlayerStats = {
         score: 0,
@@ -223,10 +224,10 @@ io.on('connection', (socket) => {
     };
     playerSessionStats.set(socket.id, stats);
 
-    const room = getOrCreateRoom(0);
+    const room = getOrCreateRoom(initialLevel);
 
     socket.join(room.channel);
-    playerRooms.set(socket.id, 0);
+    playerRooms.set(socket.id, initialLevel);
     socket.emit('serverConfig', SERVER_CONFIG);
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
@@ -480,8 +481,8 @@ io.on('connection', (socket) => {
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
         const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
-        const mode = (room && room.activeClientIds.size > 1) ? 'MP' : 'SP';
-        const physicsHash = getActivePhysicsHash();
+        const mode = room ? room.getRoomMode() : 'SP';
+        const physicsHash = room ? room.getPhysicsHash() : getActivePhysicsHash(0);
 
         let boards;
         if (room && room.category === 'race') {
@@ -490,6 +491,19 @@ io.on('connection', (socket) => {
             boards = buildMissionLeaderboards(pLevel, mode, physicsHash, uuid, alias);
         }
         socket.emit('show_leaderboard', boards, true);
+    });
+
+    socket.on('retry_level', () => {
+        const current = playerRooms.get(socket.id);
+        if (current !== undefined && current >= 0) {
+            const stats = playerSessionStats.get(socket.id);
+            if (stats) {
+                stats.lives = SERVER_CONFIG.defaultLives;
+                stats.score = 0;
+            }
+            socket.emit('hide_game_over');
+            handleTransitionToLevel(socket.id, current, true);
+        }
     });
 
     socket.on('disconnect', () => {

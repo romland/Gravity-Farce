@@ -50,9 +50,9 @@ export class RecordManager {
      * Generates a deterministic hash representing the current physical constraints.
      * Highscores MUST be connected to the settings they were achieved under.
      */
-    public generatePhysicsHash(settings: { gravity: number; thrust: number; maxSpeed: number }): string {
+    public generatePhysicsHash(settings: { gravity: number; thrust: number; maxSpeed: number; lethalRacingEnemies?: boolean; raceBumpModifier?: number; botCount?: number }): string {
         // Simple lightweight string hash for physics vars
-        const payload = `${settings.gravity}_${settings.thrust}_${settings.maxSpeed}`;
+        const payload = `${settings.gravity}_${settings.thrust}_${settings.maxSpeed}${settings.botCount ? `_bots_${settings.botCount}` : ''}`;
         let hash = 0;
         for (let i = 0; i < payload.length; i++) {
             hash = Math.imul(31, hash) + payload.charCodeAt(i) | 0;
@@ -174,6 +174,21 @@ export class RecordManager {
         return this.db[key]?.entries || [];
     }
 
+    public getPlayerBestLapRecord(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string): RecordEntry | undefined {
+        const entries = this.getRecords('fastest_lap', level, mode, physicsHash).filter(e => e.playerId === playerId);
+        if (entries.length === 0) return undefined;
+        return entries.reduce((best, cur) => (cur.value < best.value ? cur : best), entries[0]);
+    }
+
+    public updatePlayerBestLapSplits(level: number, mode: 'SP' | 'MP', physicsHash: string, playerId: string, timestamp: number, splits: Record<number, number>) {
+        const entries = this.getRecords('fastest_lap', level, mode, physicsHash);
+        const rec = entries.find(e => e.playerId === playerId && e.timestamp === timestamp);
+        if (rec) {
+            rec.metadata = { ...(rec.metadata || {}), splits };
+            this.save();
+        }
+    }
+
     private load() {
         if (fs.existsSync(this.dbPath)) {
             this.db = JSON.parse(fs.readFileSync(this.dbPath, 'utf8'));
@@ -191,7 +206,7 @@ export class RecordManager {
 
 export const recordDB = new RecordManager();
 
-export function getActivePhysicsHash(): string {
+export function getActivePhysicsHash(botCount: number = 0): string {
 /*
 
 TODO add:
@@ -200,14 +215,14 @@ TODO add:
 
 */
     return SERVER_CONFIG.useClassicPhysics 
-        ? recordDB.generatePhysicsHash({ gravity: 0.010, thrust: 0.070, maxSpeed: 7.5, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier }) // Classic constants
-        : recordDB.generatePhysicsHash({ gravity: 0.015, thrust: 0.100, maxSpeed: 10.0, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier }); // Modern constants
+        ? recordDB.generatePhysicsHash({ gravity: 0.010, thrust: 0.070, maxSpeed: 7.5, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier, botCount }) // Classic constants
+        : recordDB.generatePhysicsHash({ gravity: 0.015, thrust: 0.100, maxSpeed: 10.0, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier, botCount }); // Modern constants
 }
 
 export function formatTimeMs(diff: number): string {
     let m = Math.floor(diff / 60000).toString().padStart(2, '0');
     let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-    let ms = Math.floor((diff % 1000) / 10).toString().padStart(2, '0');
+    let ms = Math.floor(diff % 1000).toString().padStart(3, '0');
     return `${m}:${s}.${ms}`;
 }
 
@@ -295,30 +310,31 @@ export function buildLeaderboardContext(
         }
         
         results.push({
-            rankLabel: `#${i+1}`, alias: displayAlias, displayValue: formatFn(rec),
+            rank: i + 1, rankLabel: `#${i+1}`, alias: displayAlias, displayValue: formatFn(rec),
             isMe, isNewPb: isThisNewPb, isCurrentRun, replayId: rec.metadata?.replayId
         });
     }
     
     if (pIdx >= topN) {
         if (pIdx > topN) {
-            results.push({ rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false, isCurrentRun: false, replayId: undefined });
+            results.push({ rank: -1, rankLabel: '...', alias: '...', displayValue: '', isMe: false, isNewPb: false, isCurrentRun: false, replayId: undefined });
         }
         if (pIdx - 1 >= topN) {
             const rec = recordsCopy[pIdx-1];
-            results.push({ rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: rec.metadata?.replayId });
+            results.push({ rank: pIdx, rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: rec.metadata?.replayId });
         }
         const recMe = recordsCopy[pIdx];
-        results.push({ rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true, replayId: recMe.metadata?.replayId });
+        results.push({ rank: pIdx + 1, rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true, replayId: recMe.metadata?.replayId });
         if (pIdx + 1 < recordsCopy.length) {
             const recNext = recordsCopy[pIdx+1];
-            results.push({ rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: recNext.metadata?.replayId });
+            results.push({ rank: pIdx + 2, rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: recNext.metadata?.replayId });
         }
     }
 
     while (results.length < topN) {
         const idx = results.length;
         results.push({
+            rank: idx + 1,
             rankLabel: `#${idx + 1}`,
             alias: '---',
             displayValue: '--------',

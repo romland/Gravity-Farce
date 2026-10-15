@@ -1,6 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
-import { recordDB, formatTimeMs, buildLeaderboardContext, getActivePhysicsHash } from '../core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
 
 export function sysMission(ecs: Registry, room: Room) {
     if (room.category !== 'mission') return;
@@ -58,8 +58,8 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
     const f = room.ecs.fuelTanks.get(e);
     const w = room.ecs.weaponMounts.get(e);
 
-    const mode = room.ecs.players.size > 1 ? 'MP' : 'SP';
-    const physicsHash = getActivePhysicsHash();
+    const mode = room.getRoomMode();
+    const physicsHash = room.getPhysicsHash();
 
     if (room.isReplayMode) {
         return buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias);
@@ -89,6 +89,16 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         rSharpshooter = recordDB.submitRecord('sp_sharpshooter', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: w?.shotsFired || 0, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid } });
         if (rClear.rank !== -1) room.tracker.logHighscore(playerId, 'sp_cleared', timeTaken, rClear.isNewPb);
         if (rSharpshooter.rank !== -1) room.tracker.logHighscore(playerId, 'sp_sharpshooter', w?.shotsFired || 0, rSharpshooter.isNewPb);
+    }
+
+    const top1Disciplines: string[] = [];
+    if (rFast.rank === 1) top1Disciplines.push('BLITZ');
+    if (rSneak.rank === 1) top1Disciplines.push('PACIFIST');
+    if (rEco.rank === 1) top1Disciplines.push('TREEHUGGER');
+    if (rClear?.rank === 1) top1Disciplines.push('PERFECTION');
+    if (rSharpshooter?.rank === 1) top1Disciplines.push('SNIPER');
+    if (top1Disciplines.length > 0) {
+        room.broadcastGlobalAnnouncement(`${p.alias} TOOK #1 [${top1Disciplines.join(', ')}] ON ${room.level.name}!`);
     }
 
     const boards = buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias,

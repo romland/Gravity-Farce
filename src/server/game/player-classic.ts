@@ -36,9 +36,9 @@ export function spawnClassicPlayer(ecs: Registry, id: string, x: number, y: numb
         lives: stats?.lives ?? 5,
         ping: 0
     });
-    ecs.fuelTanks.set(e, { current: 76464, max: 99999, consumed: 0 });
+    ecs.fuelTanks.set(e, { current: 76464, max: 99999, consumed: stats?.fuelConsumed ?? 0 });
     ecs.cargoBays.set(e, { stack: [], unloadTimer: 0, maxWeight: 3 });
-    ecs.weaponMounts.set(e, { cooldown: 0, baseCooldown: 30, activeModeId: 0xD5, charges: 0, shotsFired: 0, shootLatch: false, prevShoot: false });
+    ecs.weaponMounts.set(e, { cooldown: 0, baseCooldown: 30, activeModeId: 0xD5, charges: 0, shotsFired: stats?.shotsFired ?? 0, shootLatch: false, prevShoot: false });
     return e;
 }
 
@@ -135,7 +135,7 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
         });
 
         if (crashed && !p.advancing) {
-            killPlayer(ecs, e);
+            killPlayer(ecs, e, room);
         }
     }
 }

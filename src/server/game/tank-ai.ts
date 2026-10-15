@@ -120,7 +120,7 @@ function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: nu
             if (room.category === 'race' && !room.isLethalRacing) {
                 bumpPlayer(ecs, room, pe, tx, ty, 6.0);
             } else {
-                killPlayer(ecs, pe);
+                killPlayer(ecs, pe, room);
             }
         }
     }

@@ -41,6 +41,7 @@ export class Room {
     public floraBurns = new Map<number, FloraBurnRecord>();
     public floraHeat = new Map<number, number>();
     public lastClientViews = new Map<string, { x: number; y: number }>();
+    private gameOverResetTimer: any = null;
 
     constructor(
         public roomId: number,
@@ -70,6 +71,57 @@ export class Room {
 
     public get channel(): string {
         return `room_${this.roomId}`;
+    }
+
+    public getRoomMode(): 'SP' | 'MP' {
+        return this.activeClientIds.size > 1 ? 'MP' : 'SP';
+    }
+
+    public getBotCount(): number {
+        return this.ecs.bots.size;
+    }
+
+    public getPhysicsHash(): string {
+        return getActivePhysicsHash(this.getBotCount());
+    }
+
+    public broadcastGlobalAnnouncement(text: string) {
+        this.io.emit('server_announcement', { text });
+    }
+
+    public checkAllPlayersOutOfLives() {
+        if (this.isReplayMode || this.activeClientIds.size === 0) return;
+        let anyHumanAliveOrHasLives = false;
+        for (const [e, p] of this.ecs.players.entries()) {
+            if (this.ecs.bots.has(e)) continue;
+            if (!p.isDead || p.lives > 0) {
+                anyHumanAliveOrHasLives = true;
+                break;
+            }
+        }
+        if (!anyHumanAliveOrHasLives && !this.gameOverResetTimer) {
+            this.gameOverResetTimer = setTimeout(() => {
+                this.gameOverResetTimer = null;
+                if (this.activeClientIds.size === 0) return;
+                this.resetLevel();
+                for (const clientId of this.activeClientIds) {
+                    const pe = this.ecs.getPlayerEntity(clientId);
+                    if (pe !== undefined) {
+                        const oldP = this.ecs.players.get(pe)!;
+                        this.trySpawnPlayer(clientId, oldP.type, {
+                            score: 0,
+                            uuid: oldP.uuid,
+                            alias: oldP.alias,
+                            lives: SERVER_CONFIG.defaultLives,
+                            joinedAtTick: this.globalWaveTimer,
+                            shotsFired: 0,
+                            fuelConsumed: 0
+                        });
+                    }
+                    this.emitToPlayer(clientId, 'hide_game_over', {});
+                }
+            }, 4000);
+        }
     }
 
     tick(isPaused: boolean = false) {
@@ -113,7 +165,7 @@ export class Room {
             }
             this.globalWaveTimer++;
             for (const [e, p] of this.ecs.players.entries()) {
-                if (p.respawnRequest) { p.respawnRequest = false; this.trySpawnPlayer(p.id, p.type); }
+                if (p.respawnRequest) { p.respawnRequest = false; if (p.lives > 0) this.trySpawnPlayer(p.id, p.type); }
             }
 
             sysModernPlayers(this.ecs, this);
@@ -207,6 +259,8 @@ export class Room {
         }
         if (this.activeClientIds.size === 0) {
             this.destroyAllEntities();
+        } else {
+            this.checkAllPlayersOutOfLives();
         }
     }
 
@@ -252,12 +306,26 @@ export class Room {
         if (chosenX !== null) {
             let spawnStats = stats ? { ...stats } : undefined;
             let oldBotState: any = undefined;
+            let wasRespawn = false;
             const existing = this.ecs.getPlayerEntity(id);
             if (existing !== undefined) {
                 const oldP = this.ecs.players.get(existing);
+                const oldW = this.ecs.weaponMounts.get(existing);
+                const oldF = this.ecs.fuelTanks.get(existing);
                 oldBotState = this.ecs.bots.get(existing);
                 if (oldP) {
-                    spawnStats = { score: oldP.score, race: oldP.race, uuid: oldP.uuid, alias: oldP.alias, joinedAt: oldP.joinedAt, shotsFired: oldP.shotsFired, lives: oldP.lives }; // Keep score, race, identity, level timer, shots, and lives
+                    wasRespawn = oldP.isDead && (!stats || stats.lives === undefined);
+                    spawnStats = {
+                        score: stats?.score ?? oldP.score,
+                        race: stats ? stats.race : oldP.race,
+                        uuid: stats?.uuid ?? oldP.uuid,
+                        alias: stats?.alias ?? oldP.alias,
+                        joinedAt: stats?.joinedAt ?? oldP.joinedAt,
+                        joinedAtTick: stats?.joinedAtTick ?? oldP.joinedAtTick,
+                        shotsFired: stats?.shotsFired ?? (oldW?.shotsFired || 0),
+                        fuelConsumed: stats?.fuelConsumed ?? (oldF?.consumed || 0),
+                        lives: stats?.lives ?? oldP.lives
+                    };
                 }
                 this.ecs.destroy(existing);
             }
@@ -282,6 +350,15 @@ export class Room {
                         v.vy = 0;
                         v.angularVelocity = 0;
                     }
+                    if (wasRespawn) {
+                        this.ecs.events.push({
+                            type: 'floating_text',
+                            text: `-1 LIFE (${p.lives} LEFT)`,
+                            color: '#e74c3c',
+                            x: chosenX,
+                            y: chosenY! - 36
+                        });
+                    }
                 }
             }
 
@@ -303,8 +380,8 @@ export class Room {
         this.io.to(this.channel).emit('flora_burn', { idx, originT });
     }
 
-    emitToPlayer(id: string, event: string, payload: any) {
-        this.io.to(id).emit(event, payload);
+    emitToPlayer(id: string, event: string, ...args: any[]) {
+        this.io.to(id).emit(event, ...args);
     }
 
     private destroyAllEntities() {
@@ -321,8 +398,12 @@ export class Room {
 
     resetLevel() {
         if (this.isReplayMode) return;
+        if (this.gameOverResetTimer) {
+            clearTimeout(this.gameOverResetTimer);
+            this.gameOverResetTimer = null;
+        }
         this.tracker.finishAndSave();
-        this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
+        this.tracker = new GameTracker(this.levelIndex, this.category, this.getRoomMode(), this.getPhysicsHash(), SERVER_CONFIG.debugMode);
         this.seed = Date.now();
         this.prng = createPRNG(this.seed);
         this.tracker['entry'].replayData.seed = this.seed;

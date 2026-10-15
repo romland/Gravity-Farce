@@ -74,7 +74,7 @@ export function sysHomingMissiles(ecs: Registry, room: Room) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, pe, missile.x, missile.y, 5.0);
                 } else {
-                    killPlayer(ecs, pe);
+                    killPlayer(ecs, pe, room);
                 }
                 missile.active = false;
                 ecs.destroy(e);

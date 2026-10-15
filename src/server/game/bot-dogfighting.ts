@@ -26,7 +26,7 @@ let globalTickCounter = 0;
 export function spawnDogfightBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
     const safePos = findSafePadPosition(level, x, y, alias);
     const botId = BOT_UUID_PREFIX + alias;
-    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: 1 });
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: SERVER_CONFIG.defaultLives });
 
     // Ensure initial physics state is upright and resting cleanly on pad
     const t = ecs.transforms.get(e);

@@ -1,6 +1,6 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
-import { recordDB, formatTimeMs, buildLeaderboardContext, getActivePhysicsHash } from '../core/records';
+import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
 import { SERVER_CONFIG } from '../core/config';
 
 export function sysRacing(ecs: Registry, room: Room) {
@@ -26,7 +26,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                     currentLap: 0,
                     totalLaps: 3, // Default to 3 laps
                     startTime: 0,
-                    lapTimes: []
+                    lapTimes: [],
+                    currentLapSplits: {}
                 };
             }
 
@@ -35,21 +36,28 @@ export function sysRacing(ecs: Registry, room: Room) {
                 p.race.nextCheckpoint = 2;
                 p.race.currentLap = 1;
                 p.race.startTime = now;
+                p.race.currentLapSplits = {};
+                p.race.bestLapResult = undefined;
+                p.race.bestFlyingResult = undefined;
                 ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
                 ecs.events.push({ type: 'floating_text', text: 'GO!', color: '#f1c40f', x: pt.x, y: pt.y - 30 });
             } else if (p.race.state === 1 && hitCheckpoint === p.race.nextCheckpoint) {
+                const mode = room.getRoomMode();
+                const physicsHash = room.getPhysicsHash();
+                const isBot = ecs.bots.has(pe);
+                const elapsedInLap = now - p.race.startTime - p.race.lapTimes.reduce((a, b) => a + b, 0);
+                if (!p.race.currentLapSplits) p.race.currentLapSplits = {};
+                p.race.currentLapSplits[hitCheckpoint] = elapsedInLap;
+
                 p.race.nextCheckpoint++;
 
                 if (p.race.nextCheckpoint > 8) {
-                    const lapTime = now - p.race.startTime - p.race.lapTimes.reduce((a, b) => a + b, 0);
+                    const lapTime = elapsedInLap;
+                    const completedSplits = { ...p.race.currentLapSplits };
+                    p.race.currentLapSplits = {};
                     p.race.lapTimes.push(lapTime);
 
                     room.tracker.logEvent(p.id, { type: 'lap_completed', lapNum: p.race.currentLap, lapTime });
-
-                    // Multiplayer = More than 1 player in the room
-                    const mode = ecs.players.size > 1 ? 'MP' : 'SP';
-                    const physicsHash = getActivePhysicsHash();
-                    const isBot = ecs.bots.has(pe);
 
                     // Save Fastest Individual Lap
                     let rLap = { rank: -1, isNewPb: false, timestamp: 0 };
@@ -58,9 +66,12 @@ export function sysRacing(ecs: Registry, room: Room) {
                             playerId: p.uuid,
                             alias: p.alias,
                             value: lapTime,
-                            metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps, replayId: room.tracker.uuid }
+                            metadata: { ship: p.type, lapNum: p.race.currentLap, totalLaps: p.race.totalLaps, replayId: room.tracker.uuid, splits: completedSplits }
                         });
                         if (rLap.rank !== -1) room.tracker.logHighscore(p.id, 'fastest_lap', lapTime, rLap.isNewPb);
+                        if (!p.race.bestLapResult || lapTime < p.race.bestLapResult.value) {
+                            p.race.bestLapResult = { value: lapTime, rank: rLap.rank, isNewPb: rLap.isNewPb, timestamp: rLap.timestamp || Date.now() };
+                        }
                     }
 
                     // Flying Lap (Lap 2+)
@@ -70,6 +81,26 @@ export function sysRacing(ecs: Registry, room: Room) {
                             playerId: p.uuid, alias: p.alias, value: lapTime, metadata: { ship: p.type, lapNum: p.race.currentLap, replayId: room.tracker.uuid }
                         });
                         if (rFlying.rank !== -1) room.tracker.logHighscore(p.id, 'flying_lap', lapTime, rFlying.isNewPb);
+                        if (!p.race.bestFlyingResult || lapTime < p.race.bestFlyingResult.value) {
+                            p.race.bestFlyingResult = { value: lapTime, rank: rFlying.rank, isNewPb: rFlying.isNewPb, timestamp: rFlying.timestamp || Date.now() };
+                        }
+                    }
+
+                    // Playfield announcement (player-only) and global server broadcast for #1
+                    if (!isBot && !room.isReplayMode) {
+                        if (rLap.rank === 1) {
+                            room.emitToPlayer(p.id, 'playfield_announce', { text: `NEW #1 LAP RECORD! ${formatTimeMs(lapTime)}`, color: '#ffd700' });
+                            room.broadcastGlobalAnnouncement(`${p.alias} SET #1 LAP RECORD ON ${room.level.name} (${formatTimeMs(lapTime)})!`);
+                        } else if (rFlying && rFlying.rank === 1) {
+                            room.emitToPlayer(p.id, 'playfield_announce', { text: `NEW #1 FLYING LAP! ${formatTimeMs(lapTime)}`, color: '#ffd700' });
+                            room.broadcastGlobalAnnouncement(`${p.alias} SET #1 FLYING LAP ON ${room.level.name} (${formatTimeMs(lapTime)})!`);
+                        } else if (rLap.isNewPb) {
+                            room.emitToPlayer(p.id, 'playfield_announce', { text: `NEW LAP PB! ${formatTimeMs(lapTime)}`, color: '#2ecc71' });
+                        } else if (rFlying && rFlying.isNewPb) {
+                            room.emitToPlayer(p.id, 'playfield_announce', { text: `NEW FLYING LAP PB! ${formatTimeMs(lapTime)}`, color: '#2ecc71' });
+                        } else if (rLap.rank > 0 && rLap.rank <= 10) {
+                            room.emitToPlayer(p.id, 'playfield_announce', { text: `TOP #${rLap.rank} LAP TIME! ${formatTimeMs(lapTime)}`, color: '#4facfe' });
+                        }
                     }
 
                     if (p.race.currentLap >= p.race.totalLaps) {
@@ -91,6 +122,9 @@ export function sysRacing(ecs: Registry, room: Room) {
                                 metadata: { ship: p.type, laps: p.race.totalLaps, replayId: room.tracker.uuid }
                             });
                             if (rRace.rank !== -1) room.tracker.logHighscore(p.id, 'race_time', now - p.race.startTime, rRace.isNewPb);
+                            if (rRace.rank === 1) {
+                                room.broadcastGlobalAnnouncement(`${p.alias} TOOK #1 RACE RECORD ON ${room.level.name} (${formatTimeMs(now - p.race.startTime)})!`);
+                            }
                         }
                         room.tracker.isCompleted = true;
 
@@ -105,9 +139,11 @@ export function sysRacing(ecs: Registry, room: Room) {
                         if (room.isReplayMode) {
                             boards = buildRaceLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias);
                         } else {
+                            const bestLap = p.race.bestLapResult || { value: Math.min(...p.race.lapTimes), isNewPb: rLap.isNewPb, timestamp: rLap.timestamp || now };
+                            const bestFly = p.race.bestFlyingResult;
                             const ctxRaces = buildLeaderboardContext('race_time', room.levelIndex, mode, physicsHash, p.uuid, rRace.isNewPb, rRace.timestamp, x => formatTimeMs(x.value), 10, { value: now - p.race.startTime, alias: p.alias });
-                            const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, rLap.isNewPb, rLap.timestamp, x => formatTimeMs(x.value), 10, { value: lapTime, alias: p.alias });
-                            const ctxFlying = buildLeaderboardContext('flying_lap', room.levelIndex, mode, physicsHash, p.uuid, rFlying?.isNewPb ?? false, rFlying?.timestamp, x => formatTimeMs(x.value), 10, rFlying ? { value: lapTime, alias: p.alias } : undefined);
+                            const ctxLaps = buildLeaderboardContext('fastest_lap', room.levelIndex, mode, physicsHash, p.uuid, bestLap.isNewPb, bestLap.timestamp, x => formatTimeMs(x.value), 10, { value: bestLap.value, alias: p.alias });
+                            const ctxFlying = buildLeaderboardContext('flying_lap', room.levelIndex, mode, physicsHash, p.uuid, bestFly?.isNewPb ?? false, bestFly?.timestamp, x => formatTimeMs(x.value), 10, bestFly ? { value: bestFly.value, alias: p.alias } : undefined);
 
                             if (mode === 'MP') {
                                 const sessionRaces = [];
@@ -137,6 +173,7 @@ export function sysRacing(ecs: Registry, room: Room) {
                                     };
                                 }) : [
                                     { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
+                                    ...p.race.lapTimes.map((lt, idx) => ({ rankLabel: `LAP ${idx + 1}`, alias: idx === 0 ? 'STANDING' : 'FLYING', displayValue: formatTimeMs(lt), isMe: true, isNewPb: false })),
                                     { rankLabel: 'FUEL', alias: 'USED', displayValue: `${Math.floor(room.ecs.fuelTanks.get(pe)?.consumed || 0)}F`, isMe: true, isNewPb: false },
                                     { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
                                 ];
@@ -163,7 +200,17 @@ export function sysRacing(ecs: Registry, room: Room) {
                     }
                 } else {
                     ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
-                    ecs.events.push({ type: 'floating_text', text: 'CHECKPOINT', color: '#fff', x: pt.x, y: pt.y - 30 });
+                    const pbRec = !isBot ? recordDB.getPlayerBestLapRecord(room.levelIndex, mode, physicsHash, p.uuid) : undefined;
+                    const pbSplit = pbRec?.metadata?.splits?.[hitCheckpoint];
+                    if (typeof pbSplit === 'number') {
+                        const diffMs = elapsedInLap - pbSplit;
+                        const sign = diffMs <= 0 ? '-' : '+';
+                        const secStr = (Math.abs(diffMs) / 1000).toFixed(3);
+                        const splitColor = diffMs <= 0 ? '#2ecc71' : '#e74c3c';
+                        ecs.events.push({ type: 'floating_text', text: `CP${hitCheckpoint} ${sign}${secStr}s`, color: splitColor, x: pt.x, y: pt.y - 30 });
+                    } else {
+                        ecs.events.push({ type: 'floating_text', text: `CHECKPOINT ${hitCheckpoint}`, color: '#fff', x: pt.x, y: pt.y - 30 });
+                    }
                 }
             }
         }

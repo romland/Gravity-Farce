@@ -13,7 +13,7 @@ let globalTickCounter = 0;
 export function spawnMissionBot(ecs: Registry, x: number, y: number, alias: string, level?: import('../core/types').LevelData): Entity {
     const safePos = findSafePadPosition(level, x, y);
     const botId = BOT_UUID_PREFIX + alias;
-    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: 5 });
+    const e = spawnClassicPlayer(ecs, botId, safePos.x, safePos.y, { uuid: botId, alias, shipType: 'classic', lives: SERVER_CONFIG.defaultLives });
 
     const t = ecs.transforms.get(e);
     if (t) t.angle = -Math.PI / 2;

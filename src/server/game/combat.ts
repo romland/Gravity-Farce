@@ -113,31 +113,34 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     p.lives--;
 
     if (p.lives <= 0) {
+        p.lives = 0;
         // Record arcade score before reset
         if (room && p.score > 0 && !ecs.bots.has(e) && !room.isReplayMode) {
-            const mode = room.ecs.players.size > 1 ? 'MP' : 'SP';
-            const rScore = recordDB.submitRecord('arcade_score', 0, mode, getActivePhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score, metadata: { replayId: room.tracker.uuid } });
+            const mode = room.getRoomMode();
+            const rScore = recordDB.submitRecord('arcade_score', 0, mode, room.getPhysicsHash(), 'desc', { playerId: p.uuid, alias: p.alias, value: p.score, metadata: { replayId: room.tracker.uuid } });
             if (rScore.rank !== -1) room.tracker.logHighscore(p.id, 'arcade_score', p.score, rScore.isNewPb);
+            if (rScore.rank === 1) {
+                room.broadcastGlobalAnnouncement(`${p.alias} SET #1 ARCADE SCORE: ${p.score}!`);
+            }
         }
         
-        setTimeout(() => {
-            p.score = 0;
-            p.lives = 5; // Reset to default
-            p.respawnRequest = true;
-        }, 3000);
+        if (room && !ecs.bots.has(e) && !room.isReplayMode) {
+            room.emitToPlayer(p.id, 'game_over', { score: p.score, levelName: room.level.name });
+            room.checkAllPlayersOutOfLives();
+        }
     } else {
         setTimeout(() => { p.respawnRequest = true; }, 3000);
     }
 }
 
-export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18): boolean {
+export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18, room?: Room): boolean {
     let crashed = false;
     for (const [oe, op] of ecs.players.entries()) {
         if (oe === e || op.isDead) continue;
         const ot = ecs.transforms.get(oe)!;
         if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { 
             crashed = true; 
-            killPlayer(ecs, oe); // Note: Could pass room here eventually, but PvP usually won't proc in most SP scenarios
+            killPlayer(ecs, oe, room);
         }
     }
     return crashed;

@@ -33,6 +33,9 @@ export interface PlayerRaceState {
     startTime: number;
     finishTime?: number;
     lapTimes: number[];
+    currentLapSplits?: Record<number, number>;
+    bestLapResult?: { value: number; rank: number; isNewPb: boolean; timestamp: number };
+    bestFlyingResult?: { value: number; rank: number; isNewPb: boolean; timestamp: number };
 }
 
 export interface Player {

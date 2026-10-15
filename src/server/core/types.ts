@@ -59,6 +59,8 @@ export interface PlayerStats {
     shipType?: 'classic' | 'modern';
     ip?: string;
     lives?: number;
+    shotsFired?: number;
+    fuelConsumed?: number;
 }
 
 export interface BotState {

@@ -197,7 +197,7 @@ export const RENDER_CONFIG = {
         maxHangingStalactites: 55,
         shockwaveRingsEnabled: true,
         shockwaveMaxRadius: 280,
-        shockwaveDurationTicks: 38,    // Guaranteed frame lifetime before cleanup
+        shockwaveDurationTicks: 70,    // Guaranteed frame lifetime before cleanup
         gravityArcsEnabled: true
     }
 };
