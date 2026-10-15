@@ -102,7 +102,7 @@ export class TileMaskRegistry {
                             }
                         }
                     }
-                    console.log(`Loaded exact Amiga 8x8 bitplane masks from ${path.basename(p)}`);
+                    console.log(`Loaded 8x8 bitplane masks from ${path.basename(p)}`);
                     return;
                 } catch (e) {
                     console.warn('Failed to parse tile_masks.json, using procedural masks.', e);

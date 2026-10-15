@@ -43,6 +43,9 @@ export interface LevelData {
     highRes?: {
         prefabs: LevelPrefab[];
         flora: FloraAnchor[];
+        recessedWalls?: Point[][];
+        recessedWidth?: number;
+        recessedHeight?: number;
     };
 }
 
@@ -67,4 +70,5 @@ export interface BotState {
     stateTimer: number;
     path: { x: number, y: number }[];
     pathTimer: number;
+    pathPending?: boolean;
 }

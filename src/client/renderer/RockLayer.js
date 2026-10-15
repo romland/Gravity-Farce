@@ -340,8 +340,29 @@ export class RockLayer {
         backCanvas.height = h;
         const bCtx = backCanvas.getContext('2d');
 
+        const siblingWalls = (level.highRes?.recessedWalls && level.highRes.recessedWalls.length > 0)
+            ? level.highRes.recessedWalls
+            : level.walls;
+        const scaleX = level.highRes?.recessedWidth ? (w / level.highRes.recessedWidth) : 1.0;
+        const scaleY = level.highRes?.recessedHeight ? (h / level.highRes.recessedHeight) : 1.0;
+
+        const traceRecessedVolume = (targetCtx, includeOuterRect) => {
+            targetCtx.beginPath();
+            if (includeOuterRect) {
+                targetCtx.rect(-64, -64, w + 128, h + 128);
+            }
+            for (const wall of siblingWalls) {
+                if (wall.length < 3) continue;
+                targetCtx.moveTo(wall[0].x * scaleX, wall[0].y * scaleY);
+                for (let i = 1; i < wall.length; i++) {
+                    targetCtx.lineTo(wall[i].x * scaleX, wall[i].y * scaleY);
+                }
+                targetCtx.closePath();
+            }
+        };
+
         bCtx.save();
-        traceRockVolume(bCtx);
+        traceRecessedVolume(bCtx, true);
         bCtx.clip('evenodd');
         bCtx.fillStyle = 'rgba(14, 18, 28, 0.82)';
         bCtx.fillRect(0, 0, w, h);
@@ -352,7 +373,7 @@ export class RockLayer {
             mineralVeinsEnabled: false
         });
 
-        traceAllLoops(bCtx);
+        traceRecessedVolume(bCtx, false);
         bCtx.lineJoin = 'round';
         bCtx.strokeStyle = '#1c2436';
         bCtx.lineWidth = 44;

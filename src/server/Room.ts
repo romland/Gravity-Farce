@@ -22,6 +22,7 @@ import { SERVER_CONFIG } from './core/config';
 import { createPRNG } from './core/math';
 import { getActivePhysicsHash } from './core/records';
 import { FloraBurnSystem, type FloraBurnRecord } from './game/highres/FloraBurnSystem';
+import { botPathWorker } from './game/bot-path-worker';
 
 export class Room {
     public ecs = new Registry();
@@ -50,6 +51,7 @@ export class Room {
         this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         this.tracker['entry'].replayData.seed = this.seed;
         this.spawnEntities();
+        botPathWorker.syncLevel(this.levelIndex, this.level, true);
         this.printLevelStats();
     }
 
@@ -266,6 +268,7 @@ export class Room {
 
     broadcastTileUpdate(x: number, y: number, tile: number) {
         this.io.to(`level_${this.levelIndex}`).emit('tile_update', { x, y, tile });
+        botPathWorker.notifyTileUpdate(this.levelIndex, x, y, tile);
     }
 
     broadcastFloraBurn(idx: number, originT: number) {
@@ -314,6 +317,7 @@ export class Room {
             this.ecs.destroy(e);
         }
         this.spawnEntities();
+        botPathWorker.syncLevel(this.levelIndex, this.level, true);
         this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
     }
 

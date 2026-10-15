@@ -27,6 +27,16 @@ export function getLevelCategory(index: number): LevelCategory {
     throw new Error(`Illegal cavern: ${index}`);
 }
 
+export function getSiblingLevelRawGrid(index: number): number[][] | undefined {
+    const validCount = Math.min(66, orgLevelsData.length);
+    if (validCount <= 1) return orgLevelsData[0]?.map_data;
+    let siblingIdx = ((index * 37) + 13) % validCount;
+    if (siblingIdx === index) {
+        siblingIdx = (index + 7) % validCount;
+    }
+    return orgLevelsData[siblingIdx]?.map_data;
+}
+
 let orgLevelsData: any[] = [];
 try {
     const rawData = fs.readFileSync(path.join(process.cwd(), 'src/server/data/org-levels.json'), 'utf-8');
@@ -48,7 +58,8 @@ export function getLevelData(index: number): LevelData {
     
     if (!compiledLevelCache.has(safeIndex)) {
         const levelJson = orgLevelsData[safeIndex];
-        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data);
+        const siblingGrid = getSiblingLevelRawGrid(safeIndex);
+        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, levelJson.map_data, siblingGrid);
         compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
     }
 

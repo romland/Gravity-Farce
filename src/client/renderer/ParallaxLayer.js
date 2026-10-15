@@ -8,7 +8,80 @@ export class ParallaxLayer {
         this.motes = [];
         this.nebulas = [];
         this.godRays = [];
+        this.pillarSprites = [];
         this.initProceduralBackdrop();
+    }
+
+    createCraggyMonolithSprite(rng, isFar) {
+        if (typeof document === 'undefined') return null;
+        const sw = 240;
+        const sh = 640;
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d');
+
+        const steps = 16;
+        const leftPts = [];
+        const rightPts = [];
+        const midPts = [];
+
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const y = t * sh;
+            // Hourglass tectonic column profile with craggy jagged ledges
+            const waist = 0.42 + 0.58 * Math.pow(Math.abs(t - 0.5) * 2, 1.35);
+            const jagL = (rng() - 0.5) * 28;
+            const jagR = (rng() - 0.5) * 28;
+            const halfW = Math.max(18, (sw * 0.42) * waist);
+            const lx = Math.max(4, sw * 0.5 - halfW + jagL);
+            const rx = Math.min(sw - 4, sw * 0.5 + halfW + jagR);
+            leftPts.push({ x: lx, y });
+            rightPts.push({ x: rx, y });
+            midPts.push({ x: (lx + rx) * 0.5 + (rng() - 0.5) * 18, y });
+        }
+
+        // West-facing lit basalt face
+        const litGrad = ctx.createLinearGradient(0, 0, sw, 0);
+        litGrad.addColorStop(0, isFar ? '#162033' : '#1e2b42');
+        litGrad.addColorStop(1, isFar ? '#0c121f' : '#111829');
+        ctx.fillStyle = litGrad;
+        ctx.beginPath();
+        ctx.moveTo(leftPts[0].x, leftPts[0].y);
+        for (let i = 1; i <= steps; i++) ctx.lineTo(leftPts[i].x, leftPts[i].y);
+        for (let i = steps; i >= 0; i--) ctx.lineTo(rightPts[i].x, rightPts[i].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // East-facing deep shadow facet
+        ctx.fillStyle = isFar ? 'rgba(6, 9, 16, 0.55)' : 'rgba(7, 10, 18, 0.68)';
+        ctx.beginPath();
+        ctx.moveTo(midPts[0].x, midPts[0].y);
+        for (let i = 1; i <= steps; i++) ctx.lineTo(midPts[i].x, midPts[i].y);
+        for (let i = steps; i >= 0; i--) ctx.lineTo(rightPts[i].x, rightPts[i].y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp rim highlight along the western crag edge & central spine
+        ctx.strokeStyle = isFar ? 'rgba(79, 172, 254, 0.10)' : 'rgba(110, 195, 255, 0.16)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(leftPts[0].x, leftPts[0].y);
+        for (let i = 1; i <= steps; i++) ctx.lineTo(leftPts[i].x, leftPts[i].y);
+        ctx.stroke();
+
+        // Top & bottom atmospheric fade so pillars blend seamlessly into the cavern abyss
+        ctx.globalCompositeOperation = 'destination-in';
+        const maskGrad = ctx.createLinearGradient(0, 0, 0, sh);
+        maskGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        maskGrad.addColorStop(0.18, 'rgba(0,0,0,1)');
+        maskGrad.addColorStop(0.82, 'rgba(0,0,0,1)');
+        maskGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = maskGrad;
+        ctx.fillRect(0, 0, sw, sh);
+        ctx.globalCompositeOperation = 'source-over';
+
+        return canvas;
     }
 
     initProceduralBackdrop() {
@@ -62,13 +135,19 @@ export class ParallaxLayer {
             });
         }
 
+        for (let s = 0; s < 6; s++) {
+            this.pillarSprites.push(this.createCraggyMonolithSprite(rng, s % 2 === 0));
+        }
+
         for (let i = 0; i < cfg.pillarCount; i++) {
+            const isFar = i % 2 === 0;
             this.pillars.push({
                 x: rng() * 2600,
                 y: rng() * 3600,
                 w: 90 + rng() * 220,
                 h: 300 + rng() * 700,
-                depth: i % 2 === 0 ? cfg.farPillarDepth : cfg.nearPillarDepth
+                depth: isFar ? cfg.farPillarDepth : cfg.nearPillarDepth,
+                sprite: this.pillarSprites[(isFar ? 0 : 1) + (i % 3) * 2]
             });
         }
 
@@ -136,10 +215,9 @@ export class ParallaxLayer {
             const sy = ((p.y - camera.y * p.depth + 750) % wrapH + wrapH) % wrapH - 750;
             if (sx + p.w < 0 || sx > this.viewW || sy + p.h < 0 || sy > this.viewH) continue;
 
-            ctx.fillStyle = p.depth < 0.25 ? '#0f1624' : '#141d2f';
-            ctx.beginPath();
-            ctx.ellipse(sx + p.w * 0.5, sy + p.h * 0.5, p.w * 0.5, p.h * 0.5, 0, 0, Math.PI * 2);
-            ctx.fill();
+            if (p.sprite) {
+                ctx.drawImage(p.sprite, sx, sy, p.w, p.h);
+            }
         }
 
         // Layer -1.5: Subterranean Atmospheric Mist & Diagonal Shimmering God-Rays

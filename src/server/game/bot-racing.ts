@@ -5,6 +5,7 @@ import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
 import { getCheckpoints, calculatePathToGate, prunePath, hasClearPath, applyAngularControl, getAngleDiff, logRacingCrash, findSafePadPosition } from './bot-utils';
+import { botPathWorker } from './bot-path-worker';
 import { spawnClassicPlayer } from './player-classic';
 export const BOT_UUID_PREFIX = 'RACER_';
 
@@ -84,30 +85,26 @@ function processRacingFlight(ecs: Registry, room: Room, e: Entity, bot: import('
     // PATH RECALCULATION
     bot.pathTimer--;
     const currentCpNum = p.race ? p.race.nextCheckpoint : 1;
-    if (bot.path.length === 0 || bot.pathTimer <= 0 || (bot as any).lastCpNum !== currentCpNum) {
+    if (!bot.pathPending && (bot.path.length === 0 || bot.pathTimer <= 0 || (bot as any).lastCpNum !== currentCpNum)) {
         (bot as any).lastCpNum = currentCpNum;
-
-        // Calculate path strictly to the next required checkpoint to prevent skipping logic
-        const rawPath = calculatePathToGate(room.level.rawMap, t.x, t.y, targetCp);
-        const pruned = prunePath(rawPath, room, { x: t.x, y: t.y });
-
-        // Add a secondary path to the subsequent checkpoint to enable smooth cornering THROUGH the gate
         const validCps = checkpoints.filter(Boolean);
         const nextIndex = validCps.length > 0 ? (currentCpNum % validCps.length) : 0;
         const futureCp = validCps[nextIndex];
 
-        if (futureCp && rawPath.length > 0) {
-            const lastNode = rawPath[rawPath.length - 1];
-            const startX = lastNode.x * 32 + 16;
-            const startY = lastNode.y * 32 + 16;
-            const rawPath2 = calculatePathToGate(room.level.rawMap, startX, startY, futureCp);
-            const pruned2 = prunePath(rawPath2, room);
-            // Stitch paths, ensuring we cross the current gate precisely
-            bot.path = [...pruned, ...pruned2.slice(1)];
-        } else {
-            bot.path = pruned;
-        }
         bot.pathTimer = 15;
+        bot.pathPending = true;
+        botPathWorker.syncLevel(room.levelIndex, room.level);
+        botPathWorker.enqueue({
+            kind: 'gate',
+            levelIndex: room.levelIndex,
+            sx: t.x,
+            sy: t.y,
+            gate: targetCp,
+            futureGate: futureCp
+        }, (res) => {
+            bot.pathPending = false;
+            if (res.path.length > 0) bot.path = res.path;
+        });
     }
 
     // 4. PATH ANALYZER & DYNAMIC BRAKING

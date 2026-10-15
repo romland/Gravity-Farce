@@ -1,5 +1,6 @@
 import type { FloraAnchor } from '../../core/types';
 import type { SmoothedVertex } from './ContourSmoother';
+import { TILE_DICTIONARY } from '../../core/tiles';
 
 export const FLORA_SEED_CONFIG = {
     vertexStep: 2,
@@ -33,10 +34,36 @@ export class FloraSeeder {
         return (s1 * 0.65 + s2 * 0.35 + 1.0) * 0.5;
     }
 
+    private static clampLengthToAir(
+        wx: number,
+        wy: number,
+        dirY: number,
+        desiredLength: number,
+        rawMap?: number[][]
+    ): number {
+        if (!rawMap || rawMap.length === 0) return desiredLength;
+        const mapH = rawMap.length;
+        const mapW = rawMap[0].length;
+        const tx = Math.floor(wx / 32);
+        if (tx < 0 || tx >= mapW) return 0;
+
+        let maxLen = 0;
+        for (let d = 12; d <= desiredLength; d += 8) {
+            const probeY = wy + dirY * d;
+            const ty = Math.floor(probeY / 32);
+            if (ty < 0 || ty >= mapH) break;
+            const tid = rawMap[ty]?.[tx] ?? 0;
+            if (TILE_DICTIONARY[tid]?.solid || TILE_DICTIONARY[tid]?.pad) break;
+            maxLen = d;
+        }
+        return maxLen;
+    }
+
     public static generateFlora(
         smoothedLoops: SmoothedVertex[][],
         levelIndex: number,
-        scaleToWorld: number = 4
+        scaleToWorld: number = 4,
+        rawMap?: number[][]
     ): FloraAnchor[] {
         const anchors: FloraAnchor[] = [];
         const cfg = FLORA_SEED_CONFIG;
@@ -54,7 +81,9 @@ export class FloraSeeder {
 
                 // Ceiling Hanging Vines (Outward normal pointing down into cavern air: ny > 0.60)
                 if (v.ny > cfg.vineMinNormalY && fertility > cfg.vineMinFertility && rng < cfg.vineSpawnChance) {
-                    const length = Math.round((cfg.vineBaseLength + rng * cfg.vineVarLength) * (0.8 + fertility * 0.7));
+                    const rawLen = Math.round((cfg.vineBaseLength + rng * cfg.vineVarLength) * (0.8 + fertility * 0.7));
+                    const length = this.clampLengthToAir(wx, wy, 1, rawLen, rawMap);
+                    if (length < 20) continue;
                     anchors.push({
                         kind: 'VINE',
                         x: wx,
@@ -87,13 +116,16 @@ export class FloraSeeder {
                     } else if (rng < cfg.broadleafChance) {
                         kind = 'BROADLEAF';
                     }
+                    const rawLen = Math.round(cfg.floorBaseLength + rng * cfg.floorVarLength);
+                    const length = this.clampLengthToAir(wx, wy, -1, rawLen, rawMap);
+                    if (length < 16) continue;
                     anchors.push({
                         kind,
                         x: wx,
                         y: wy,
                         nx: Number(v.nx.toFixed(2)),
                         ny: Number(v.ny.toFixed(2)),
-                        length: Math.round(cfg.floorBaseLength + rng * cfg.floorVarLength),
+                        length,
                         seed: Number((rng * 100).toFixed(2))
                     });
                 }

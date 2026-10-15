@@ -165,7 +165,7 @@ export class FloraLayer {
                 const dy = clampedY - s.y;
                 const dist = Math.hypot(dx, dy * 0.75);
 
-                const isThrusting = Boolean(s.inputs && s.inputs.up && (s.fuel === undefined || s.fuel > 0));
+                const isThrusting = Boolean(!s.isLanded && s.inputs && s.inputs.up && (s.fuel === undefined || s.fuel > 0));
                 const radius = isThrusting ? cfg.thrustRadius : cfg.proxRadius;
                 if (dist < radius) {
                     const proximity = Math.pow(1.0 - (dist / radius), cfg.proxExponent);
@@ -199,12 +199,21 @@ export class FloraLayer {
 
                     const minY = dirY > 0 ? a.y : a.y - a.length;
                     const maxY = dirY > 0 ? a.y + a.length : a.y;
+                    const plumeMinY = Math.min(buttY, buttY + backY * jetLen) - jetRad;
+                    const plumeMaxY = Math.max(buttY, buttY + backY * jetLen) + jetRad;
+                    if (maxY < plumeMinY || minY > plumeMaxY) continue;
 
                     for (const step of [0.25, 0.65, 1.0]) {
                         const px = buttX + backX * jetLen * step;
                         const py = buttY + backY * jetLen * step;
+                        if (level?.rawMap) {
+                            const tid = level.rawMap[Math.floor(py / 32)]?.[Math.floor(px / 32)] ?? 0;
+                            if (tid > 0 && tid < 0x90 && tid !== 0x20) break;
+                        }
                         const cy = Math.max(minY, Math.min(maxY, py));
                         const swayAtY = a.bendAngle * 18 * (Math.abs(cy - a.y) / a.length);
+                        const dotRear = ((a.x + swayAtY) - buttX) * backX + (cy - buttY) * backY;
+                        if (dotRear < -4) continue;
                         if (Math.hypot(px - (a.x + swayAtY), py - cy) <= jetRad) {
                             hitByThruster = true;
                             contactT = Math.max(0.05, Math.min(0.95, Math.abs(cy - a.y) / a.length));

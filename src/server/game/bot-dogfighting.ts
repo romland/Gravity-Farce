@@ -10,6 +10,7 @@ import {
     generateRoamPath, resolveTargetEntity, getEntityPos, getEntityVel, findSafePadPosition, 
     logDogfightCrash, predictGlideCollision } from './bot-utils';
 import { evaluateTacticalSensors } from './bot-sensors';
+import { botPathWorker } from './bot-path-worker';
 
 // Bot Constants
 const BOT_UUID_PREFIX = 'BOT_';
@@ -229,7 +230,7 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
         }
 
         // 2. PATH RECALCULATION
-        if (bot.path.length === 0 || bot.pathTimer <= 0) {
+        if (!bot.pathPending && (bot.path.length === 0 || bot.pathTimer <= 0)) {
             let stitchedPath: { x: number; y: number }[] | null = null;
             if (bot.targetId) {
                 const cached = sharedTargetPaths.get(bot.targetId);
@@ -251,28 +252,42 @@ function processBotFlight(ecs: Registry, room: Room, e: Entity, bot: import('../
 
             if (!targetT) {
                 bot.state = 'roam';
-                bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
+                bot.pathPending = true;
+                botPathWorker.syncLevel(room.levelIndex, room.level);
+                botPathWorker.enqueue({ kind: 'roam', levelIndex: room.levelIndex, sx: t.x, sy: t.y }, (res) => {
+                    bot.pathPending = false;
+                    bot.path = res.path;
+                });
             } else if (stitchedPath && stitchedPath.length > 0) {
                 bot.state = 'attack';
                 bot.path = [...stitchedPath];
             } else {
-                const rawPath = calculatePath(room.level.rawMap, t.x, t.y, targetT.x, targetT.y);
-                const targetTileX = Math.floor(targetT.x / 32);
-                const targetTileY = Math.floor(targetT.y / 32);
-                const lastNode = rawPath[rawPath.length - 1];
-                const reachedTarget = !!lastNode && lastNode.x === targetTileX && lastNode.y === targetTileY;
-
-                if (!reachedTarget && distToTarget > 250 && !hasLOS) {
-                    bot.state = 'roam';
-                    bot.path = prunePath(generateRoamPath(room.level.rawMap, t.x, t.y), room, { x: t.x, y: t.y });
-                } else {
-                    bot.state = 'attack';
-                    bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
-                }
-
-                if (bot.targetId && bot.path.length > 0 && bot.state === 'attack') {
-                    sharedTargetPaths.set(bot.targetId, { path: [...bot.path], tick: globalTickCounter });
-                }
+                bot.pathPending = true;
+                botPathWorker.syncLevel(room.levelIndex, room.level);
+                botPathWorker.enqueue({
+                    kind: 'target',
+                    levelIndex: room.levelIndex,
+                    sx: t.x,
+                    sy: t.y,
+                    tx: targetT.x,
+                    ty: targetT.y
+                }, (res) => {
+                    bot.pathPending = false;
+                    if (!res.reachedTarget && distToTarget > 250 && !hasLOS) {
+                        bot.state = 'roam';
+                        bot.pathPending = true;
+                        botPathWorker.enqueue({ kind: 'roam', levelIndex: room.levelIndex, sx: t.x, sy: t.y }, (rRes) => {
+                            bot.pathPending = false;
+                            bot.path = rRes.path;
+                        });
+                    } else {
+                        bot.state = 'attack';
+                        bot.path = res.path;
+                        if (bot.targetId && bot.path.length > 0) {
+                            sharedTargetPaths.set(bot.targetId, { path: [...bot.path], tick: globalTickCounter });
+                        }
+                    }
+                });
             }
             bot.pathTimer = 90 + Math.floor(Math.random() * 30);
         }

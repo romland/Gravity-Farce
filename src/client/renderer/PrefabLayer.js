@@ -80,7 +80,8 @@ class EnvironmentalLightBaker {
 }
 
 export class PrefabLayer {
-    constructor() {
+    constructor(assetManager = null) {
+        this.assetManager = assetManager;
         this.lightCanvas = null;
         this.builtForLevel = null;
     }
@@ -261,6 +262,11 @@ export class PrefabLayer {
     }
 
     drawBaseStructure(ctx, p, timeSec) {
+        const sprite = this.assetManager?.get('PREFAB_BASE');
+        if (sprite) {
+            ctx.drawImage(sprite, p.x, p.y, p.w, p.h);
+            return;
+        }
         ctx.save();
         const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
         grad.addColorStop(0, '#2b3945');
@@ -283,6 +289,15 @@ export class PrefabLayer {
     }
 
     drawBarrelStack(ctx, p) {
+        const sprite = this.assetManager?.get('PREFAB_BARREL');
+        if (sprite) {
+            for (let y = p.y; y < p.y + p.h; y += 32) {
+                for (let x = p.x; x < p.x + p.w; x += 32) {
+                    ctx.drawImage(sprite, x, y, 32, 32);
+                }
+            }
+            return;
+        }
         ctx.save();
         ctx.fillStyle = '#1b5e68';
         ctx.strokeStyle = '#38b2c4';

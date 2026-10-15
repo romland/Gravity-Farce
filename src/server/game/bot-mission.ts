@@ -5,6 +5,7 @@ import { SERVER_CONFIG } from '../core/config';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, findSafePadPosition, logDogfightCrash, predictGlideCollision } from './bot-utils';
 import { evaluateTacticalSensors } from './bot-sensors';
+import { botPathWorker } from './bot-path-worker';
 
 const BOT_UUID_PREFIX = 'MBOT_';
 let globalTickCounter = 0;
@@ -162,10 +163,21 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
         }
     }
 
-    if (bot.pathTimer <= 0 || bot.path.length === 0) {
-        const rawPath = calculatePath(room.level.rawMap!, t.x, t.y, targetObj.x, targetObj.y);
-        bot.path = prunePath(rawPath, room, { x: t.x, y: t.y });
+    if (!bot.pathPending && (bot.pathTimer <= 0 || bot.path.length === 0)) {
         bot.pathTimer = 60;
+        bot.pathPending = true;
+        botPathWorker.syncLevel(room.levelIndex, room.level);
+        botPathWorker.enqueue({
+            kind: 'target',
+            levelIndex: room.levelIndex,
+            sx: t.x,
+            sy: t.y,
+            tx: targetObj.x,
+            ty: targetObj.y
+        }, (res) => {
+            bot.pathPending = false;
+            if (res.path.length > 0) bot.path = res.path;
+        });
     }
     bot.pathTimer--;
 

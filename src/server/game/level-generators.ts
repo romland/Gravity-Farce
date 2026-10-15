@@ -130,13 +130,13 @@ export class LegacyTileGenerator implements LevelGenerator {
     private mesher: GreedyMesher;
     private extractor: EntityExtractor;
 
-    constructor(private name: string, private grid: number[][]) {
+    constructor(private name: string, private grid: number[][], private siblingGrid?: number[][]) {
         this.mesher = new GreedyMesher(grid);
         this.extractor = new EntityExtractor(grid);
     }
 
     generate(index: number): LevelData {
-        const smoothedLoops = this.extractSmoothedContours();
+        const smoothedLoops = this.extractSmoothedContours(this.grid);
         const walls: Point[][] = smoothedLoops.map(loop => {
             const pts = loop.map(v => ({
                 x: Number((v.x * 4).toFixed(1)),
@@ -148,11 +148,24 @@ export class LegacyTileGenerator implements LevelGenerator {
             return pts;
         });
 
+        let recessedWalls: Point[][] | undefined = undefined;
+        let recessedWidth: number | undefined = undefined;
+        let recessedHeight: number | undefined = undefined;
+        if (this.siblingGrid && this.siblingGrid.length > 0) {
+            const siblingLoops = this.extractSmoothedContours(this.siblingGrid);
+            recessedWidth = this.siblingGrid[0].length * TILE_SIZE;
+            recessedHeight = this.siblingGrid.length * TILE_SIZE;
+            recessedWalls = siblingLoops.map(loop => loop.map(v => ({
+                x: Number((v.x * 4).toFixed(1)),
+                y: Number((v.y * 4).toFixed(1))
+            })));
+        }
+
         const rawPads = this.mesher.mesh(t => !!TILE_DICTIONARY[t]?.pad);
         const pads = rawPads.map((p, idx) => this.polyToPadEntity(p, idx === rawPads.length - 1));
         const entities = this.extractor.extract(pads);
         const prefabs = ClusterPromoter.extractPrefabs(this.grid, TILE_SIZE);
-        const flora = FloraSeeder.generateFlora(smoothedLoops, index, 4);
+        const flora = FloraSeeder.generateFlora(smoothedLoops, index, 4, this.grid);
 
         return { 
             name: this.name, 
@@ -165,21 +178,24 @@ export class LegacyTileGenerator implements LevelGenerator {
             rawMap: this.grid,
             highRes: {
                 prefabs,
-                flora
+                flora,
+                recessedWalls,
+                recessedWidth,
+                recessedHeight
             }
         };
     }
 
-    private extractSmoothedContours() {
-        const tilesH = this.grid.length;
-        const tilesW = tilesH > 0 ? this.grid[0].length : 0;
+    private extractSmoothedContours(targetGrid: number[][] = this.grid) {
+        const tilesH = targetGrid.length;
+        const tilesW = tilesH > 0 ? targetGrid[0].length : 0;
         const pxW = tilesW * 8;
         const pxH = tilesH * 8;
 
         const solidGrid: number[][] = Array.from({ length: pxH }, () => new Array(pxW).fill(0));
         for (let ty = 0; ty < tilesH; ty++) {
             for (let tx = 0; tx < tilesW; tx++) {
-                const tid = this.grid[ty][tx];
+                const tid = targetGrid[ty][tx];
                 const cat = getTileCategory(tid);
                 if (cat !== 'NONE' && !TILE_DICTIONARY[tid]?.pad) {
                     const mask = tileMaskRegistry.getMask(tid);
@@ -195,7 +211,7 @@ export class LegacyTileGenerator implements LevelGenerator {
         }
 
         const rawLoops = ContourExtractor.extractLoops(solidGrid, pxW, pxH);
-        return rawLoops.map(loop => ContourSmoother.smoothLoop(loop, this.grid, tilesW, tilesH, 3));
+        return rawLoops.map(loop => ContourSmoother.smoothLoop(loop, targetGrid, tilesW, tilesH, 3));
     }
 
     private polyToPadEntity(poly: Point[], isEndPad: boolean): LevelEntity {

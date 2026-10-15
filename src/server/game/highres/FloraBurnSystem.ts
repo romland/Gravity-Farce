@@ -1,5 +1,6 @@
 import type { Registry } from '../../core/ecs';
 import type { Room } from '../../Room';
+import { TILE_DICTIONARY } from '../../core/tiles';
 
 export const SERVER_FLORA_BURN_CONFIG = {
     enabled: true,
@@ -23,9 +24,10 @@ export class FloraBurnSystem {
         if (!flora || flora.length === 0) return;
 
         const cfg = SERVER_FLORA_BURN_CONFIG;
+        const rawMap = room.level?.rawMap;
 
         for (const [pe, p] of ecs.players.entries()) {
-            if (p.isDead || !p.inputs.up) continue;
+            if (p.isDead || p.isLanded || !p.inputs.up) continue;
             const f = ecs.fuelTanks.get(pe);
             if (!f || f.current <= 0) continue;
             const t = ecs.transforms.get(pe);
@@ -50,6 +52,8 @@ export class FloraBurnSystem {
                 const dirY = a.kind === 'VINE' ? 1 : -1;
                 const minY = dirY > 0 ? a.y : a.y - a.length;
                 const maxY = dirY > 0 ? a.y + a.length : a.y;
+                if (maxY < Math.min(buttY, plumeEndY) - cfg.jetRadiusPx) continue;
+                if (minY > Math.max(buttY, plumeEndY) + cfg.jetRadiusPx) continue;
 
                 // Sample 3 points along the hot exhaust plume behind the ship butt
                 let bestDist = Infinity;
@@ -57,7 +61,15 @@ export class FloraBurnSystem {
                 for (const s of [0.2, 0.6, 1.0]) {
                     const px = buttX + (plumeEndX - buttX) * s;
                     const py = buttY + (plumeEndY - buttY) * s;
+                    if (rawMap) {
+                        const tid = rawMap[Math.floor(py / 32)]?.[Math.floor(px / 32)] ?? 0;
+                        if (TILE_DICTIONARY[tid]?.solid || TILE_DICTIONARY[tid]?.pad) break;
+                    }
                     const clampedY = Math.max(minY, Math.min(maxY, py));
+                    // Enforce that the contact point on the plant lies strictly behind the ship nozzle
+                    const dotRear = (a.x - buttX) * backX + (clampedY - buttY) * backY;
+                    if (dotRear < -4) continue;
+
                     const d = Math.hypot(px - a.x, py - clampedY);
                     if (d < bestDist) {
                         bestDist = d;
