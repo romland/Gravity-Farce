@@ -49,6 +49,7 @@ let nextReplayRoomId = -1;
 // O(1) lookup to prevent DoS when iterating over rooms to find a player on every input
 const playerRooms = new Map<string, number>();
 const playerSessionStats = new Map<string, PlayerStats>();
+const pendingPingTimestamps = new Map<string, number>();
 
 function isValidLevelIndex(index: number): boolean {
     try {
@@ -382,6 +383,16 @@ io.on('connection', (socket) => {
     socket.on('next_level', () => {
         const current = playerRooms.get(socket.id);
         if (current !== undefined) {
+            const currentRoom = rooms.get(current);
+            if (currentRoom && !SERVER_CONFIG.debugMode) {
+                const pe = currentRoom.ecs.getPlayerEntity(socket.id);
+                const p = pe !== undefined ? currentRoom.ecs.players.get(pe) : undefined;
+                const canAdvanceMission = currentRoom.category === 'mission' && Boolean(p?.advancing);
+                const canAdvanceRace = currentRoom.category === 'race' && p?.race?.state === 2;
+                if (!canAdvanceMission && !canAdvanceRace) {
+                    return;
+                }
+            }
             let nextLvl = current + 1;
             while (!isValidLevelIndex(nextLvl) && nextLvl < 74) {
                 nextLvl++;
@@ -418,14 +429,18 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('pong', (clientTime: number) => {
+    socket.on('pong', () => {
+        const sentAt = pendingPingTimestamps.get(socket.id);
+        if (sentAt === undefined) return;
+        pendingPingTimestamps.delete(socket.id);
+
         const roomIndex = playerRooms.get(socket.id);
         if (roomIndex !== undefined) {
             const room = rooms.get(roomIndex);
             if (room) {
                 const e = room.ecs.getPlayerEntity(socket.id);
                 if (e !== undefined) {
-                    const ping = Date.now() - clientTime;
+                    const ping = Math.max(0, Math.min(9999, Date.now() - sentAt));
                     room.ecs.players.get(e)!.ping = ping;
                     room.tracker.logPing(socket.id, ping);
                 }
@@ -464,6 +479,7 @@ io.on('connection', (socket) => {
         }
         playerRooms.delete(socket.id);
         playerSessionStats.delete(socket.id);
+        pendingPingTimestamps.delete(socket.id);
     });
 });
 
@@ -473,6 +489,7 @@ const profiler = new ServerProfiler(10000);
 setInterval(() => {
     const now = Date.now();
     for (const id of playerRooms.keys()) {
+        pendingPingTimestamps.set(id, now);
         io.to(id).emit('ping', now);
     }
 }, 500);
