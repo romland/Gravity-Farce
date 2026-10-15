@@ -48,7 +48,7 @@ I also added _optional_ bots to the single-player disciplines. I'm quite pleased
 Turrets and enemies in race courses optionally bump instead of one-shotting you (opens up more courses for fun racing). Toggle with server config flag `lethalRacingEnemies`.
 
 ### Not really a port
-It's not really a port. I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the assembly code. So yes, absolutely, there are subtle and not so subtle differences _everywhere_. 
+I have tried to get the _feeling_ correct. It is written from scratch. Essentially I started with a simple skeleton of what I thought would be in there and then I started digging in the 68K assembly code. There are a LOT of clones of Gravity-Force out there, but all of them have their own levels, pathing, missions. I wanted to get the original feeling back, but yeah, absolutely, there are subtle and not so subtle differences _everywhere_ in this version too! Hopefully all for the better!
 
 ## Party like it's 1989: Play It!
 https://...
