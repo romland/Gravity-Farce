@@ -48,6 +48,10 @@ try {
 
 const compiledLevelCache = new Map<number, LevelData>();
 
+export function getLevelCount(): number {
+    return Math.max(1, orgLevelsData.length);
+}
+
 export function getLevelData(index: number): LevelData {
     const maxLevels = Math.max(1, orgLevelsData.length);
     let safeIndex = index % maxLevels;
@@ -58,10 +62,16 @@ export function getLevelData(index: number): LevelData {
     
     if (!compiledLevelCache.has(safeIndex)) {
         const levelJson = orgLevelsData[safeIndex];
-        const cleanGrid = levelJson.map_data.map((row: number[]) => [...row]);
-        const siblingGrid = getSiblingLevelRawGrid(safeIndex);
-        const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, cleanGrid, siblingGrid);
-        compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
+        if (!levelJson || !levelJson.map_data) {
+            const dummyGrid = Array.from({length: 20}, () => Array(30).fill(0));
+            const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, dummyGrid);
+            compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
+        } else {
+            const cleanGrid = levelJson.map_data.map((row: number[]) => [...row]);
+            const siblingGrid = getSiblingLevelRawGrid(safeIndex);
+            const generator = new LegacyTileGenerator(`CAVERN ${String(safeIndex).padStart(2, '0')}`, cleanGrid, siblingGrid);
+            compiledLevelCache.set(safeIndex, generator.generate(safeIndex));
+        }
     }
 
     const cached = compiledLevelCache.get(safeIndex)!;

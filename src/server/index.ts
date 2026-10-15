@@ -1,7 +1,7 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import { getLevelData, getLevelCategory } from './levels';
+import { getLevelData, getLevelCategory, getLevelCount } from './levels';
 import { Room } from './Room';
 import { TILE_DICTIONARY } from './core/tiles';
 import { ServerProfiler } from './core/profiler';
@@ -56,7 +56,7 @@ const pendingPingTimestamps = new Map<string, number>();
 function isValidLevelIndex(index: number): boolean {
     try {
         getLevelCategory(index);
-        return true;
+        return index < getLevelCount();
     } catch {
         return false;
     }
@@ -175,6 +175,7 @@ function emitRoomInfo(socket: any, room: Room) {
         joinCode: room.joinCode,
         mode: room.sessionMode,
         levelIndex: room.levelIndex,
+        category: room.category,
         playerCount: room.activeClientIds.size
     });
 }
@@ -515,11 +516,16 @@ io.on('connection', (socket) => {
         const current = playerRooms.get(socket.id);
         if (current !== undefined) {
             const currentRoom = rooms.get(current);
+            const curLvlIdx = currentRoom ? currentRoom.levelIndex : 0;
+            const curCategory = currentRoom ? currentRoom.category : 'mission';
+
             if (currentRoom?.isReplayMode) {
-                // Exiting a replay via "NEXT LEVEL" returns to the next playable level cleanly
-                let nextLvl = currentRoom.levelIndex + 1;
-                while (!isValidLevelIndex(nextLvl) && nextLvl < 74) nextLvl++;
-                if (nextLvl >= 74) nextLvl = 0;
+                let nextLvl = curLvlIdx + 1;
+                while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
+                if (nextLvl >= 74 || !isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory) {
+                    nextLvl = 0;
+                    while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
+                }
                 handleTransitionToLevel(socket.id, nextLvl, true);
                 return;
             }
@@ -532,12 +538,14 @@ io.on('connection', (socket) => {
                     return;
                 }
             }
-            const curLvlIdx = currentRoom ? currentRoom.levelIndex : 0;
             let nextLvl = curLvlIdx + 1;
-            while (!isValidLevelIndex(nextLvl) && nextLvl < 74) {
+            while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) {
                 nextLvl++;
             }
-            if (nextLvl >= 74) nextLvl = 0;
+            if (nextLvl >= 74 || !isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory) {
+                nextLvl = 0;
+                while (nextLvl < 74 && (!isValidLevelIndex(nextLvl) || getLevelCategory(nextLvl) !== curCategory)) nextLvl++;
+            }
             handleTransitionToLevel(socket.id, nextLvl);
         }
     });
