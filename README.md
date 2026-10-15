@@ -87,12 +87,15 @@ There was replay functionality at least partially implemented in the original Gr
 ### Disclaimer
 Generative models were obviously used. I had fun creating it. And yeah, _creating things_ was always the fun part, the tools 
 used were always rather secondary.  
+
 At the end of the day, nothing changed: Shit still takes time.
 
 ## Your own server
 ... todo ...   
-You can run it on your own hardware. You need a bit of CPU since physics run on the server.
-But really, I run it on a $10 / month VPS and I think it can host quite a bunch of players without issues.
+You can run Gravity-Farce on your own hardware or server. You need a bit of CPU since all physics run on the server.
+But really, I run it on a $10 / month VPS and I think it can host quite a bunch of players and bots without issues.  
+
+You can also set a limit of number of simultaneous players you want to allow.
 
 ### Installing server
 - grab the tar, unpack, cd gravityfarce, start screen, `node index.cjs`, ctrl+a and ctrl+d, ctrl+d. check.
