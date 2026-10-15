@@ -375,6 +375,12 @@
             }
         });
 
+        socket.on('flora_burn_reset', () => {
+            if (window.gfRenderer && window.gfRenderer.flora) {
+                window.gfRenderer.flora.resetBurns();
+            }
+        });
+
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         function formatTimeMs(diff) {

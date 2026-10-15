@@ -41,7 +41,16 @@ export class Room {
     public floraBurns = new Map<number, FloraBurnRecord>();
     public floraHeat = new Map<number, number>();
 
-    constructor(public levelIndex: number, public level: LevelData, private io: Server, private transitionCb: (id: string) => void, public isLethalRacing: boolean = false, public raceBumpModifier: number = 0.4) {
+    constructor(
+        public roomId: number,
+        public levelIndex: number,
+        public level: LevelData,
+        private io: Server,
+        private transitionCb: (id: string) => void,
+        public isLethalRacing: boolean = false,
+        public raceBumpModifier: number = 0.4,
+        public isReplayMode: boolean = false
+    ) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
@@ -49,10 +58,17 @@ export class Room {
         this.seed = Date.now();
         this.prng = createPRNG(this.seed);
         this.tracker = new GameTracker(levelIndex, this.category, 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
+        if (this.isReplayMode) {
+            (this.tracker as any).isActive = false;
+        }
         this.tracker['entry'].replayData.seed = this.seed;
         this.spawnEntities();
         botPathWorker.syncLevel(this.levelIndex, this.level, true);
         this.printLevelStats();
+    }
+
+    public get channel(): string {
+        return `room_${this.roomId}`;
     }
 
     tick(isPaused: boolean = false) {
@@ -164,7 +180,20 @@ export class Room {
         }
     }
 
-    removePlayer(id: string) {
+    addReplayActor(actorId: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
+        // Never add replay actors to activeClientIds; they are simulated entities, not connected sockets
+        this.trySpawnPlayer(actorId, type, { ...stats, joinedAtTick: 0 }, true);
+    }
+
+    addSpectator(socketId: string) {
+        this.activeClientIds.add(socketId);
+        if (this.floraBurns.size > 0) {
+            const burns = Array.from(this.floraBurns.entries()).map(([idx, b]) => ({ idx, originT: b.originT }));
+            this.emitToPlayer(socketId, 'flora_burn_sync', burns);
+        }
+    }
+
+    removeClient(id: string) {
         this.activeClientIds.delete(id);
         const e = this.ecs.getPlayerEntity(id);
         if (e !== undefined) {
@@ -174,16 +203,13 @@ export class Room {
             if (f) this.tracker.updatePlayerFuelConsumed(id, f.consumed);
             this.ecs.destroy(e);
         }
-        // Note: Room deletion when empty is now handled by the parent index.ts
         if (this.activeClientIds.size === 0) {
-            for (const [botE] of Array.from(this.ecs.bots.entries())) {
-                this.ecs.destroy(botE);
-            }
+            this.destroyAllEntities();
         }
     }
 
-    trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
-        const isBot = id.includes('BOT_') || id.includes('RACER_') || id.includes('MBOT_');
+    trySpawnPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>, forceSimulated: boolean = false) {
+        const isBot = forceSimulated || this.isReplayMode || id.includes('BOT_') || id.includes('RACER_') || id.includes('MBOT_') || id.startsWith('REPLAY_');
         if (!this.activeClientIds.has(id) && !isBot) return;
         let chosenX: number | null = null;
         let chosenY: number | null = null;
@@ -267,19 +293,32 @@ export class Room {
     }
 
     broadcastTileUpdate(x: number, y: number, tile: number) {
-        this.io.to(`level_${this.levelIndex}`).emit('tile_update', { x, y, tile });
+        this.io.to(this.channel).emit('tile_update', { x, y, tile });
         botPathWorker.notifyTileUpdate(this.levelIndex, x, y, tile);
     }
 
     broadcastFloraBurn(idx: number, originT: number) {
-        this.io.to(`level_${this.levelIndex}`).emit('flora_burn', { idx, originT });
+        this.io.to(this.channel).emit('flora_burn', { idx, originT });
     }
 
     emitToPlayer(id: string, event: string, payload: any) {
         this.io.to(id).emit(event, payload);
     }
 
+    private destroyAllEntities() {
+        for (const [e] of Array.from(this.ecs.turrets.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.tanks.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.cargos.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.powerups.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.bots.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.bullets.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.homingMissiles.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.players.entries())) this.ecs.destroy(e);
+    }
+
     resetLevel() {
+        if (this.isReplayMode) return;
         this.tracker.finishAndSave();
         this.tracker = new GameTracker(this.levelIndex, this.category, this.activeClientIds.size > 1 ? 'MP' : 'SP', getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         this.seed = Date.now();
@@ -292,33 +331,18 @@ export class Room {
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
         }
-        for (const [e] of Array.from(this.ecs.turrets.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.tanks.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.cargos.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.powerups.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.bots.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.bullets.entries())) {
-            this.ecs.destroy(e);
-        }
-        for (const [e] of Array.from(this.ecs.homingMissiles.entries())) {
-            this.ecs.destroy(e);
-        }
+        for (const [e] of Array.from(this.ecs.turrets.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.tanks.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.cargos.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.powerups.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.bots.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.bullets.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.homingMissiles.entries())) this.ecs.destroy(e);
         this.spawnEntities();
         botPathWorker.syncLevel(this.levelIndex, this.level, true);
-        this.io.to(`level_${this.levelIndex}`).emit('initLevel', this.level);
+        this.io.to(this.channel).emit('initLevel', this.level);
+        this.io.to(this.channel).emit('flora_burn_reset');
     }
 
     private printLevelStats() {

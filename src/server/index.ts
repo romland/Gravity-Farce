@@ -62,64 +62,76 @@ function isValidLevelIndex(index: number): boolean {
 
 function getOrCreateRoom(index: number): Room {
     if (!rooms.has(index)) {
-        rooms.set(index, new Room(index, getLevelData(index), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier));
+        rooms.set(index, new Room(index, index, getLevelData(index), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier, false));
     }
     return rooms.get(index)!;
+}
+
+function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classic' | 'modern'; stats: PlayerStats } {
+    const socket = io.sockets.sockets.get(id);
+    const currentRoomId = playerRooms.get(id);
+    let stats = playerSessionStats.get(id) || { score: 0, uuid: id, alias: 'UNK', shipType: 'classic', lives: SERVER_CONFIG.defaultLives };
+    let pType: 'classic' | 'modern' = stats.shipType || 'classic';
+    let lastActiveLevel = (currentRoomId !== undefined && currentRoomId >= 0) ? currentRoomId : 0;
+
+    if (currentRoomId !== undefined) {
+        const room = rooms.get(currentRoomId);
+        if (room) {
+            lastActiveLevel = room.levelIndex;
+            if (!room.isReplayMode) {
+                const e = room.ecs.getPlayerEntity(id);
+                if (e !== undefined) {
+                    const p = room.ecs.players.get(e)!;
+                    pType = p.type;
+                    stats = {
+                        score: p.score,
+                        uuid: p.uuid,
+                        alias: p.alias,
+                        shipType: p.type,
+                        lives: p.lives
+                    };
+                    playerSessionStats.set(id, stats);
+                }
+            }
+            room.removeClient(id);
+            if (socket) {
+                socket.leave(room.channel);
+            }
+            if (room.activeClientIds.size === 0) {
+                room.tracker.finishAndSave();
+                rooms.delete(currentRoomId);
+            }
+        }
+        playerRooms.delete(id);
+    }
+    return { lastActiveLevel, pType, stats };
 }
 
 function handleTransitionToLevel(id: string, targetLevel: number, forceReset: boolean = false) {
     const socket = io.sockets.sockets.get(id);
     if (!socket) return;
 
-    const pLevel = playerRooms.get(id) ?? 0;
-    let stats = playerSessionStats.get(id) || { score: 0, fuel: 76464, doubleShotAmmo: 0, uuid: id, alias: 'UNK', shotsFired: 0, shipType: 'classic' };
-    let pType: 'classic' | 'modern' = stats.shipType || 'classic';
-
-    for (const [rId, room] of rooms.entries()) {
-        const e = room.ecs.getPlayerEntity(id);
-        if (e !== undefined) {
-            const p = room.ecs.players.get(e)!;
-            pType = p.type;
-            stats = {
-                score: p.score,
-                doubleShotAmmo: 0,
-                uuid: p.uuid,
-                alias: p.alias,
-                shipType: p.type,
-                shotsFired: 0,
-                fuel: 76464,
-                lives: p.lives
-            };
-            playerSessionStats.set(id, stats);
-            room.removePlayer(id);
-            if (room.activeClientIds.size === 0) {
-                room.tracker.finishAndSave();
-                rooms.delete(rId);
-            }
-            break;
-        }
-    }
-
-    socket.leave(`level_${pLevel}`);
+    const { pType, stats } = leaveCurrentRoom(id);
 
     const newRoom = getOrCreateRoom(targetLevel);
     if (forceReset && newRoom.ecs.players.size === 0) {
         newRoom.resetLevel();
     }
-    socket.join(`level_${targetLevel}`);
+    socket.join(newRoom.channel);
     playerRooms.set(id, targetLevel);
 
     socket.emit('initLevel', newRoom.level);
+    socket.emit('flora_burn_reset');
     socket.emit('levelIndex', newRoom.levelIndex);
     newRoom.addPlayer(id, pType, stats);
 }
 
-function handleTransition(id: string) {
-    let pLevel = playerRooms.get(id) ?? 0;
-    let oldRoom = null;
+function handleTransition(actorOrSocketId: string) {
+    // Locate the room containing this player/replay actor
+    let oldRoom: Room | null = null;
     let rIdToRemove: number | null = null;
     for (const [rId, room] of rooms.entries()) {
-        if (room.ecs.getPlayerEntity(id) !== undefined) {
+        if (room.ecs.getPlayerEntity(actorOrSocketId) !== undefined) {
             oldRoom = room;
             rIdToRemove = rId;
             break;
@@ -127,15 +139,13 @@ function handleTransition(id: string) {
     }
 
     if (oldRoom) {
-        const e = oldRoom.ecs.getPlayerEntity(id);
+        const e = oldRoom.ecs.getPlayerEntity(actorOrSocketId);
         if (e !== undefined) {
             const p = oldRoom.ecs.players.get(e)!;
-            const f = oldRoom.ecs.fuelTanks.get(e);
-            const w = oldRoom.ecs.weaponMounts.get(e);
             const timeTaken = Math.round((oldRoom.globalWaveTimer - p.joinedAtTick) * (1000 / SERVER_CONFIG.tickRate));
 
             if (oldRoom.category === 'mission') {
-                const boards = evaluateMissionEnd(oldRoom, id, timeTaken);
+                const boards = evaluateMissionEnd(oldRoom, actorOrSocketId, timeTaken);
                 if (boards) {
                     if (oldRoom.isReplayMode) {
                         for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
@@ -156,20 +166,14 @@ function handleTransition(id: string) {
                 }
             }
 
-            playerSessionStats.set(id, {
-                score: p.score,
-                doubleShotAmmo: 0,
-                uuid: p.uuid,
-                alias: p.alias,
-                shipType: p.type,
-                shotsFired: 0,
-                fuel: 76464,
-                lives: p.lives
-            });
-            oldRoom.removePlayer(id);
-            if (oldRoom.activeClientIds.size === 0) {
-                oldRoom.tracker.finishAndSave();
-                if (rIdToRemove !== null) rooms.delete(rIdToRemove);
+            if (!oldRoom.isReplayMode) {
+                leaveCurrentRoom(actorOrSocketId);
+            } else {
+                // Replay completed: remove the replay actor
+                oldRoom.ecs.destroy(e);
+                if (oldRoom.ecs.players.size === 0 && rIdToRemove !== null) {
+                    rooms.delete(rIdToRemove);
+                }
             }
         }
     }
@@ -216,7 +220,7 @@ io.on('connection', (socket) => {
 
     const room = getOrCreateRoom(0);
 
-    socket.join('level_0');
+    socket.join(room.channel);
     playerRooms.set(socket.id, 0);
     socket.emit('serverConfig', SERVER_CONFIG);
     socket.emit('initTiles', TILE_DICTIONARY);
@@ -332,30 +336,37 @@ io.on('connection', (socket) => {
             const replay = JSON.parse(dataRaw);
             socket.emit('hide_leaderboard');
 
+            // Cleanly exit the spectator's current room first (destroying it if empty)
+            leaveCurrentRoom(socket.id);
+
             const rId = nextReplayRoomId--;
-            const newRoom = new Room(replay.levelIndex, getLevelData(replay.levelIndex), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier);
-            newRoom.isReplayMode = true;
-            (newRoom.tracker as any).isActive = false;
+            const newRoom = new Room(rId, replay.levelIndex, getLevelData(replay.levelIndex), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier, true);
             newRoom.seed = replay.replayData.seed;
             newRoom.prng = createPRNG(newRoom.seed);
-            newRoom.replayFrames = replay.replayData.frames;
+
+            // Namespace replay actor IDs so they can NEVER collide with live socket IDs
+            const rawFrames = Array.isArray(replay.replayData.frames) ? replay.replayData.frames : [];
+            newRoom.replayFrames = rawFrames.map((f: any) => {
+                const mappedInputs: Record<string, number> = {};
+                if (f.i) {
+                    for (const [pid, mask] of Object.entries(f.i)) {
+                        mappedInputs[`REPLAY_${pid}`] = mask as number;
+                    }
+                }
+                return { t: f.t, i: mappedInputs };
+            });
 
             for (const [pid, pstat] of Object.entries(replay.playerStats)) {
-                newRoom.addPlayer(pid, (pstat as any).shipType || 'classic', pstat as any);
+                newRoom.addReplayActor(`REPLAY_${pid}`, (pstat as any).shipType || 'classic', pstat as any);
             }
             rooms.set(rId, newRoom);
 
-            const oldRoomIdx = playerRooms.get(socket.id);
-            if (oldRoomIdx !== undefined) {
-                const oldR = rooms.get(oldRoomIdx);
-                if (oldR) oldR.removePlayer(socket.id);
-                socket.leave(`level_${oldRoomIdx}`);
-            }
-            socket.join(`level_${rId}`);
+            socket.join(newRoom.channel);
             playerRooms.set(socket.id, rId);
             socket.emit('initLevel', newRoom.level);
+            socket.emit('flora_burn_reset');
             socket.emit('levelIndex', newRoom.levelIndex);
-            newRoom.activeClientIds.add(socket.id);
+            newRoom.addSpectator(socket.id);
         } catch (e) { console.error("Replay load failed", e); }
     };
 
@@ -376,7 +387,8 @@ io.on('connection', (socket) => {
     socket.on('leave_replay', () => {
         const rId = playerRooms.get(socket.id);
         if (rId !== undefined && rId < 0) {
-            handleTransitionToLevel(socket.id, 0, false);
+            const targetLvl = rooms.get(rId)?.levelIndex ?? 0;
+            handleTransitionToLevel(socket.id, isValidLevelIndex(targetLvl) ? targetLvl : 0, true);
         }
     });
 
@@ -384,6 +396,14 @@ io.on('connection', (socket) => {
         const current = playerRooms.get(socket.id);
         if (current !== undefined) {
             const currentRoom = rooms.get(current);
+            if (currentRoom?.isReplayMode) {
+                // Exiting a replay via "NEXT LEVEL" returns to the next playable level cleanly
+                let nextLvl = currentRoom.levelIndex + 1;
+                while (!isValidLevelIndex(nextLvl) && nextLvl < 74) nextLvl++;
+                if (nextLvl >= 74) nextLvl = 0;
+                handleTransitionToLevel(socket.id, nextLvl, true);
+                return;
+            }
             if (currentRoom && !SERVER_CONFIG.debugMode) {
                 const pe = currentRoom.ecs.getPlayerEntity(socket.id);
                 const p = pe !== undefined ? currentRoom.ecs.players.get(pe) : undefined;
@@ -407,7 +427,7 @@ io.on('connection', (socket) => {
         if (roomIndex === undefined) return;
 
         const room = rooms.get(roomIndex);
-        if (!room) return;
+        if (!room || room.isReplayMode) return;
 
         const e = room.ecs.getPlayerEntity(socket.id);
         if (e !== undefined) {
@@ -450,8 +470,8 @@ io.on('connection', (socket) => {
 
     socket.on('request_leaderboard', () => {
         const rawLevel = playerRooms.get(socket.id) ?? 0;
-        const pLevel = rooms.get(rawLevel)?.levelIndex ?? 0;
-        const room = rooms.get(pLevel);
+        const room = rooms.get(rawLevel);
+        const pLevel = room?.levelIndex ?? 0;
         const stats = playerSessionStats.get(socket.id);
         const uuid = stats?.uuid || socket.handshake.auth?.uuid || socket.id;
         const alias = stats?.alias || socket.handshake.auth?.alias || 'UNK';
@@ -468,16 +488,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        for (const [rId, room] of rooms.entries()) {
-            if (room.ecs.getPlayerEntity(socket.id) !== undefined) {
-                room.removePlayer(socket.id);
-                if (room.activeClientIds.size === 0) {
-                    room.tracker.finishAndSave();
-                    rooms.delete(rId);
-                }
-            }
-        }
-        playerRooms.delete(socket.id);
+        leaveCurrentRoom(socket.id);
         playerSessionStats.delete(socket.id);
         pendingPingTimestamps.delete(socket.id);
     });

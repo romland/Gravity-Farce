@@ -80,6 +80,17 @@ export class FloraLayer {
         }
     }
 
+    resetBurns() {
+        for (const a of this.anchors) {
+            a.burning = false;
+            a.charred = false;
+            a.thrustExposureSec = 0;
+            a.burnOriginT = 0.5;
+            a.burnMinT = 0.5;
+            a.burnMaxT = 0.5;
+        }
+    }
+
     isIntervalBurned(a, t0, t1) {
         if (!a.burning && !a.charred) return false;
         const mid = (t0 + t1) * 0.5;
