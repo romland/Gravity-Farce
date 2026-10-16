@@ -28,7 +28,7 @@ am worried that I will lose a bit of that feeling then! But, would have to test 
 
 ### 1. No split-screen and Server-side
 I did not really fancy the split-screen for multi-player. I went for networked play instead. The server is 
-supposed to be 100% authorative, which means it should be hard(er) to cheat (why-people-why, let everyone 
+supposed to be 100% authoritative, which means it should be hard(er) to cheat (why-people-why, let everyone 
 enjoy things!). But, eh, anti-cheat is now a big-money industry so, yeah... No guarantees. 
 
 ### 2. Records, Rankings and Scores
