@@ -1,4 +1,4 @@
-import { RENDER_CONFIG } from './RenderConfig.js';
+import { RENDER_CONFIG, rollChance } from './RenderConfig.js';
 
 const METAL_TILES = new Set([
     0x15, 0x29, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x21, 0x24, 0x25, 0x26, 0x27, 0x28,
@@ -36,6 +36,8 @@ export class MicroDetailsLayer {
         this.rockTrickles = [];
         this.shipPrev = new Map();
         this.turretPrevCooldown = new Map();
+        this.lastWaterTimeSec = 0;
+        this.lastUpdateTimeSec = 0;
     }
 
     initLevel(level) {
@@ -673,6 +675,9 @@ export class MicroDetailsLayer {
         }
         if (this.waterPools.length === 0) return;
 
+        const dt = this.lastWaterTimeSec > 0 ? Math.min(0.05, Math.max(0.002, timeSec - this.lastWaterTimeSec)) : (1 / 60);
+        const dt60 = dt * 60.0;
+        this.lastWaterTimeSec = timeSec;
         const activeShips = players ? Object.values(players).filter(s => !s.isDead) : [];
         const bulletList = Array.isArray(bullets) ? bullets : [];
         const padPx = cfg.waterOverlapPx ?? 24;
@@ -699,7 +704,7 @@ export class MicroDetailsLayer {
                 if (Math.abs(dy) < 22 && s.x >= pool.x && s.x <= pool.x + pool.w) {
                     const idx = Math.max(1, Math.min(n - 2, Math.floor(((s.x - startX) / totalW) * (n - 1))));
                     pool.vels[idx] += Math.min(2.8, Math.max(-2.8, (s.vy || 0) * 0.4 + 0.7));
-                    if (Math.random() < 0.22 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                    if (rollChance(0.22, dt60) && this.sparks.length < (cfg.maxSparks ?? 90)) {
                         this.sparks.push({
                             x: s.x + (Math.random() - 0.5) * 12,
                             y: pool.y,
@@ -728,7 +733,7 @@ export class MicroDetailsLayer {
                                     pool.vels[ni] += (Math.abs(k) === 2 ? -strength * 0.5 : strength * (1 - Math.abs(k) * 0.3));
                                 }
                             }
-                            if (Math.random() < 0.28 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                            if (rollChance(0.28, dt60) && this.sparks.length < (cfg.maxSparks ?? 90)) {
                                 const side = Math.random() > 0.5 ? 1 : -1;
                                 this.sparks.push({
                                     x: hitX + side * (6 + Math.random() * 8),
@@ -759,12 +764,12 @@ export class MicroDetailsLayer {
             for (let i = 1; i < n - 1; i++) {
                 const neighborAvg = (pool.nodes[i - 1] + pool.nodes[i + 1]) * 0.5;
                 const accel = -0.045 * pool.nodes[i] + (neighborAvg - pool.nodes[i]) * 0.24;
-                pool.vels[i] = (pool.vels[i] + accel) * 0.91;
+                pool.vels[i] = (pool.vels[i] + accel * dt60) * Math.pow(0.91, dt60);
             }
             pool.nodes[0] = 0;
             pool.nodes[n - 1] = 0;
             for (let i = 1; i < n - 1; i++) {
-                pool.nodes[i] = Math.max(-8, Math.min(8, pool.nodes[i] + pool.vels[i]));
+                pool.nodes[i] = Math.max(-8, Math.min(8, pool.nodes[i] + pool.vels[i] * dt60));
             }
 
             // Draw water body extended by padPx into left, right, and bottom rock (RockLayer masks the edges!)
@@ -802,6 +807,9 @@ export class MicroDetailsLayer {
         if (level && this.builtForLevel !== level) {
             this.initLevel(level);
         }
+        const dt = this.lastUpdateTimeSec > 0 ? Math.min(0.05, Math.max(0.002, timeSec - this.lastUpdateTimeSec)) : (1 / 60);
+        const dt60 = dt * 60.0;
+        this.lastUpdateTimeSec = timeSec;
 
         ctx.save();
 
@@ -825,7 +833,7 @@ export class MicroDetailsLayer {
                 }
 
                 if (w.state === 'hidden') {
-                    if (!startled && Math.random() < emergeChance) {
+                    if (!startled && rollChance(emergeChance, dt60)) {
                         w.state = 'peeking';
                         w.timer = 0;
                         w.targetLook = (Math.random() - 0.5) * 0.9;
@@ -833,19 +841,19 @@ export class MicroDetailsLayer {
                         continue;
                     }
                 } else if (w.state === 'peeking') {
-                    w.ext = Math.min(1.0, w.ext + 0.022);
+                    w.ext = Math.min(1.0, w.ext + 0.022 * dt60);
                     if (startled) w.state = 'retreating';
                     else if (w.ext >= 1.0) {
                         w.state = 'looking';
                         w.timer = 140 + Math.floor(Math.random() * 120);
                     }
                 } else if (w.state === 'looking') {
-                    w.timer--;
+                    w.timer -= dt60;
                     if (w.timer % 45 === 0) w.targetLook = (Math.random() - 0.5) * 1.1;
-                    w.lookAngle += (w.targetLook - w.lookAngle) * 0.06;
+                    w.lookAngle += (w.targetLook - w.lookAngle) * 0.06 * dt60;
                     if (startled || w.timer <= 0) w.state = 'retreating';
                 } else if (w.state === 'retreating') {
-                    w.ext = Math.max(0.0, w.ext - (startled ? 0.08 : 0.03));
+                    w.ext = Math.max(0.0, w.ext - (startled ? 0.08 : 0.03) * dt60);
                     if (w.ext <= 0.0) {
                         w.state = 'hidden';
                         continue;
@@ -973,8 +981,8 @@ export class MicroDetailsLayer {
                 // 4. Fine vertical gravity-accelerated water filaments
                 for (let i = 0; i < tr.streaks.length; i++) {
                     const st = tr.streaks[i];
-                    st.vy += 0.04;
-                    st.y += st.vy;
+                    st.vy += 0.04 * dt60;
+                    st.y += st.vy * dt60;
                     const fallDist = st.y - tr.lipY;
                     if (fallDist >= pulseLen) {
                         st.y = tr.lipY + (Math.random() * 4);
@@ -1180,7 +1188,7 @@ export class MicroDetailsLayer {
                     }
 
                     // Subtle RCS attitude-thruster micro-sparks when rotating in flight
-                    if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right) && Math.random() < 0.45 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                    if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right) && rollChance(0.45, dt60) && this.sparks.length < (cfg.maxSparks ?? 90)) {
                         const cos = Math.cos(p.angle);
                         const sin = Math.sin(p.angle);
                         const localX = 10.5;
@@ -1218,7 +1226,7 @@ export class MicroDetailsLayer {
                             const tid = level.rawMap[ty]?.[tx];
                             if (tid && tid > 0 && tid < 0x90 && tid !== 0x20 && tid !== 0x32 && tid !== 0x33) {
                                 // Tangential dust & pebble kick-up
-                                if (cfg.thrusterDustEnabled !== false && Math.random() < 0.65 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                                if (cfg.thrusterDustEnabled !== false && rollChance(0.65, dt60) && this.sparks.length < (cfg.maxSparks ?? 90)) {
                                     const side = Math.random() > 0.5 ? 1 : -1;
                                     const tangX = -backY * side + (Math.random() - 0.5) * 0.4;
                                     const tangY = backX * side + (Math.random() - 0.5) * 0.4;
@@ -1239,7 +1247,7 @@ export class MicroDetailsLayer {
 
                                 // Rock Scorch & Temporary Cherry-Orange Heat Glow
                                 if (cfg.thrusterScorchEnabled !== false) {
-                                    if (rockLayer && Math.random() < 0.35) {
+                                    if (rockLayer && rollChance(0.35, dt60)) {
                                         rockLayer.stampScorch(hx, hy, 7.0, 0.08);
                                     }
                                     let existing = this.heatSpots.find(h => Math.hypot(h.x - hx, h.y - hy) < 14);
@@ -1281,8 +1289,8 @@ export class MicroDetailsLayer {
                             this.shatterStalactite(st, s.vx || 0);
                             break;
                         } else if (d < 75 && s.inputs?.up) {
-                            st.shake = Math.min(1.0, st.shake + 0.12);
-                            if (Math.random() < 0.25 && this.sparks.length < (cfg.maxSparks ?? 90)) {
+                            st.shake = Math.min(1.0, st.shake + 0.12 * dt60);
+                            if (rollChance(0.25, dt60) && this.sparks.length < (cfg.maxSparks ?? 90)) {
                                 this.sparks.push({
                                     x: st.x + (Math.random() - 0.5) * 5,
                                     y: st.y + st.length * 0.85,
@@ -1300,7 +1308,7 @@ export class MicroDetailsLayer {
                 }
 
                 const jitterX = st.shake > 0 ? Math.sin(timeSec * 55 + st.x) * st.shake * 2.4 : 0;
-                if (st.shake > 0) st.shake = Math.max(0, st.shake - 0.03);
+                if (st.shake > 0) st.shake = Math.max(0, st.shake - 0.03 * dt60);
 
                 const drawLen = st.intact ? st.length : st.length * 0.28;
                 const tipX = st.x + st.skew + jitterX;
@@ -1338,11 +1346,11 @@ export class MicroDetailsLayer {
             // Update & render tumbling shattered stalactite shards
             for (let i = this.fallingShards.length - 1; i >= 0; i--) {
                 const sh = this.fallingShards[i];
-                sh.vy += 0.14;
-                sh.x += sh.vx;
-                sh.y += sh.vy;
-                sh.angle += sh.spin;
-                sh.life--;
+                sh.vy += 0.14 * dt60;
+                sh.x += sh.vx * dt60;
+                sh.y += sh.vy * dt60;
+                sh.angle += sh.spin * dt60;
+                sh.life -= dt60;
 
                 if (this.splashWaterAt(sh.x, sh.y, 6.5)) {
                     this.fallingShards.splice(i, 1);
@@ -1394,7 +1402,7 @@ export class MicroDetailsLayer {
                 if (!t.active) continue;
                 const key = `${Math.round(t.x)},${Math.round(t.y)}`;
                 // Detect firing sound or spawn subtle periodic wisp if turret is recently active
-                if (Math.random() < (cfg.turretSmokeChance ?? 0.018) && this.smokePuffs.length < (cfg.maxSmokePuffs ?? 35)) {
+                if (rollChance(cfg.turretSmokeChance ?? 0.018, dt60) && this.smokePuffs.length < (cfg.maxSmokePuffs ?? 35)) {
                     const my = t.type === 0xB6 ? t.y + 14 : t.y - 16;
                     this.smokePuffs.push({
                         x: t.x + (Math.random() - 0.5) * 4,
@@ -1417,13 +1425,13 @@ export class MicroDetailsLayer {
             const scaleFactor = cfg.crashSmokeAlpha ?? 0.75;
             for (let i = this.crashPlumes.length - 1; i >= 0; i--) {
                 const cp = this.crashPlumes[i];
-                cp.life--;
+                cp.life -= dt60;
                 if (cp.life <= 0) {
                     this.crashPlumes.splice(i, 1);
                     continue;
                 }
                 const intensity = cp.life / cp.maxLife;
-                if (Math.random() < baseChance * (0.35 + intensity * 0.65) && this.smokePuffs.length < maxSmoke) {
+                if (rollChance(baseChance * (0.35 + intensity * 0.65), dt60) && this.smokePuffs.length < maxSmoke) {
                     const puffLife = 52 + Math.floor(Math.random() * 26);
                     this.smokePuffs.push({
                         x: cp.x + (Math.random() - 0.5) * 18 * cp.scale,
@@ -1447,7 +1455,7 @@ export class MicroDetailsLayer {
             const coolRate = cfg.scorchHeatDecay ?? 0.012;
             for (let i = this.heatSpots.length - 1; i >= 0; i--) {
                 const hs = this.heatSpots[i];
-                hs.heat -= coolRate;
+                hs.heat -= coolRate * dt60;
                 if (hs.heat <= 0) {
                     this.heatSpots.splice(i, 1);
                     continue;
@@ -1481,18 +1489,18 @@ export class MicroDetailsLayer {
                         const dist = Math.hypot(dx, dy);
                         if (dist < pushRad && dist > 1) {
                             const power = (1 - dist / pushRad) * pushForce;
-                            sm.vx += (dx / dist) * power;
-                            sm.vy += (dy / dist) * power * 0.5 - 0.08; // Upward draft pull
+                            sm.vx += (dx / dist) * power * dt60;
+                            sm.vy += ((dy / dist) * power * 0.5 - 0.08) * dt60; // Upward draft pull
                         }
                     }
                 }
 
-                sm.x += sm.vx + Math.sin(timeSec * 3 + i) * 0.08;
-                sm.y += sm.vy;
-                sm.r += sm.grow ?? 0.09;
-                sm.vx *= 0.96;
-                sm.vy *= 0.97;
-                sm.life--;
+                sm.x += (sm.vx + Math.sin(timeSec * 3 + i) * 0.08) * dt60;
+                sm.y += sm.vy * dt60;
+                sm.r += (sm.grow ?? 0.09) * dt60;
+                sm.vx *= Math.pow(0.96, dt60);
+                sm.vy *= Math.pow(0.97, dt60);
+                sm.life -= dt60;
                 if (sm.life <= 0) {
                     this.smokePuffs.splice(i, 1);
                     continue;
@@ -1512,11 +1520,11 @@ export class MicroDetailsLayer {
         if (this.sparks.length > 0) {
             for (let i = this.sparks.length - 1; i >= 0; i--) {
                 const sp = this.sparks[i];
-                sp.x += sp.vx;
-                sp.y += sp.vy;
-                sp.vy += sp.gravity;
-                sp.vx *= 0.96;
-                sp.life--;
+                sp.x += sp.vx * dt60;
+                sp.y += sp.vy * dt60;
+                sp.vy += sp.gravity * dt60;
+                sp.vx *= Math.pow(0.96, dt60);
+                sp.life -= dt60;
                 if (sp.life <= 0) {
                     this.sparks.splice(i, 1);
                     continue;
@@ -1537,7 +1545,7 @@ export class MicroDetailsLayer {
             for (let i = this.shockwaves.length - 1; i >= 0; i--) {
                 const sw = this.shockwaves[i];
                 sw.prevR = sw.r;
-                sw.life++;
+                sw.life += dt60;
                 const progress = sw.life / sw.maxLife;
                 if (progress >= 1.0) {
                     this.shockwaves.splice(i, 1);

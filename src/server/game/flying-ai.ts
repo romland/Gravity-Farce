@@ -83,6 +83,8 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
     for (const [e, enemy] of ecs.flyingEnemies.entries()) {
         if (!enemy.active) continue;
         const t = ecs.transforms.get(e)!;
+        const prevX = t.x;
+        const prevY = t.y;
         const specs = FLYING_ENEMY_TEMPLATES[enemy.enemyType];
 
         if (!enemy.segmentId) {
@@ -136,6 +138,8 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
 
                     t.x = lerpX + (enemy.width / 2);
                     t.y = lerpY + (enemy.height / 2);
+                    enemy.lastDx = t.x - prevX;
+                    enemy.lastDy = t.y - prevY;
                     enemy.pointIndex = floatIndex + AMIGA_SPEED;
                 }
             }

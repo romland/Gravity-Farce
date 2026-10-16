@@ -1,4 +1,4 @@
-import { RENDER_CONFIG } from './RenderConfig.js';
+import { RENDER_CONFIG, rollChance } from './RenderConfig.js';
 
 const TEAL_BRICK_LAYOUTS = {
     0x1B: [1, 1, 1, 1], // Full
@@ -328,6 +328,7 @@ export class RockLayer {
         this.cataclysmDebris = [];
         this.recessedFlatPlatforms = [];
         this.ghostShip = null;
+        this.lastRecessedTimeMs = 0;
     }
 
     buildLevelCache(level) {
@@ -563,6 +564,10 @@ export class RockLayer {
             this.buildLevelCache(level);
         }
         if (!this.recessedCanvas) return;
+        const nowMs = performance.now();
+        const dtSec = this.lastRecessedTimeMs > 0 ? Math.min(0.05, Math.max(0.002, (nowMs - this.lastRecessedTimeMs) * 0.001)) : (1 / 60);
+        const dt60 = dtSec * 60.0;
+        this.lastRecessedTimeMs = nowMs;
         const ox = camera.x * cfg.recessedParallax;
         const oy = camera.y * cfg.recessedParallax;
         ctx.save();
@@ -575,15 +580,15 @@ export class RockLayer {
             ctx.drawImage(this.recessedCanvas, sx, sy, sw, sh, ox + sx, oy + sy, sw, sh);
         }
         if (cfg.recessedCataclysmsEnabled !== false) {
-            this.updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg);
+            this.updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg, dt60);
         }
         if (cfg.recessedGhostShipEnabled !== false) {
-            this.updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg);
+            this.updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg, dt60);
         }
         ctx.restore();
     }
 
-    updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg) {
+    updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg, dt60 = 1.0) {
         const maxActive = cfg.recessedCataclysmMaxActive ?? 1;
         const spawnChance = cfg.recessedCataclysmSpawnChance ?? 0.00045;
         const baseAlpha = cfg.recessedCataclysmAlpha ?? 0.11;
@@ -594,7 +599,7 @@ export class RockLayer {
         const burnMult = cfg.recessedCataclysmBurnGlowMultiplier ?? 2.2;
         const emberChance = cfg.recessedCataclysmEmberShedChance ?? 0.22;
 
-        if (this.cataclysms.length < maxActive && Math.random() < spawnChance) {
+        if (this.cataclysms.length < maxActive && rollChance(spawnChance, dt60)) {
             const spawnX = camera.x + viewW * (0.15 + Math.random() * 0.70);
             const spawnY = camera.y + viewH * (0.05 + Math.random() * 0.35);
             const dirSign = Math.random() > 0.5 ? 1 : -1;
@@ -627,13 +632,13 @@ export class RockLayer {
             c.trail.push({ x: c.x, y: c.y });
             if (c.trail.length > maxTrail) c.trail.shift();
 
-            c.x += c.vx;
-            c.y += c.vy;
-            c.vy += grav;
-            c.life--;
+            c.x += c.vx * dt60;
+            c.y += c.vy * dt60;
+            c.vy += grav * dt60;
+            c.life -= dt60;
 
             // Continuously shed slow-burning sparks/embers along the tail wake
-            if (Math.random() < emberChance && this.cataclysmDebris.length < 64) {
+            if (rollChance(emberChance, dt60) && this.cataclysmDebris.length < 64) {
                 this.cataclysmDebris.push({
                     x: c.x + (Math.random() - 0.5) * c.r * 0.9,
                     y: c.y + (Math.random() - 0.5) * c.r * 0.9,
@@ -742,11 +747,11 @@ export class RockLayer {
 
         for (let i = this.cataclysmDebris.length - 1; i >= 0; i--) {
             const d = this.cataclysmDebris[i];
-            d.x += d.vx;
-            d.y += d.vy;
-            d.vy += grav * 1.4;
-            d.vx *= 0.985;
-            d.life--;
+            d.x += d.vx * dt60;
+            d.y += d.vy * dt60;
+            d.vy += grav * 1.4 * dt60;
+            d.vx *= Math.pow(0.985, dt60);
+            d.life -= dt60;
             if (d.life <= 0) {
                 this.cataclysmDebris.splice(i, 1);
                 continue;
@@ -761,12 +766,12 @@ export class RockLayer {
         ctx.restore();
     }
 
-    updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg) {
+    updateAndDrawRecessedGhostShip(ctx, camera, viewW, viewH, ox, oy, cfg, dt60 = 1.0) {
         if (this.recessedFlatPlatforms.length === 0) return;
         const maxAlpha = cfg.recessedGhostShipMaxAlpha ?? 0.14;
         const spawnChance = cfg.recessedGhostShipSpawnChance ?? 0.0005;
 
-        if (!this.ghostShip && Math.random() < spawnChance) {
+        if (!this.ghostShip && rollChance(spawnChance, dt60)) {
             // Pick a flat platform visible within the current camera view
             const visiblePads = this.recessedFlatPlatforms.filter(p => {
                 const wx = p.x + ox;
@@ -792,12 +797,12 @@ export class RockLayer {
 
         if (!this.ghostShip) return;
         const g = this.ghostShip;
-        g.timer++;
+        g.timer += dt60;
 
         if (g.state === 'landing') {
-            g.alpha = Math.min(maxAlpha, g.alpha + 0.003);
-            g.x += (g.padX - g.x) * 0.04;
-            g.y += (g.padY - g.y) * 0.035;
+            g.alpha = Math.min(maxAlpha, g.alpha + 0.003 * dt60);
+            g.x += (g.padX - g.x) * (1 - Math.pow(0.96, dt60));
+            g.y += (g.padY - g.y) * (1 - Math.pow(0.965, dt60));
             g.angle = -Math.PI / 2 + (g.padX - g.x) * 0.015;
             if (Math.abs(g.y - g.padY) < 1.2) {
                 g.y = g.padY;

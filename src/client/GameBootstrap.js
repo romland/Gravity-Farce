@@ -65,7 +65,7 @@ let currentRoomRules = { discipline: 'mission', flavor: 'STANDARD', objectiveTex
 const socket = io({ autoConnect: false });
 let myId = null;
 let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [], cargos: [], powerups: [] };
-let renderState = { players: {} };
+let renderState = { players: {}, flying: {}, tanks: {} };
 let level = null;
 let camera = { x: 0, y: 0 };
 let particles = [];
@@ -292,6 +292,8 @@ socket.on('show_leaderboard', (boards, isHud = false) => {
 socket.on('initLevel', (data) => {
     level = data;
     renderState.players = {};
+    renderState.flying = {};
+    renderState.tanks = {};
     document.getElementById('loading-screen').style.display = 'none';
     if (window.gfRenderer) {
         window.gfRenderer.rock.buildLevelCache(level);
@@ -432,6 +434,35 @@ socket.on('state', (state) => {
             renderState.players[id].missingFrames = 0;
         }
     }
+
+    // Track flying enemies & tanks in renderState for silky 144Hz+ sub-tick interpolation
+    const seenFlying = new Set();
+    for (const f of (serverState.flying || [])) {
+        const key = f.id ?? f.debugId;
+        seenFlying.add(key);
+        const rf = renderState.flying[key];
+        if (!rf || Math.hypot(rf.x - f.x, rf.y - f.y) > 96) {
+            renderState.flying[key] = { ...f };
+        } else {
+            rf.authX = f.x; rf.authY = f.y; rf.vx = f.vx || 0; rf.vy = f.vy || 0;
+            rf.angle = f.angle; rf.active = f.active;
+        }
+    }
+    for (const k in renderState.flying) if (!seenFlying.has(Number(k)) && !seenFlying.has(k)) delete renderState.flying[k];
+
+    const seenTanks = new Set();
+    for (const tk of (serverState.tanks || [])) {
+        const key = tk.id ?? tk.debugId;
+        seenTanks.add(key);
+        const rt = renderState.tanks[key];
+        if (!rt || Math.hypot(rt.x - tk.x, rt.y - tk.y) > 96) {
+            renderState.tanks[key] = { ...tk };
+        } else {
+            rt.authX = tk.x; rt.authY = tk.y; rt.vx = tk.vx || 0; rt.vy = tk.vy || 0;
+            rt.active = tk.active;
+        }
+    }
+    for (const k in renderState.tanks) if (!seenTanks.has(Number(k)) && !seenTanks.has(k)) delete renderState.tanks[k];
     endNetState();
 });
 
@@ -507,7 +538,7 @@ function updateAndDrawParticles(ctx, dt60 = 1.0) {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx * dt60;
-        p.y += p.vy;
+        p.y += p.vy * dt60;
         p.vx *= Math.pow(0.98, dt60);
         p.vy *= Math.pow(0.98, dt60);
         p.life -= dt60;
@@ -622,7 +653,7 @@ function drawTank(t) {
     const w = t.width || 32;
     const h = t.height || 24;
     ctx.save();
-    ctx.translate(Math.round(t.x), Math.round(t.y));
+    ctx.translate(t.x, t.y);
     ctx.fillStyle = '#8a8a8a';
     ctx.fillRect(-w / 2, -h / 2, w, h);
     ctx.fillStyle = '#ff4b2b';
@@ -637,12 +668,12 @@ function drawTank(t) {
     }
 }
 
-function drawFlyingEnemy(t, subTick = 0) {
+function drawFlyingEnemy(t) {
     if (!t.active) return;
     const w = t.width || 96;
     const h = t.height || 64;
-    const rx = t.x + (t.vx || 0) * subTick;
-    const ry = t.y + (t.vy || 0) * subTick;
+    const rx = t.x;
+    const ry = t.y;
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(t.angle);
@@ -796,6 +827,20 @@ function gameLoop(timestamp = performance.now()) {
                 r.isBot = s.isBot; r.botState = s.botState; r.botPath = s.botPath;
             }
         }
+        for (const k in renderState.flying) {
+            const rf = renderState.flying[k];
+            const predX = (rf.authX ?? rf.x) + (rf.vx || 0) * subTick;
+            const predY = (rf.authY ?? rf.y) + (rf.vy || 0) * subTick;
+            rf.x = lerp(rf.x, predX, blendFactor);
+            rf.y = lerp(rf.y, predY, blendFactor);
+        }
+        for (const k in renderState.tanks) {
+            const rt = renderState.tanks[k];
+            const predX = (rt.authX ?? rt.x) + (rt.vx || 0) * subTick;
+            const predY = (rt.authY ?? rt.y) + (rt.vy || 0) * subTick;
+            rt.x = lerp(rt.x, predX, blendFactor);
+            rt.y = lerp(rt.y, predY, blendFactor);
+        }
         endInterp();
 
         let myServerPlayer = serverState.players[myId];
@@ -856,8 +901,8 @@ function gameLoop(timestamp = performance.now()) {
         if (serverState.cargos) serverState.cargos.forEach(drawCargo);
         if (serverState.powerups) serverState.powerups.forEach(drawPowerup);
         if (serverState.turrets) serverState.turrets.forEach(drawTurret);
-        if (serverState.tanks) serverState.tanks.forEach(drawTank);
-        if (serverState.flying) serverState.flying.forEach(f => drawFlyingEnemy(f, subTick));
+        for (const k in renderState.tanks) drawTank(renderState.tanks[k]);
+        for (const k in renderState.flying) drawFlyingEnemy(renderState.flying[k]);
 
         for (const id in renderState.players) {
             drawShip(renderState.players[id], id === myId);

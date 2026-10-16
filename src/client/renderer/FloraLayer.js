@@ -1,4 +1,4 @@
-import { RENDER_CONFIG } from './RenderConfig.js';
+import { RENDER_CONFIG, rollChance } from './RenderConfig.js';
 
 export class FloraLayer {
     constructor() {
@@ -164,6 +164,7 @@ export class FloraLayer {
         if (!this.anchors.length) return;
 
         const dt = this.lastTimeSec > 0 ? Math.min(0.1, Math.max(0.004, timeSec - this.lastTimeSec)) : (1 / 60);
+        const dt60 = dt * 60.0;
         this.lastTimeSec = timeSec;
 
         const camMinX = camera ? camera.x - 110 : -Infinity;
@@ -176,7 +177,7 @@ export class FloraLayer {
         ctx.save();
         for (const a of this.anchors) {
             if (a.kind === 'DRIP_EMITTER') {
-                if (Math.random() < cfg.dripSpawnChance && this.drips.length < cfg.maxDrips) {
+                if (rollChance(cfg.dripSpawnChance, dt60) && this.drips.length < cfg.maxDrips) {
                     this.drips.push({ x: a.x, y: a.y + 4, vy: 1.5, life: 110 });
                 }
                 continue;
@@ -187,9 +188,9 @@ export class FloraLayer {
                 continue;
             }
 
-            if (a.shredCooldown > 0) a.shredCooldown--;
+            if (a.shredCooldown > 0) a.shredCooldown -= dt60;
             if (a.shyness > 0) {
-                a.shyness = Math.max(0, a.shyness - (dCfg.shyRecoveryRate ?? 0.015));
+                a.shyness = Math.max(0, a.shyness - (dCfg.shyRecoveryRate ?? 0.015) * dt60);
             }
 
             // Interactive Ship-Wash & Thruster Blast Physics
@@ -225,7 +226,7 @@ export class FloraLayer {
                     const shipSpd = Math.hypot(s.vx || 0, s.vy || 0);
                     const shyRad = dCfg.shyShipRadius ?? 95;
                     if (dist < shyRad && (shipSpd > (dCfg.shySpeedThreshold ?? 4.2) || isThrusting)) {
-                        a.shyness = Math.min(1.0, a.shyness + (1 - dist / shyRad) * 0.18);
+                        a.shyness = Math.min(1.0, a.shyness + (1 - dist / shyRad) * 0.18 * dt60);
                     }
                 }
 
@@ -327,7 +328,7 @@ export class FloraLayer {
             // Emit rising bioluminescent spores from live, unburned flora
             if (cfg.sporesEnabled !== false && !this.isPointBurned(a, 0.95)) {
                 if (a.kind === 'GLOW_SHROOM' || a.kind === 'CAVE_FLOWER' || (a.kind === 'VINE' && a.seed > 40)) {
-                    if (Math.random() < (cfg.sporeSpawnChance ?? 0.012) && this.spores.length < (cfg.maxSpores ?? 55)) {
+                    if (rollChance(cfg.sporeSpawnChance ?? 0.012, dt60) && this.spores.length < (cfg.maxSpores ?? 55)) {
                         const tipY = a.kind === 'VINE' ? a.y + a.length : a.y - a.length;
                         const maxLife = cfg.sporeLifeTicks ?? 160;
                         this.spores.push({
@@ -347,9 +348,9 @@ export class FloraLayer {
 
             // Smoothly spring toward targetBend (holds open while ship is present, relaxes when ship leaves)
             const springK = targetBend !== 0 ? cfg.activeSpringK : cfg.restSpringK;
-            a.bendVel += (targetBend - a.bendAngle) * springK;
-            a.bendVel *= cfg.damping;
-            a.bendAngle = Math.max(-cfg.maxBendAngle, Math.min(cfg.maxBendAngle, a.bendAngle + a.bendVel));
+            a.bendVel += (targetBend - a.bendAngle) * springK * dt60;
+            a.bendVel *= Math.pow(cfg.damping, dt60);
+            a.bendAngle = Math.max(-cfg.maxBendAngle, Math.min(cfg.maxBendAngle, a.bendAngle + a.bendVel * dt60));
 
             if (a.kind === 'VINE') {
                 this.drawVine(ctx, a, timeSec, cfg);
@@ -372,9 +373,9 @@ export class FloraLayer {
         ctx.fillStyle = 'rgba(130, 210, 255, 0.75)';
         for (let i = this.drips.length - 1; i >= 0; i--) {
             const d = this.drips[i];
-            d.vy += 0.08;
-            d.y += d.vy;
-            d.life--;
+            d.vy += 0.08 * dt60;
+            d.y += d.vy * dt60;
+            d.life -= dt60;
 
             // Check Ship Hull Deflection & Thruster Steam Vaporization
             let consumedByShip = false;
@@ -435,8 +436,8 @@ export class FloraLayer {
             ctx.lineWidth = 1.2;
             for (let i = this.ripples.length - 1; i >= 0; i--) {
                 const rp = this.ripples[i];
-                rp.rx += 0.45;
-                rp.alpha -= 0.024;
+                rp.rx += 0.45 * dt60;
+                rp.alpha -= 0.024 * dt60;
                 if (rp.alpha <= 0 || rp.rx >= rp.maxRx) {
                     this.ripples.splice(i, 1);
                     continue;
@@ -452,12 +453,12 @@ export class FloraLayer {
         if (this.leafConfetti.length > 0) {
             for (let i = this.leafConfetti.length - 1; i >= 0; i--) {
                 const lf = this.leafConfetti[i];
-                lf.x += lf.vx + Math.sin(timeSec * 4.5 + i) * 0.35;
-                lf.y += lf.vy;
-                lf.vy = Math.min(0.85, lf.vy + 0.015);
-                lf.vx *= 0.97;
-                lf.angle += lf.spin;
-                lf.life--;
+                lf.x += (lf.vx + Math.sin(timeSec * 4.5 + i) * 0.35) * dt60;
+                lf.y += lf.vy * dt60;
+                lf.vy = Math.min(0.85, lf.vy + 0.015 * dt60);
+                lf.vx *= Math.pow(0.97, dt60);
+                lf.angle += lf.spin * dt60;
+                lf.life -= dt60;
                 if (lf.life <= 0) {
                     this.leafConfetti.splice(i, 1);
                     continue;
@@ -481,8 +482,8 @@ export class FloraLayer {
             ctx.globalCompositeOperation = 'lighter';
             for (let i = this.spores.length - 1; i >= 0; i--) {
                 const sp = this.spores[i];
-                sp.y += sp.vy;
-                sp.x += Math.sin(timeSec * 2.2 + sp.phase) * swayAmp;
+                sp.y += sp.vy * dt60;
+                sp.x += Math.sin(timeSec * 2.2 + sp.phase) * swayAmp * dt60;
                 if (dCfg.bulletWakeEnabled !== false && bulletList.length > 0) {
                     for (let bIdx = 0; bIdx < bulletList.length; bIdx++) {
                         const b = bulletList[bIdx];
@@ -493,7 +494,7 @@ export class FloraLayer {
                         }
                     }
                 }
-                sp.life--;
+                sp.life -= dt60;
                 if (sp.life <= 0) {
                     this.spores.splice(i, 1);
                     continue;
@@ -520,8 +521,8 @@ export class FloraLayer {
                 if (host && (host.burning || host.charred)) continue;
                 const targetX = f.homeX + Math.sin(timeSec * 1.6 + f.phase) * 18;
                 const targetY = f.homeY + Math.cos(timeSec * 1.3 + f.phase * 1.7) * 14;
-                f.vx += (targetX - f.x) * 0.025;
-                f.vy += (targetY - f.y) * 0.025;
+                f.vx += (targetX - f.x) * 0.025 * dt60;
+                f.vy += (targetY - f.y) * 0.025 * dt60;
 
                 for (const s of shipList) {
                     const dx = f.x - s.x;
@@ -529,15 +530,15 @@ export class FloraLayer {
                     const d = Math.hypot(dx, dy);
                     if (d < 110 && d > 1) {
                         const push = ((110 - d) / 110) * (s.inputs?.up ? 1.8 : 0.9);
-                        f.vx += (dx / d) * push;
-                        f.vy += (dy / d) * push;
+                        f.vx += (dx / d) * push * dt60;
+                        f.vy += (dy / d) * push * dt60;
                     }
                 }
 
-                f.vx *= 0.88;
-                f.vy *= 0.88;
-                f.x += f.vx;
-                f.y += f.vy;
+                f.vx *= Math.pow(0.88, dt60);
+                f.vy *= Math.pow(0.88, dt60);
+                f.x += f.vx * dt60;
+                f.y += f.vy * dt60;
 
                 const pulse = 0.45 + 0.55 * Math.sin(timeSec * 4.2 + f.phase);
                 ctx.fillStyle = f.color;
@@ -924,7 +925,7 @@ export class FloraLayer {
             ctx.arc(fx, fy - 1, flameLen * 0.22 * flicker, 0, Math.PI * 2);
             ctx.fill();
 
-            if (spawnParticlesFn && Math.random() < 0.18) {
+            if (spawnParticlesFn && rollChance(0.18, 1.0)) {
                 spawnParticlesFn(fx, fy, (Math.random() - 0.5) * 0.4, -0.6 - Math.random() * 0.5, '#ff6b1a', 1, 18);
             }
         }

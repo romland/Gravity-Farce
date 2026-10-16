@@ -171,6 +171,20 @@ export class FlyingPathManager {
                 }
             }
         }
+
+        // Smooth out 4px Amiga integer stair-stepping on diagonal curves while keeping exact frame counts & endpoints
+        for (const seg of this.segments.values()) {
+            const pts = seg.points;
+            if (pts.length < 4) continue;
+            const smoothed = pts.map(p => ({ x: p.x, y: p.y }));
+            for (let pass = 0; pass < 2; pass++) {
+                for (let i = 1; i < pts.length - 1; i++) {
+                    smoothed[i].x = Number((0.25 * smoothed[i - 1].x + 0.5 * smoothed[i].x + 0.25 * smoothed[i + 1].x).toFixed(2));
+                    smoothed[i].y = Number((0.25 * smoothed[i - 1].y + 0.5 * smoothed[i].y + 0.25 * smoothed[i + 1].y).toFixed(2));
+                }
+            }
+            seg.points = smoothed;
+        }
     }
 }
 

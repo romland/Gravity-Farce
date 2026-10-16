@@ -125,6 +125,7 @@ export class PerfOverlay {
             this.profiler.stopRecording(this.getContextDataFn());
             const md = PerfReportGenerator.generate(this.profiler, this.getContextDataFn(), false);
             this.profiler.lastReportMarkdown = md;
+            // This will fail on non-localhost if not https.
             navigator.clipboard.writeText(md).then(() => {
                 btn.textContent = '✓ COPIED';
                 this.profiler.lastReportMarkdown = null;

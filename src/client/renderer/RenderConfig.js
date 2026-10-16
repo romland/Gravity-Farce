@@ -222,6 +222,18 @@ export const RENDER_CONFIG = {
     }
 };
 
+/**
+ * Frame-rate invariant probability roll for per-frame chances defined at a 60Hz baseline.
+ * Uses exact Bernoulli scaling: 1 - (1 - p)^dt60 so 60Hz, 144Hz, and 240Hz spawn identical rates.
+ */
+export function rollChance(chanceAt60Hz, dt60 = 1.0) {
+    if (chanceAt60Hz <= 0) return false;
+    if (chanceAt60Hz >= 1) return true;
+    const p = dt60 === 1.0 ? chanceAt60Hz : (1.0 - Math.pow(1.0 - chanceAt60Hz, dt60));
+    return Math.random() < p;
+}
+
 if (typeof window !== 'undefined') {
     window.GF_RENDER_CONFIG = RENDER_CONFIG;
+    window.gfRollChance = rollChance;
 }
