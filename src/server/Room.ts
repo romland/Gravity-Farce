@@ -71,8 +71,30 @@ export class Room {
         }
         this.tracker['entry'].replayData.seed = this.seed;
         this.spawnEntities();
+        this.syncRoomRulesComponent();
         botPathWorker.syncLevel(this.roomId, this.level, true);
         this.printLevelStats();
+    }
+
+    public syncRoomRulesComponent() {
+        let flavor = 'STANDARD';
+        let objectiveText = 'REACH EXIT PAD';
+        if (this.category === 'mission') {
+            flavor = this.initialCargoCount > 0 ? 'CARGO RECOVERY' : 'INFILTRATION';
+            objectiveText = this.initialCargoCount > 0 ? 'DELIVER ALL CARGO TO HOME PAD' : 'LAND ON DESIGNATED EXIT PAD';
+        } else if (this.category === 'race') {
+            flavor = this.isLethalRacing ? 'LETHAL CIRCUIT' : 'BUMPER CIRCUIT';
+            objectiveText = '3-LAP CHECKPOINT SPRINT';
+        } else if (this.category === 'dogfight') {
+            flavor = this.getRoomMode() === 'MP' ? 'TEAM ELIMINATION' : 'BOT SKIRMISH';
+            objectiveText = 'ELIMINATE OPPOSING SQUADRON';
+        }
+        this.ecs.roomRules = {
+            discipline: this.category,
+            flavor,
+            objectiveText,
+            customCounters: {}
+        };
     }
 
     public get channel(): string {
@@ -288,6 +310,16 @@ export class Room {
         if (this.floraBurns.size > 0) {
             const burns = Array.from(this.floraBurns.entries()).map(([idx, b]) => ({ idx, originT: b.originT }));
             this.emitToPlayer(id, 'flora_burn_sync', burns);
+        }
+        this.syncRoomRulesComponent();
+        this.emitToPlayer(id, 'room_rules', this.ecs.roomRules);
+        if (!this.isReplayMode) {
+            this.emitToPlayer(id, 'game_hint', {
+                id: `deploy_${this.category}`,
+                title: `${this.category.toUpperCase()} — ${this.ecs.roomRules.flavor}`,
+                body: this.ecs.roomRules.objectiveText,
+                showKeys: this.levelIndex === 0
+            });
         }
     }
 
@@ -577,8 +609,10 @@ export class Room {
                 }
             }
         }
+        this.syncRoomRulesComponent();
         botPathWorker.syncLevel(this.roomId, this.level, true);
         this.io.to(this.channel).emit('initLevel', this.level);
+        this.io.to(this.channel).emit('room_rules', this.ecs.roomRules);
         this.io.to(this.channel).emit('flora_burn_reset');
     }
 

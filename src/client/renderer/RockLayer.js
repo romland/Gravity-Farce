@@ -578,15 +578,15 @@ export class RockLayer {
     }
 
     updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg) {
-        const maxActive = cfg.recessedCataclysmMaxActive ?? 2;
-        const spawnChance = cfg.recessedCataclysmSpawnChance ?? 0.0016;
-        const baseAlpha = cfg.recessedCataclysmAlpha ?? 0.28;
-        const baseSpeed = cfg.recessedCataclysmBaseSpeed ?? 1.15;
-        const speedVar = cfg.recessedCataclysmSpeedVar ?? 0.75;
-        const grav = cfg.recessedCataclysmGravity ?? 0.008;
-        const maxTrail = cfg.recessedCataclysmTrailLength ?? 34;
-        const burnMult = cfg.recessedCataclysmBurnGlowMultiplier ?? 3.4;
-        const emberChance = cfg.recessedCataclysmEmberShedChance ?? 0.48;
+        const maxActive = cfg.recessedCataclysmMaxActive ?? 1;
+        const spawnChance = cfg.recessedCataclysmSpawnChance ?? 0.00045;
+        const baseAlpha = cfg.recessedCataclysmAlpha ?? 0.11;
+        const baseSpeed = cfg.recessedCataclysmBaseSpeed ?? 0.38;
+        const speedVar = cfg.recessedCataclysmSpeedVar ?? 0.22;
+        const grav = cfg.recessedCataclysmGravity ?? 0.0022;
+        const maxTrail = cfg.recessedCataclysmTrailLength ?? 42;
+        const burnMult = cfg.recessedCataclysmBurnGlowMultiplier ?? 2.2;
+        const emberChance = cfg.recessedCataclysmEmberShedChance ?? 0.22;
 
         if (this.cataclysms.length < maxActive && Math.random() < spawnChance) {
             const spawnX = camera.x + viewW * (0.15 + Math.random() * 0.70);
@@ -600,10 +600,11 @@ export class RockLayer {
                 x: spawnX - ox,
                 y: spawnY - oy,
                 vx: Math.cos(angle) * speed,
-                vy: Math.abs(Math.sin(angle)) * speed + 0.35,
-                r: 5.5 + Math.random() * 3.5,
-                life: maxLife,
                 maxLife,
+                vy: Math.abs(Math.sin(angle)) * speed + 0.12,
+                r: 4.0 + Math.random() * 2.5,
+                life: maxLife * 2,
+                maxLife: maxLife * 2,
                 isComet,
                 trail: []
             });
@@ -613,7 +614,7 @@ export class RockLayer {
 
         ctx.save();
         ctx.translate(ox, oy);
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = 'source-over';
 
         for (let i = this.cataclysms.length - 1; i >= 0; i--) {
             const c = this.cataclysms[i];
@@ -630,11 +631,11 @@ export class RockLayer {
                 this.cataclysmDebris.push({
                     x: c.x + (Math.random() - 0.5) * c.r * 0.9,
                     y: c.y + (Math.random() - 0.5) * c.r * 0.9,
-                    vx: -c.vx * (0.15 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.35,
-                    vy: -c.vy * (0.15 + Math.random() * 0.25) - 0.15 + (Math.random() - 0.5) * 0.35,
-                    r: 1.1 + Math.random() * 1.8,
-                    life: 32 + Math.floor(Math.random() * 28),
-                    maxLife: 60,
+                    vx: -c.vx * (0.12 + Math.random() * 0.2) + (Math.random() - 0.5) * 0.14,
+                    vy: -c.vy * (0.12 + Math.random() * 0.2) - 0.05 + (Math.random() - 0.5) * 0.14,
+                    r: 1.0 + Math.random() * 1.4,
+                    life: 48 + Math.floor(Math.random() * 36),
+                    maxLife: 84,
                     isComet: c.isComet
                 });
             }
@@ -676,15 +677,15 @@ export class RockLayer {
                 }
                 for (let d = 0; d < 10 && this.cataclysmDebris.length < 36; d++) {
                     const ang = Math.random() * Math.PI * 2;
-                    const spd = 0.45 + Math.random() * 1.65;
+                    const spd = 0.18 + Math.random() * 0.55;
                     this.cataclysmDebris.push({
                         x: c.x,
                         y: c.y,
                         vx: Math.cos(ang) * spd - c.vx * 0.15,
                         vy: Math.sin(ang) * spd - Math.abs(c.vy) * 0.2,
-                        r: 1.6 + Math.random() * 2.4,
-                        life: 45 + Math.floor(Math.random() * 35),
-                        maxLife: 80,
+                        r: 1.2 + Math.random() * 1.8,
+                        life: 65 + Math.floor(Math.random() * 45),
+                        maxLife: 110,
                         isComet: c.isComet
                     });
                 }
@@ -695,19 +696,19 @@ export class RockLayer {
             // Draw long smoldering meteor tail with outer burn envelope + hot inner core
             for (let t = 0; t < c.trail.length; t++) {
                 const ratio = (t + 1) / c.trail.length;
-                const jitterX = Math.sin(t * 1.7 + c.life * 0.15) * (1 - ratio) * 2.2;
-                const jitterY = Math.cos(t * 1.3 - c.life * 0.12) * (1 - ratio) * 2.2;
+                const jitterX = Math.sin(t * 1.7 + c.life * 0.08) * (1 - ratio) * 1.2;
+                const jitterY = Math.cos(t * 1.3 - c.life * 0.06) * (1 - ratio) * 1.2;
                 const tx = c.trail[t].x + jitterX;
                 const ty = c.trail[t].y + jitterY;
 
-                ctx.globalAlpha = Math.pow(ratio, 1.35) * baseAlpha * 0.42;
-                ctx.fillStyle = c.isComet ? '#1868a8' : '#b82808';
+                ctx.globalAlpha = Math.pow(ratio, 1.35) * baseAlpha * 0.35;
+                ctx.fillStyle = c.isComet ? '#2b4c66' : '#593325';
                 ctx.beginPath();
                 ctx.arc(tx, ty, c.r * (0.55 + ratio * 1.15), 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.globalAlpha = Math.pow(ratio, 1.8) * baseAlpha * 0.78;
-                ctx.fillStyle = c.isComet ? '#4facfe' : '#ff6b2b';
+                ctx.globalAlpha = Math.pow(ratio, 1.8) * baseAlpha * 0.65;
+                ctx.fillStyle = c.isComet ? '#567d99' : '#8a563c';
                 ctx.beginPath();
                 ctx.arc(tx, ty, c.r * ratio * 0.75, 0, Math.PI * 2);
                 ctx.fill();
@@ -716,8 +717,8 @@ export class RockLayer {
             // Draw wide atmospheric burn halo around fireball head
             const burnR = c.r * burnMult;
             const halo = ctx.createRadialGradient(c.x, c.y, c.r * 0.2, c.x, c.y, burnR);
-            halo.addColorStop(0, c.isComet ? `rgba(110, 235, 255, ${baseAlpha * 0.95})` : `rgba(255, 165, 65, ${baseAlpha * 0.95})`);
-            halo.addColorStop(0.45, c.isComet ? `rgba(45, 140, 235, ${baseAlpha * 0.42})` : `rgba(235, 65, 20, ${baseAlpha * 0.42})`);
+            halo.addColorStop(0, c.isComet ? `rgba(105, 145, 175, ${baseAlpha * 0.65})` : `rgba(155, 105, 75, ${baseAlpha * 0.65})`);
+            halo.addColorStop(0.45, c.isComet ? `rgba(55, 85, 115, ${baseAlpha * 0.30})` : `rgba(95, 55, 40, ${baseAlpha * 0.30})`);
             halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
             ctx.globalAlpha = 1.0;
             ctx.fillStyle = halo;
@@ -726,8 +727,8 @@ export class RockLayer {
             ctx.fill();
 
             // Draw glowing core
-            ctx.globalAlpha = baseAlpha;
-            ctx.fillStyle = c.isComet ? '#e0f7fa' : '#fff3a0';
+            ctx.globalAlpha = baseAlpha * 0.85;
+            ctx.fillStyle = c.isComet ? '#9bb8cc' : '#bfa082';
             ctx.beginPath();
             ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
             ctx.fill();
@@ -744,8 +745,8 @@ export class RockLayer {
                 this.cataclysmDebris.splice(i, 1);
                 continue;
             }
-            ctx.globalAlpha = (d.life / d.maxLife) * baseAlpha;
-            ctx.fillStyle = d.isComet ? '#70d6ff' : '#ff9233';
+            ctx.globalAlpha = (d.life / d.maxLife) * baseAlpha * 0.75;
+            ctx.fillStyle = d.isComet ? '#6c8ea6' : '#8c6249';
             ctx.beginPath();
             ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
             ctx.fill();

@@ -147,27 +147,6 @@ export class PrefabLayer {
                 sh / scale
             );
         }
-
-        // Dynamic Ship Engine Thruster Illumination onto neighboring walls & flora
-        if (players && lCfg.shipLightEnabled !== false) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = 1.0;
-            for (const id in players) {
-                const p = players[id];
-                if (p.isDead) continue;
-                const isThrusting = Boolean(p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && p.fuel > 0);
-                const rad = isThrusting ? (lCfg.shipThrustRadius ?? 90) : (lCfg.shipIdleRadius ?? 44);
-                const alpha = isThrusting ? (lCfg.shipThrustIntensity ?? 0.20) : (lCfg.shipIdleIntensity ?? 0.08);
-                if (rad <= 0 || alpha <= 0) continue;
-                const g = ctx.createRadialGradient(p.x, p.y, 4, p.x, p.y, rad);
-                g.addColorStop(0, `rgba(79, 195, 255, ${alpha})`);
-                g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = g;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
         ctx.restore();
     }
 

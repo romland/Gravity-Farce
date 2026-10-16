@@ -517,14 +517,10 @@ export function buildLeaderboardContext(
         const isMe = rec.playerId === playerId;
         const isThisNewPb = isMe && isNewPb && rec.timestamp === newEntryTimestamp;
         const isCurrentRun = isMe && rec.timestamp === newEntryTimestamp;
-        
-        let displayAlias = rec.alias;
-        if (i === 0 && rec.timestamp) {
-            displayAlias = `${rec.alias} <span style="font-size: 0.75em; opacity: 0.6; font-weight: normal; margin-left: 6px;">(${getRelativeTimeStr(rec.timestamp)})</span>`;
-        }
+        const ageStr = (i === 0 && rec.timestamp) ? getRelativeTimeStr(rec.timestamp) : undefined;
         
         results.push({
-            rank: i + 1, rankLabel: `#${i+1}`, alias: displayAlias, displayValue: formatFn(rec),
+            rank: i + 1, rankLabel: `#${i+1}`, alias: rec.alias, ageStr, displayValue: formatFn(rec),
             isMe, isNewPb: isThisNewPb, isCurrentRun, replayId: rec.metadata?.replayId
         });
     }

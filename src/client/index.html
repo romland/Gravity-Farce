@@ -3,1656 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Gravity Farce</title>
-    <style>
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background: #050505; color: #eee; 
-            font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            overflow: hidden;
-            touch-action: none;
-        }
-        #gameCanvas { 
-            display: block;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform-origin: center center;
-        }
-        #hud { 
-            z-index: 20; pointer-events: none; white-space: nowrap;
-            font-size: 16px; font-weight: 600; letter-spacing: 1px; color: rgba(255, 255, 255, 0.9);
-            background: rgba(20, 25, 30, 0.6);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 12px 24px; border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); text-transform: uppercase;
-        }
-        #touch-controls {
-            position: absolute; bottom: 40px; left: 40px; right: 40px;
-            display: none; justify-content: space-between; z-index: 50;
-            pointer-events: none; user-select: none; -webkit-user-select: none;
-        }
-        @media (hover: none) and (pointer: coarse) {
-            #touch-controls { display: flex; }
-        }
-        .tbtn {
-            width: 72px; height: 72px; border-radius: 36px;
-            background: rgba(20, 25, 30, 0.65);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: rgba(255, 255, 255, 0.85); font-size: 26px; pointer-events: auto;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); margin: 0 12px; transition: background 0.1s, transform 0.1s;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .tbtn:active { background: rgba(255, 255, 255, 0.25); transform: scale(0.95); }
-        .dpad, .action-pad { display: flex; align-items: flex-end; }
-        .fire-btn { width: 92px; height: 92px; border-radius: 46px; background: rgba(255, 75, 43, 0.5); border-color: rgba(255, 75, 43, 0.6); font-size: 32px; font-weight: bold; color: #fff;}
-        .fire-btn:active { background: rgba(255, 75, 43, 0.8); }
-        
-        #leaderboard-modal {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(79, 172, 254, 0.3); border-radius: 16px;
-            width: 90vw; max-width: 920px; max-height: 85vh; overflow-y: auto;
-            display: none; flex-direction: column; z-index: 100;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.85); padding: 24px;
-        }
-        #run-summary-container { margin-bottom: 16px; }
-        .board-tabs {
-            display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px;
-            margin-bottom: 16px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
-        }
-        .board-tab {
-            background: rgba(25, 30, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #aaa; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 12px;
-            letter-spacing: 1px; cursor: pointer; white-space: nowrap; transition: all 0.2s;
-        }
-        .board-tab:hover { background: rgba(79, 172, 254, 0.15); color: #fff; border-color: rgba(79, 172, 254, 0.4); }
-        .board-tab.active {
-            background: linear-gradient(135deg, rgba(79, 172, 254, 0.2), rgba(0, 242, 254, 0.2));
-            border-color: #4facfe; color: #fff; box-shadow: 0 0 12px rgba(79, 172, 254, 0.3);
-        }
-        .board-tab.top10-highlight {
-            border-color: #ffd700;
-            color: #ffd700;
-            box-shadow: 0 0 14px rgba(255, 215, 0, 0.45);
-        }
-        #server-banner {
-            white-space: normal;
-            position: absolute; top: 88px; left: 50%; transform: translateX(-50%);
-            z-index: 90; pointer-events: none; display: none;
-            background: linear-gradient(135deg, rgba(20, 25, 35, 0.92), rgba(40, 30, 10, 0.92));
-            border: 1px solid #ffd700; color: #ffd700; padding: 10px 26px; border-radius: 999px;
-            font-weight: 800; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase;
-            box-shadow: 0 0 28px rgba(255, 215, 0, 0.55);
-            max-width: 80%;
-            text-align: center;
-            line-height: 1.4;
-        }
-        #playfield-announce {
-            position: absolute; top: 24%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 85; pointer-events: none; display: none;
-            font-size: 32px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase;
-            text-shadow: 0 0 24px rgba(0,0,0,0.95), 0 0 18px currentColor;
-        }
-        #gameover-modal {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(15, 12, 18, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 2px solid #e74c3c; border-radius: 16px; padding: 32px 40px;
-            display: none; flex-direction: column; align-items: center; z-index: 150;
-            box-shadow: 0 20px 60px rgba(231, 76, 60, 0.35); text-align: center;
-        }
-        #leaderboard-content {
-            display: block;
-            margin-bottom: 20px;
-        }
-        .board-pane { display: none; }
-        .board-pane.active { display: block; }
-        @media (max-width: 768px) {
-            #leaderboard-modal { width: 95vw; padding: 16px; max-height: 90vh; }
-        }
-        .board-card {
-            background: rgba(25, 30, 40, 0.45); border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px; padding: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-            max-width: 680px; margin: 0 auto;
-        }
-        .board-title { color: #f1c40f; text-align: center; margin-bottom: 12px; font-weight: bold; letter-spacing: 1px; }
-        .board-table { width: 100%; border-collapse: collapse; font-family: monospace; }
-        .board-table th { border-bottom: 1px solid rgba(255,255,255,0.2); padding: 8px 6px; text-align: left; color: #888; white-space: nowrap; }
-        .board-table td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
-        .board-table tr:nth-child(1) td { color: #f1c40f; font-weight: bold; }
-        .board-table tr:nth-child(2) td { color: #bdc3c7; font-weight: bold; }
-        .board-table tr:nth-child(3) td { color: #cd7f32; font-weight: bold; }
-        .btn-close {
-            background: #4facfe; color: #000; border: none; padding: 10px; font-weight: bold;
-            border-radius: 6px; cursor: pointer; text-align: center; font-size: 16px; margin-top: auto;
-        }
-        .btn-close:hover { background: #3a9ade; }
-        .modal-close-x {
-            position: absolute; top: 14px; right: 16px;
-            width: 32px; height: 32px; border-radius: 8px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            color: #ccc; font-size: 16px; font-weight: bold; line-height: 1;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.15s; z-index: 10;
-        }
-        .modal-close-x:hover {
-            background: rgba(231, 76, 60, 0.25);
-            border-color: rgba(231, 76, 60, 0.6);
-            color: #fff;
-        }
-        
-        @keyframes pulse-pb {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.1); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-    </style>
+    <title>Gravity Farce — Zarkos Subterranean Transit</title>
+    <link rel="stylesheet" href="ui/hud.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="AssetManager.js"></script>
     <script src="InputManager.js"></script>
 </head>
 <body>
-    <div id="loading-screen" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#050505; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; color:#4facfe; font-weight:bold; letter-spacing:2px;">
-        <img id="loader-img" src="assets/loader-detailed.webp" style="max-width:256px; margin-bottom:24px; display:none;" />
-        <div id="loading-text">INITIALIZING SYSTEMS...</div>
-    </div>
-    <div style="position: absolute; top: 24px; left: 24px; z-index: 20; display: flex; align-items: center; gap: 12px; pointer-events: none;">
-        <div id="hud">CAVERN SECURED: AWAITING DEPLOYMENT</div>
-        <button onclick="socket.emit('request_leaderboard')" style="pointer-events: auto; background: rgba(20, 25, 30, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(79, 172, 254, 0.4); color: #4facfe; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onmouseover="this.style.background='rgba(79, 172, 254, 0.2)'" onmouseout="this.style.background='rgba(20, 25, 30, 0.7)'">HIGHSCORES</button>
-        <button id="btn-room-mode" onclick="openRoomModal()" style="pointer-events: auto; background: rgba(20, 25, 30, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(46, 204, 113, 0.45); color: #2ecc71; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onmouseover="this.style.background='rgba(46, 204, 113, 0.2)'" onmouseout="this.style.background='rgba(20, 25, 30, 0.7)'">SOLO (SP)</button>
-        <button id="btn-spawn-bot" onclick="socket.emit('debug_action', 'spawn_bot')" style="display:none; pointer-events: auto; background: rgba(20, 25, 30, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(231, 76, 60, 0.4); color: #e74c3c; padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; letter-spacing: 1px; transition: all 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" onmouseover="this.style.background='rgba(231, 76, 60, 0.2)'" onmouseout="this.style.background='rgba(20, 25, 30, 0.7)'">+ BOT</button>
-    </div>
-    <div id="server-banner"></div>
-    <div id="playfield-announce"></div>
-    <canvas id="gameCanvas"></canvas>
-    <div id="touch-controls">
-        <div class="dpad">
-            <div id="btn-left" class="tbtn">◀</div>
-            <div id="btn-thrust" class="tbtn">▲</div>
-            <div id="btn-right" class="tbtn">▶</div>
+    <div id="app-shell">
+        <div id="loading-screen" style="position:absolute; inset:0; background:#05070a; z-index:200; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+            <img id="loader-img" src="assets/loader-detailed.webp" style="max-width:240px; margin-bottom:20px; display:none;" alt="Loading" />
+            <div id="loading-text" class="hud-val hud-val-lg">INITIALIZING ZARKOS FLIGHT SYSTEMS...</div>
         </div>
-        <div class="action-pad">
-            <div id="btn-fire" class="tbtn fire-btn">◎</div>
-        </div>
-    </div>
-    
-    <div id="gameover-modal">
-        <button class="modal-close-x" aria-label="Close" onclick="document.getElementById('gameover-modal').style.display='none'">✕</button>
-        <div style="font-size: 42px; font-weight: 900; color: #e74c3c; letter-spacing: 4px; margin-bottom: 8px; text-shadow: 0 0 20px rgba(231,76,60,0.6);">GAME OVER</div>
-        <div id="gameover-sub" style="font-family: monospace; font-size: 15px; color: #ccc; margin-bottom: 22px; letter-spacing: 1px;">ALL SHIPS LOST</div>
-        <div style="display: flex; gap: 12px; width: 100%;">
-            <button class="btn-close" style="flex: 1; background: #2c3e50; color: #fff;" onclick="document.getElementById('gameover-modal').style.display='none'">SPECTATE</button>
-            <button class="btn-close" style="flex: 1; background: #e74c3c; color: #fff;" onclick="socket.emit('retry_level')">RETRY CAVERN</button>
-        </div>
-    </div>
 
-    <div id="leaderboard-modal">
-        <button class="modal-close-x" aria-label="Close" onclick="document.getElementById('leaderboard-modal').style.display='none'">✕</button>
-        <div id="run-summary-container"></div>
-        <div id="board-tabs-container" class="board-tabs"></div>
-        <div id="leaderboard-content"></div>
-        <div id="modal-footer" style="display: flex; gap: 10px; margin-top: auto;">
-            <button class="btn-close" style="flex: 1; margin-top: 0; background: #2c3e50; color: #fff;" onclick="document.getElementById('leaderboard-modal').style.display='none'">SPECTATE</button>
-            <button class="btn-close" style="flex: 1; margin-top: 0;" onclick="requestNextLevel()">NEXT LEVEL</button>
-        </div>
-    </div>
-
-    <div id="room-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(79, 172, 254, 0.4); border-radius: 16px; width: 420px; max-width: 92vw; display: none; flex-direction: column; z-index: 180; box-shadow: 0 20px 50px rgba(0,0,0,0.85); padding: 24px;">
-        <button class="modal-close-x" aria-label="Close" onclick="document.getElementById('room-modal').style.display='none'">✕</button>
-        <div class="board-title">SESSION MODE &amp; ROOM INSTANCE</div>
-        <div id="room-modal-current" style="text-align: center; font-family: monospace; font-size: 12px; color: #bdc3c7; margin-bottom: 16px; letter-spacing: 1px;">CURRENT: SOLO PRIVATE INSTANCE</div>
-        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
-            <button class="btn-close" style="flex: 1; background: #2ecc71; color: #000; font-size: 13px;" onclick="switchSessionMode('SP', '')">NEW SOLO (SP)</button>
-            <button class="btn-close" style="flex: 1; background: #f39c12; color: #000; font-size: 13px;" onclick="switchSessionMode('MP', '')">PUBLIC MP</button>
-        </div>
-        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; margin-bottom: 14px;">
-            <div style="font-size: 11px; color: #888; text-align: center; margin-bottom: 8px; letter-spacing: 1px; font-weight: bold;">JOIN OR CREATE SPECIFIC MP ROOM BY CODE</div>
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="room-code-input" maxlength="4" placeholder="CODE" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 18px; padding: 8px; font-family: monospace; font-weight: bold; text-transform: uppercase; border-radius: 6px; outline: none;">
-                <button class="btn-close" style="padding: 8px 18px; font-size: 14px; margin-top: 0;" onclick="joinRoomByCodeInput()">JOIN MP</button>
+        <div id="canvas-stage">
+            <canvas id="gameCanvas"></canvas>
+            <div id="server-banner"></div>
+            <div id="playfield-announce"></div>
+            <div id="touch-controls">
+                <div class="dpad">
+                    <div id="btn-left" class="tbtn">◀</div>
+                    <div id="btn-thrust" class="tbtn">▲</div>
+                    <div id="btn-right" class="tbtn">▶</div>
+                </div>
+                <div class="action-pad">
+                    <div id="btn-fire" class="tbtn tbtn-fire">◎</div>
+                </div>
             </div>
         </div>
-        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; margin-bottom: 16px;">
-            <div style="font-size: 11px; color: #888; text-align: center; margin-bottom: 8px; letter-spacing: 1px; font-weight: bold;">ACTIVE ROOM INSTANCES ON SERVER</div>
-            <div id="active-rooms-list" style="max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 12px; display: flex; flex-direction: column; gap: 6px;"></div>
-        </div>
-    </div>
 
-    <div id="login-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 20, 25, 0.9); backdrop-filter: blur(10px); border: 2px solid #4facfe; border-radius: 12px; width: 300px; display: none; flex-direction: column; z-index: 200; box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 20px;">
-        <div class="board-title">PILOT REGISTRATION</div>
-        <input type="text" autofocus id="alias-input" maxlength="3" style="background: rgba(0,0,0,0.5); border: 1px solid #4facfe; color: #fff; text-align: center; font-size: 24px; padding: 10px; margin-bottom: 10px; font-family: monospace; font-weight: bold; outline: none;" placeholder="AAA">
-        <div style="display: flex; gap: 6px; margin-bottom: 10px; font-family: monospace;">
-            <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; background: rgba(46, 204, 113, 0.15); border: 1px solid rgba(46, 204, 113, 0.4); padding: 8px 4px; border-radius: 6px; font-size: 11px; color: #2ecc71; cursor: pointer; font-weight: bold;">
-                <input type="radio" name="login-session-mode" id="login-mode-sp" value="SP" checked style="accent-color: #2ecc71; cursor: pointer;">
-                <span>SOLO (SP)</span>
-            </label>
-            <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; background: rgba(243, 156, 18, 0.15); border: 1px solid rgba(243, 156, 18, 0.4); padding: 8px 4px; border-radius: 6px; font-size: 11px; color: #f39c12; cursor: pointer; font-weight: bold;">
-                <input type="radio" name="login-session-mode" id="login-mode-mp" value="MP" style="accent-color: #f39c12; cursor: pointer;">
-                <span>MULTI (MP)</span>
-            </label>
-        </div>
-        <input type="text" id="login-room-code" maxlength="4" placeholder="OPTIONAL MP ROOM CODE (E.G. K7X9)" style="display: none; background: rgba(0,0,0,0.5); border: 1px solid #f39c12; color: #fff; text-align: center; font-size: 13px; padding: 8px; margin-bottom: 10px; font-family: monospace; font-weight: bold; text-transform: uppercase; outline: none; border-radius: 6px;">
-        <!--
-        <label style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #bdc3c7; margin-bottom: 12px; cursor: pointer; user-select: none; font-family: monospace;">
-            <input type="checkbox" id="bot-pilot-checkbox" style="accent-color: #4facfe; width: 15px; height: 15px; cursor: pointer;">
-            <span>I WILL BE A BOT/AI PILOT (BOT LEAGUE)</span>
-        </label>
-        -->
-        <div id="login-error" style="color: #e74c3c; text-align: center; margin-bottom: 10px; font-size: 12px; font-weight: bold;"></div>
-        <button id="btn-login-submit" class="btn-close" style="margin-bottom: 10px;">CONNECT</button>
-        <button id="btn-login-random" class="btn-close" style="background: #2c3e50; color: #fff;">RANDOM CALLSIGN</button>
-    </div>
+        <div id="hud-layer"></div>
+        <div id="debug-hud-panel"></div>
 
-    <script>
-        function requestNextLevel() {
-            document.getElementById('leaderboard-modal').style.display='none';
-            document.getElementById('loading-screen').style.display='flex';
-            document.getElementById('loading-text').innerText='WARPING TO NEXT CAVERN...';
-            if (typeof socket !== 'undefined') socket.emit('next_level');
-        }
-
-        function requestReplayLevel() {
-            document.getElementById('leaderboard-modal').style.display='none';
-            document.getElementById('gameover-modal').style.display='none';
-            if (typeof socket !== 'undefined') socket.emit('retry_level');
-        }
-
-        function closeAnyOpenDialogs() {
-            let closedAny = false;
-            for (const id of ['leaderboard-modal', 'room-modal', 'gameover-modal']) {
-                const el = document.getElementById(id);
-                if (el && el.style.display && el.style.display !== 'none') {
-                    el.style.display = 'none';
-                    closedAny = true;
-                }
-            }
-            return closedAny;
-        }
-
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const hud = document.getElementById('hud');
-        
-        // Enforce Fixed Viewport
-        const VIEW_W = 1600;
-        const VIEW_H = 900;
-        canvas.width = VIEW_W;
-        canvas.height = VIEW_H;
-
-        function resize() { 
-            const scale = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
-            canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
-        }
-        window.addEventListener('resize', resize); resize();
-
-        const assetManager = new AssetManager();
-
-        let myUuid = localStorage.getItem('gf_uuid');
-        if (!myUuid) {
-            myUuid = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
-            localStorage.setItem('gf_uuid', myUuid);
-        }
-        let myAlias = localStorage.getItem('gf_alias');
-        let myIsBot = localStorage.getItem('gf_is_bot') === 'true';
-        let mySessionMode = localStorage.getItem('gf_session_mode') === 'MP' ? 'MP' : 'SP';
-        let currentRoomInfo = { roomId: 0, joinCode: '', mode: mySessionMode, levelIndex: 0, playerCount: 1 };
-
-        const socket = io({ autoConnect: false });
-        let myId = null;
-        let serverState = { players: {}, bullets: [], turrets: [], tanks: [], flying: [], cargos: [], powerups: [] };
-        let renderState = { players: {} }; 
-        let level = null;
-        let camera = { x: 0, y: 0 };
-        let particles = [];
-        let fireworks = [];
-        let floatingTexts = [];
-        let lastHudHTML = "";
-        let myPing = 0;
-        let raceLights = [];
-        let spectateTargetId = null;
-        let cameraShake = 0;
-        let metrics = { bytesIn: 0, bytesOut: 0, packetsIn: 0, packetsOut: 0 };
-
-        let freecam = false;
-        let debugMode = false;
-        let showDebugLines = false;
-
-        const inputManager = new InputManager(null, (inputs) => {
-            if (!freecam) socket.emit('input', inputs);
-        }, (action, payload) => {
-            if (action === 'escape') {
-                if (!closeAnyOpenDialogs()) socket.emit('leave_replay');
-            } else if (action === 'inputEnter') {
-                if (payload === 'alias-input') attemptLogin(aliasInput.value);
-                else if (payload === 'room-code-input') window.joinRoomByCodeInput();
-            }
-            else if (action === 'watchReplay') socket.emit('watch_latest_replay');
-            else if (debugMode) {
-                if (action === 'pause') socket.emit('debug_action', 'pause');
-                else if (action === 'toggleDebugLines') showDebugLines = !showDebugLines;
-                else if (action === 'toggleFreecam') freecam = !freecam;
-                else if (action === 'powerup2x') socket.emit('debug_action', 'powerup-0xD6');
-                else if (action === 'powerup3x') socket.emit('debug_action', 'powerup-0xD7');
-                else if (action === 'powerupRear') socket.emit('debug_action', 'powerup-0xD8');
-                else if (action === 'spawnBot') socket.emit('debug_action', 'spawn_bot');
-                else if (action === 'dumpBots') socket.emit('debug_action', 'dump_bots');
-                else if (action === 'jumpLevel') {
-                    const lvl = prompt("Jump to level (0-99):");
-                    if (lvl !== null && !isNaN(parseInt(lvl))) socket.emit('debug_action', 'jump', { levelIndex: parseInt(lvl) });
-                }
-            }
-        });
-
-        socket.on('connect', () => { 
-            myId = socket.id; 
-        });
-
-        socket.onAny((eventName, ...args) => {
-            metrics.packetsIn++;
-            let size = eventName.length;
-            for (let i = 0; i < args.length; i++) {
-                if (typeof args[i] === 'string') size += args[i].length;
-                else if (typeof args[i] === 'object') size += JSON.stringify(args[i]).length;
-                else size += 8;
-            }
-            metrics.bytesIn += size;
-        });
-        const originalEmit = socket.emit.bind(socket);
-        socket.emit = function(eventName, ...args) {
-            metrics.packetsOut++;
-            let size = eventName.length;
-            for (let i = 0; i < args.length; i++) {
-                if (typeof args[i] === 'string') size += args[i].length;
-                else if (typeof args[i] === 'object') size += JSON.stringify(args[i]).length;
-                else size += 8;
-            }
-            metrics.bytesOut += size;
-            originalEmit(eventName, ...args);
-        };
-        
-        socket.on('ping', (serverTime) => {
-            socket.emit('pong', serverTime);
-        });
-        
-        socket.on('hide_leaderboard', () => {
-            const modal = document.getElementById('leaderboard-modal');
-            if (modal) modal.style.display = 'none';
-            spectateTargetId = null;
-        });
-
-        let bannerTimer = null;
-        socket.on('server_announcement', (data) => {
-            const el = document.getElementById('server-banner');
-            if (!el || !data?.text) return;
-            el.innerText = `★ ${data.text} ★`;
-            el.style.display = 'block';
-            if (bannerTimer) clearTimeout(bannerTimer);
-            bannerTimer = setTimeout(() => { el.style.display = 'none'; }, 5500);
-        });
-
-        let announceTimer = null;
-        socket.on('playfield_announce', (data) => {
-            const el = document.getElementById('playfield-announce');
-            if (!el || !data?.text) return;
-            el.innerText = data.text;
-            el.style.color = data.color || '#ffd700';
-            el.style.display = 'block';
-            if (announceTimer) clearTimeout(announceTimer);
-            announceTimer = setTimeout(() => { el.style.display = 'none'; }, 2800);
-        });
-
-        socket.on('game_over', (data) => {
-            const modal = document.getElementById('gameover-modal');
-            const sub = document.getElementById('gameover-sub');
-            if (sub) sub.innerText = `FINAL SCORE: ${String(data?.score || 0).padStart(6, '0')} — OUT OF LIVES`;
-            if (modal) modal.style.display = 'flex';
-        });
-
-        socket.on('hide_game_over', () => {
-            const modal = document.getElementById('gameover-modal');
-            if (modal) modal.style.display = 'none';
-        });
-
-        let tileDictionary = {};
-        socket.on('initTiles', (dict) => { 
-            tileDictionary = dict; 
-        });
-        
-        socket.on('serverConfig', (config) => { 
-            debugMode = config.debugMode;
-            if (debugMode) {
-                document.getElementById('btn-spawn-bot').style.display = 'block';
-            }
-        });
-        
-        socket.on('levelIndex', (idx) => {
-            localStorage.setItem('gf_dev_level', idx.toString());
-        });
-        
-        socket.on('room_info', (info) => {
-            if (!info) return;
-            currentRoomInfo = info;
-            mySessionMode = info.mode || 'SP';
-            localStorage.setItem('gf_session_mode', mySessionMode);
-            const btn = document.getElementById('btn-room-mode');
-            if (btn) {
-                if (mySessionMode === 'MP') {
-                    btn.innerText = `MP #${info.joinCode} (${info.playerCount || 1}P)`;
-                    btn.style.color = '#f39c12';
-                    btn.style.borderColor = 'rgba(243, 156, 18, 0.55)';
-                } else {
-                    btn.innerText = `SOLO (SP #${info.joinCode})`;
-                    btn.style.color = '#2ecc71';
-                    btn.style.borderColor = 'rgba(46, 204, 113, 0.45)';
-                }
-            }
-            const curEl = document.getElementById('room-modal-current');
-            if (curEl) {
-                curEl.innerText = `CURRENT: ${mySessionMode === 'MP' ? 'MULTIPLAYER' : 'SOLO PRIVATE'} | CODE: #${info.joinCode} | PILOTS: ${info.playerCount || 1}`;
-            }
-        });
-
-        socket.on('room_list', (list) => {
-            const container = document.getElementById('active-rooms-list');
-            if (!container) return;
-            if (!Array.isArray(list) || list.length === 0) {
-                container.innerHTML = `<div style="text-align:center; color:#666; padding: 8px;">No active rooms found</div>`;
-                return;
-            }
-            container.innerHTML = list.map(r => {
-                const isHere = r.joinCode === currentRoomInfo.joinCode;
-                const badgeCol = r.mode === 'MP' ? '#f39c12' : '#2ecc71';
-                const pilotsStr = (r.pilots && r.pilots.length > 0) ? r.pilots.join(', ') : 'EMPTY';
-                return `<div style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.35); padding:6px 10px; border-radius:6px; border:1px solid ${isHere ? '#4facfe' : 'rgba(255,255,255,0.08)'};">
-                    <div>
-                        <span style="color:${badgeCol}; font-weight:bold;">[${r.mode} #${r.joinCode}]</span>
-                        <span style="color:#fff; margin-left:6px;">${r.levelName}</span>
-                        <span style="color:#888; margin-left:6px;">(${pilotsStr}${r.botCount ? ` +${r.botCount}AI` : ''})</span>
+        <!-- Corner Tactical Hint Toast (Server-Pushed, Shown Once) -->
+        <div id="tactical-hint-toast">
+            <div class="gmodal-header">
+                <span class="gmodal-title" id="hint-toast-title">FLIGHT BRIEFING</span>
+                <button class="gmodal-close" id="btn-hint-dismiss" type="button">✕</button>
+            </div>
+            <div class="hud-val" id="hint-toast-body" style="white-space:normal; margin-bottom:10px;"></div>
+            <div id="hint-toast-keys" style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid rgba(0,242,254,0.18); padding-top:8px;">
+                <div>
+                    <div class="hud-label">LEFT HAND: CANNON</div>
+                    <div style="margin-top:4px;"><span class="keycap keycap-fire">W</span></div>
+                </div>
+                <div>
+                    <div class="hud-label">RIGHT HAND: NUMPAD STEER</div>
+                    <div class="keycap-grid" style="margin-top:4px;">
+                        <span class="keycap">4</span>
+                        <span class="keycap">5</span>
+                        <span class="keycap">6</span>
                     </div>
-                    ${isHere ? `<span style="color:#4facfe; font-weight:bold; font-size:11px;">HERE</span>` : `<button onclick="switchSessionMode('MP', '${r.joinCode}')" style="background:#4facfe; color:#000; border:none; border-radius:4px; padding:4px 8px; font-weight:bold; font-size:11px; cursor:pointer;">JOIN</button>`}
-                </div>`;
-            }).join('');
-        });
+                </div>
+            </div>
+        </div>
 
-        window.openRoomModal = function() {
-            const modal = document.getElementById('room-modal');
-            if (!modal) return;
-            socket.emit('request_room_list');
-            modal.style.display = 'flex';
-        };
+        <!-- Game Over Modal -->
+        <div id="gameover-modal" class="gmodal" style="width:420px; text-align:center;">
+            <div class="gmodal-header">
+                <span class="gmodal-title" style="color:var(--col-crimson);">CRAFT DESTROYED</span>
+                <button class="gmodal-close" data-close-modal="gameover-modal" type="button">✕</button>
+            </div>
+            <div id="gameover-sub" class="hud-val" style="margin:14px 0 20px;">ALL SHIPS LOST</div>
+            <div style="display:flex; gap:10px;">
+                <button class="gbtn gbtn-lg" id="btn-gameover-spectate" style="flex:1;" type="button">SPECTATE</button>
+                <button class="gbtn gbtn-crimson gbtn-lg" id="btn-gameover-retry" style="flex:1;" type="button">RETRY CAVERN</button>
+            </div>
+        </div>
 
-        window.switchSessionMode = function(mode, roomCode) {
-            localStorage.setItem('gf_session_mode', mode);
-            mySessionMode = mode;
-            socket.emit('switch_session_mode', { mode, roomCode });
-            const modal = document.getElementById('room-modal');
-            if (modal) modal.style.display = 'none';
-        };
+        <!-- Leaderboard Modal -->
+        <div id="leaderboard-modal" class="gmodal" style="width:860px;">
+            <div class="gmodal-header">
+                <span class="gmodal-title">ZARKOS FLIGHT RECORDS</span>
+                <button class="gmodal-close" data-close-modal="leaderboard-modal" type="button">✕</button>
+            </div>
+            <div id="run-summary-container" style="margin-bottom:12px;"></div>
+            <div id="board-tabs-container" class="board-tabs"></div>
+            <div id="leaderboard-content" style="margin-bottom:14px;"></div>
+            <div id="modal-footer" style="display:flex; gap:10px;"></div>
+        </div>
 
-        window.joinRoomByCodeInput = function() {
-            const inp = document.getElementById('room-code-input');
-            const code = inp ? inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4) : '';
-            if (!code) return;
-            window.switchSessionMode('MP', code);
-        };
+        <!-- Room / Session Mode Modal -->
+        <div id="room-modal" class="gmodal" style="width:460px;">
+            <div class="gmodal-header">
+                <span class="gmodal-title">SECTOR DEPLOYMENT</span>
+                <button class="gmodal-close" data-close-modal="room-modal" type="button">✕</button>
+            </div>
+            <div id="room-modal-current" class="hud-label" style="text-align:center; margin-bottom:12px;">CURRENT: SOLO INSTANCE</div>
+            <div style="display:flex; gap:10px; margin-bottom:14px;">
+                <button class="gbtn gbtn-emerald gbtn-lg" id="btn-room-sp" style="flex:1;" type="button">NEW SOLO (SP)</button>
+                <button class="gbtn gbtn-amber gbtn-lg" id="btn-room-mp" style="flex:1;" type="button">PUBLIC MP</button>
+            </div>
+            <div class="hud-label" style="margin-bottom:6px;">JOIN / CREATE MP SECTOR BY 4-CHAR CODE</div>
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <input type="text" id="room-code-input" class="ginput" maxlength="4" placeholder="CODE" style="font-size:var(--fs-lg);">
+                <button class="gbtn gbtn-lg" id="btn-room-join-code" type="button">JOIN MP</button>
+            </div>
+            <div class="hud-label" style="margin-bottom:6px;">ACTIVE SECTORS ON SERVER</div>
+            <div id="active-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
+        </div>
 
-        socket.on('initLevel', (data) => { 
-            level = data;
-            renderState.players = {}; // Clear old players on level swap
-            document.getElementById('loading-screen').style.display = 'none';
-            if (window.gfRenderer) {
-                window.gfRenderer.rock.buildLevelCache(level);
-                window.gfRenderer.flora.initLevel(level);
-                if (window.gfRenderer.details) window.gfRenderer.details.initLevel(level);
-            }
-            
-            raceLights = [];
-            if (level.rawMap) {
-                for(let y=0; y<level.rawMap.length; y++) {
-                    for(let x=0; x<level.rawMap[y].length; x++) {
-                        let t = level.rawMap[y][x];
-                        if (t >= 0x3B && t <= 0x42) raceLights.push({ x: x*32, y: y*32, id: t });
-                    }
-                }
-            }
-        });
-        
-        socket.on('tile_update', (data) => {
-            if (level && level.rawMap && level.rawMap[data.y]) {
-                level.rawMap[data.y][data.x] = data.tile;
-            }
-        });
+        <!-- Controls Help Modal -->
+        <div id="controls-modal" class="gmodal" style="width:460px;">
+            <div class="gmodal-header">
+                <span class="gmodal-title">TWO-HANDED FLIGHT CONTROLS</span>
+                <button class="gmodal-close" data-close-modal="controls-modal" type="button">✕</button>
+            </div>
+            <div class="hud-label" style="margin-bottom:10px; line-height:1.4;">
+                RECOMMENDED PRO DECK LAYOUT: DEDICATE LEFT HAND TO CANNON FIRE AND RIGHT HAND TO NUMPAD THRUST &amp; ROTATION.
+            </div>
+            <div style="display:flex; justify-content:space-around; align-items:center; background:rgba(0,0,0,0.45); padding:14px; border:1px solid rgba(0,242,254,0.2); margin-bottom:12px;">
+                <div style="text-align:center;">
+                    <div class="hud-label" style="margin-bottom:6px;">LEFT HAND (FIRE)</div>
+                    <span class="keycap keycap-fire">W</span>
+                    <div class="hud-label" style="margin-top:6px;">RAPID PULSE</div>
+                </div>
+                <div style="text-align:center;">
+                    <div class="hud-label" style="margin-bottom:6px;">RIGHT HAND (NUMPAD)</div>
+                    <div class="keycap-grid">
+                        <span class="keycap">4</span>
+                        <span class="keycap">5</span>
+                        <span class="keycap">6</span>
+                    </div>
+                    <div class="hud-label" style="margin-top:6px;">4:LEFT &nbsp; 5:THRUST &nbsp; 6:RIGHT</div>
+                </div>
+            </div>
+            <div class="hud-label" style="text-align:center;">ALTERNATE: ARROWS / WASD + SPACE / ENTER OR GAMEPAD</div>
+        </div>
 
-        socket.on('flora_burn', (data) => {
-            if (window.gfRenderer && window.gfRenderer.flora && data) {
-                window.gfRenderer.flora.igniteAnchor(data.idx, data.originT);
-            }
-        });
+        <!-- Pilot Registration Modal -->
+        <div id="login-modal" class="gmodal" style="width:400px;">
+            <div class="gmodal-header">
+                <span class="gmodal-title">PILOT REGISTRATION // 2312</span>
+            </div>
+            <div class="hud-label" style="text-align:center; margin-bottom:6px;">ENTER 3-LETTER CALLSIGN</div>
+            <input type="text" autofocus id="alias-input" class="ginput" maxlength="3" placeholder="AAA" style="margin-bottom:12px;">
 
-        socket.on('flora_burn_sync', (burns) => {
-            if (window.gfRenderer && window.gfRenderer.flora) {
-                window.gfRenderer.flora.syncServerBurns(burns);
-            }
-        });
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+                <label class="gbtn gbtn-emerald" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;">
+                    <input type="radio" name="login-session-mode" id="login-mode-sp" value="SP" checked>
+                    <span>SOLO (SP)</span>
+                </label>
+                <label class="gbtn gbtn-amber" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;">
+                    <input type="radio" name="login-session-mode" id="login-mode-mp" value="MP">
+                    <span>MULTI (MP)</span>
+                </label>
+            </div>
+            <input type="text" id="login-room-code" class="ginput" maxlength="4" placeholder="OPTIONAL MP CODE" style="display:none; font-size:var(--fs-md); margin-bottom:10px;">
 
-        socket.on('flora_burn_reset', () => {
-            if (window.gfRenderer && window.gfRenderer.flora) {
-                window.gfRenderer.flora.resetBurns();
-            }
-        });
+            <!-- Built-in Two-Handed Keycap Guide on Registration (TODO #17) -->
+            <div style="background:rgba(0,0,0,0.45); border:1px solid rgba(0,242,254,0.2); padding:10px; margin-bottom:12px;">
+                <div class="hud-label" style="text-align:center; color:var(--col-cyan); margin-bottom:8px;">TWO-HANDED FLIGHT DECK</div>
+                <div style="display:flex; justify-content:space-around; align-items:center;">
+                    <div style="text-align:center;">
+                        <span class="keycap keycap-fire">W</span>
+                        <div class="hud-label" style="margin-top:4px;">SHOOT</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div class="keycap-grid">
+                            <span class="keycap">4</span>
+                            <span class="keycap">5</span>
+                            <span class="keycap">6</span>
+                        </div>
+                        <div class="hud-label" style="margin-top:4px;">NUMPAD STEER &amp; THRUST</div>
+                    </div>
+                </div>
+            </div>
 
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
-        function formatTimeMs(diff) {
-            let m = Math.floor(diff / 60000).toString().padStart(2, '0');
-            let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-            let ms = Math.floor(diff % 1000).toString().padStart(3, '0');
-            return `${m}:${s}.${ms}`;
-        }
+            <div id="login-error" class="hud-val hud-val-crimson" style="text-align:center; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px;">
+                <button id="btn-login-random" class="gbtn gbtn-lg" style="flex:1;" type="button">RANDOM</button>
+                <button id="btn-login-submit" class="gbtn gbtn-emerald gbtn-lg" style="flex:1;" type="button">LAUNCH</button>
+            </div>
+        </div>
+    </div>
 
-        function playTurretSound(soundId) {
-            if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            const now = audioCtx.currentTime;
-            if (soundId === 8) {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(440, now);
-                osc.frequency.exponentialRampToValueAtTime(110, now + 0.12);
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-                osc.start(now); osc.stop(now + 0.12);
-            } else if (soundId === 10) {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(320, now);
-                osc.frequency.exponentialRampToValueAtTime(80, now + 0.15);
-                gain.gain.setValueAtTime(0.18, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-                osc.start(now); osc.stop(now + 0.15);
-            } else if (soundId === 12) {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(150, now + 0.18);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-                osc.start(now); osc.stop(now + 0.18);
-            } else {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(520, now);
-                osc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
-                gain.gain.setValueAtTime(0.12, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-                osc.start(now); osc.stop(now + 0.08);
-            }
-        }        
-        socket.on('state', (state) => {
-            serverState = state;
-            
-            if (state.events) {
-                for (let ev of state.events) {
-                    if (ev.type === 'poof') {
-                        const handled = window.gfRenderer?.details?.onBulletImpact(
-                            ev.x, ev.y, level, window.gfRenderer.rock, window.gfRenderer.flora
-                        );
-                        if (!handled) {
-                            spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 5, 10);
-                        }
-                    } else if (ev.type === 'turret_explosion') {
-                        spawnParticles(ev.x, ev.y, 0, 0, '#ffaa00', 40, 50);
-                        spawnParticles(ev.x, ev.y, 0, 0, '#ff0000', 20, 30);
-                        spawnParticles(ev.x, ev.y, 0, 0, '#ffffff', 10, 20);
-                        let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
-                        if (dist < 800) { cameraShake = Math.max(cameraShake, 10 * (1 - dist / 800)); inputManager.vibrate(150, 0.4 * (1 - dist / 800), 0.4 * (1 - dist / 800)); }
-                        window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 160, 1.0);
-                        window.gfRenderer?.details?.onExplosion(
-                            ev.x, ev.y, 0, 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 0.85
-                        );
-                    } else if (ev.type === 'large_explosion') {
-                        spawnLargeExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0);
-                        let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
-                        if (dist < 800) { cameraShake = Math.max(cameraShake, 18 * (1 - dist / 800)); inputManager.vibrate(300, 0.8 * (1 - dist / 800), 0.8 * (1 - dist / 800)); }
-                        window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 200, 1.0);
-                        window.gfRenderer?.details?.onExplosion(
-                            ev.x, ev.y, ev.vx || 0, ev.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
-                        );
-                    } else if (ev.type === 'sound') {
-                        playTurretSound(ev.soundId);
-                        if (ev.soundId === 10) {
-                            let dist = Math.hypot(ev.x - (camera.x + VIEW_W/2), ev.y - (camera.y + VIEW_H/2));
-                            if (dist < 800) inputManager.vibrate(100, 0.5 * (1 - dist / 800), 0.2 * (1 - dist / 800));
-                        }
-                    } else if (ev.type === 'floating_text') {
-                        floatingTexts.push({ text: ev.text, x: ev.x, y: ev.y, color: ev.color || '#fff', life: 60, maxLife: 60 });
-                    }
-                }
-            }
-            
-            for (let id in serverState.players) {
-                let s = serverState.players[id];
-                let r = renderState.players[id];
-                if (!r) {
-                    renderState.players[id] = { ...s };
-                } else if (!r.isDead && s.isDead) {
-                    // Trigger explosion the moment the server says a ship died
-                    spawnLargeExplosion(s.x, s.y, s.vx, s.vy);
-                    let dist = Math.hypot(s.x - (camera.x + VIEW_W/2), s.y - (camera.y + VIEW_H/2));
-                    if (dist < 800) cameraShake = Math.max(cameraShake, 25 * (1 - dist / 800));
-                    window.gfRenderer?.flora?.triggerShock(s.x, s.y, 200, 1.0);
-                    window.gfRenderer?.details?.onExplosion(
-                        s.x, s.y, r.vx || s.vx || 0, r.vy || s.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0
-                    );
-
-                    // Force reset local inputs so we don't hold thrust/fire while dead
-                    if (id === myId) {
-                        inputManager.vibrate(600, 1.0, 1.0);
-                        inputManager.forceReset();
-                    }
-                }
-            }
-            
-            // Clean up disconnected ghost ships
-            for (let id in renderState.players) {
-                if (!serverState.players[id]) {
-                    if (!renderState.players[id].missingFrames) renderState.players[id].missingFrames = 0;
-                    renderState.players[id].missingFrames++;
-                    if (renderState.players[id].missingFrames > 30) {
-                        delete renderState.players[id];
-                    }
-                } else {
-                    renderState.players[id].missingFrames = 0;
-                }
-            }
-        });
-
-        socket.on('show_leaderboard', (boards, isHud = false) => {
-            let modal = document.getElementById('leaderboard-modal');
-            if (!modal) return; // Failsafe in case HTML wasn't added
-            let summaryHtml = '';
-            let tabsHtml = '';
-            let panesHtml = '';
-            let footnoteHtml = '';
-            
-            let boardIndex = 0;
-            let flatteringIndex = 0;
-            let bestScore = 9999; // Lower rank number is better
-            let top10TabIndices = [];
-            let gotRankOne = false;
-
-            boards.forEach((b) => {
-                if (b.isFootnote || (b.title && b.title.includes('SUMMARY'))) return;
-                let hasTop10InTab = false;
-                b.entries.forEach(e => {
-                    if (e.isMe && (e.isCurrentRun || !isHud)) {
-                        const parsed = e.rank ?? parseInt(String(e.rankLabel).replace('#', ''), 10);
-                        if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
-                            hasTop10InTab = true;
-                            if (parsed === 1 && e.isCurrentRun) gotRankOne = true;
-                        }
-                    }
-                });
-                if (hasTop10InTab) top10TabIndices.push(boardIndex);
-                boardIndex++;
-            });
-            const shouldHighlightTop10Tabs = !isHud && top10TabIndices.length > 0 && top10TabIndices.length <= 2;
-            boardIndex = 0;
-
-            boards.forEach((b, idx) => {
-                if (b.isFootnote) {
-                    footnoteHtml += `<div style="text-align:center; color:${b.color || '#fff'}; font-size:13px; margin-top:12px; font-weight:bold; letter-spacing:1px;">${b.text}</div>`;
-                    return;
-                }
-                if (b.title && b.title.includes('SUMMARY')) {
-                    summaryHtml += `<div class="board-card" style="max-width: 600px;"><div class="board-title">${b.title}</div>`;
-                    summaryHtml += `<div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; font-family: monospace; padding: 4px 0;">`;
-                    b.entries.forEach(e => {
-                        summaryHtml += `<div style="display: flex; flex-direction: column; align-items: center; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); min-width: 70px; flex: 1;"><span style="font-size: 10px; color: #888; letter-spacing: 1px; margin-bottom: 2px; white-space: nowrap;">${e.alias}</span><span style="font-size: 13px; font-weight: bold; color: ${e.isMe ? '#2ecc71' : '#fff'};">${e.displayValue}</span></div>`;
-                    });
-                    summaryHtml += `</div></div>`;
-                } else {
-                    // Evaluate flattering rank for default tab selection
-                    let myRankScore = 999;
-                    b.entries.forEach(e => {
-                        if (e.isMe) {
-                            if (e.isNewPb) myRankScore = 0; // Highest priority: New PB!
-                            else {
-                                const parsed = parseInt(e.rankLabel.replace('#', ''), 10);
-                                if (!isNaN(parsed)) myRankScore = parsed;
-                            }
-                        }
-                    });
-                    if (myRankScore < bestScore) {
-                        bestScore = myRankScore;
-                        flatteringIndex = boardIndex;
-                    }
-
-                    const hiClass = (shouldHighlightTop10Tabs && top10TabIndices.includes(boardIndex)) ? 'top10-highlight' : '';
-                    tabsHtml += `<button class="board-tab ${boardIndex === 0 ? 'active' : ''} ${hiClass}" onclick="switchBoardTab(${boardIndex})">${b.title}</button>`;
-                    
-                    panesHtml += `<div id="board-pane-${boardIndex}" class="board-pane ${boardIndex === 0 ? 'active' : ''}"><div class="board-card">`;
-                    panesHtml += `<div class="board-title">${b.title}</div>`;
-                if (b.description) panesHtml += `<div style="text-align:center; color:#4facfe; font-size:10px; margin-bottom:12px; font-weight:bold; letter-spacing:1px; text-transform:uppercase;">${b.description}</div>`;
-                    if (b.subtitle) panesHtml += `<div style="text-align:center; color:#bdc3c7; font-size:12px; margin-bottom:12px; letter-spacing:1px; font-weight:bold;">${b.subtitle}</div>`;
-                    panesHtml += `<table class="board-table"><tr><th>RANK</th><th>PILOT</th><th style="text-align:right">RECORD</th></tr>`;
-                    b.entries.forEach((e, idx) => {
-                        let col = e.isMe ? 'color:#2ecc71;' : (e.rankLabel === '...' ? 'color:#555;' : '');
-                        let bg = e.isCurrentRun ? 'background:rgba(46,204,113,0.15); font-weight:bold;' : '';
-                        let styleStr = (col || bg) ? `style="${col} ${bg}"` : '';
-                        let pbTag = e.isNewPb ? ' <span style="color:#f1c40f; font-size:10px; vertical-align:middle; display:inline-block; animation: pulse-pb 1s infinite;">[NEW PB!]</span>' : '';
-                    let replayBtn = e.replayId ? ` <a href="#" onclick="socket.emit('watch_replay', '${e.replayId}'); return false;" style="display:inline-block; white-space:nowrap; color:#e74c3c; font-size:9px; vertical-align:middle; text-decoration:none; border:1px solid #e74c3c; padding:2px 4px; border-radius:4px; margin-left:6px;">[DEBUG: REPLAY]</a>` : '';
-                    panesHtml += `<tr ${styleStr}><td>${e.rankLabel}</td><td>${e.alias}${pbTag}${replayBtn}</td><td style="text-align:right">${e.displayValue}</td></tr>`;
-                    });
-                    panesHtml += `</table></div></div>`;
-                    boardIndex++;
-                }
-            });
-
-            panesHtml += footnoteHtml;
-            document.getElementById('run-summary-container').innerHTML = summaryHtml;
-            document.getElementById('board-tabs-container').innerHTML = tabsHtml;
-            document.getElementById('leaderboard-content').innerHTML = panesHtml;
-            
-            const isDogfightOrRace = currentRoomInfo.category === 'dogfight' || currentRoomInfo.category === 'race';
-            let footerHtml = '';
-            if (isHud) {
-                footerHtml = '';
-            } else if (isDogfightOrRace) {
-                footerHtml = `
-                    <button class="btn-close" style="flex: 1; margin-top: 0; background: #2c3e50; color: #fff;" onclick="document.getElementById('leaderboard-modal').style.display='none'">SPECTATE</button>
-                    <button class="btn-close" style="flex: 1; margin-top: 0;" onclick="requestReplayLevel()">REPLAY</button>
-                `;
-            } else {
-                footerHtml = `
-                    <button class="btn-close" style="flex: 1; margin-top: 0; background: #2c3e50; color: #fff;" onclick="document.getElementById('leaderboard-modal').style.display='none'">SPECTATE</button>
-                    <button class="btn-close" style="flex: 1; margin-top: 0;" onclick="requestNextLevel()">NEXT LEVEL</button>
-                `;
-            }
-            document.getElementById('modal-footer').innerHTML = footerHtml;
-
-            // Automatically switch to the most flattering tab
-            if (boardIndex > 0) switchBoardTab(flatteringIndex);
-            if (!isHud && gotRankOne) {
-                triggerRankOneFireworks();
-            }
-
-            modal.style.display = 'flex';
-        });
-
-        function switchBoardTab(index) {
-            const tabs = document.querySelectorAll('.board-tab');
-            const panes = document.querySelectorAll('.board-pane');
-            tabs.forEach((t, i) => t.classList.toggle('active', i === index));
-            panes.forEach((p, i) => p.classList.toggle('active', i === index));
-        }
-
-        function spawnParticles(x, y, vx, vy, color, count, lifeSpan) {
-            for (let i = 0; i < count; i++) {
-                let angle = Math.random() * Math.PI * 2;
-                let speed = Math.random() * 4;
-                
-                particles.push({
-                    x: x, 
-                    y: y,
-                    vx: vx + Math.cos(angle) * speed,
-                    vy: vy + Math.sin(angle) * speed,
-                    life: lifeSpan * (0.5 + Math.random() * 0.5),
-                    color: color,
-                    size: Math.random() * 2 + 1
-                });
-            }
-        }
-
-        function spawnLargeExplosion(x, y, vx, vy) {
-            spawnParticles(x, y, vx, vy, '#f80', 60, 80);
-            spawnParticles(x, y, vx, vy, '#f00', 40, 60);
-            spawnParticles(x, y, vx, vy, '#fff', 30, 40);
-        }
-
-        function triggerRankOneFireworks() {
-            const colors = ['#ffd700', '#00f2fe', '#ff4b2b', '#7dffaa', '#ff7eb3', '#ffffff'];
-            for (let b = 0; b < 5; b++) {
-                setTimeout(() => {
-                    const bx = VIEW_W * (0.2 + Math.random() * 0.6);
-                    const by = VIEW_H * (0.18 + Math.random() * 0.35);
-                    const baseColor = colors[b % colors.length];
-                    for (let i = 0; i < 52; i++) {
-                        const ang = (Math.PI * 2 * i) / 52 + (Math.random() - 0.5) * 0.12;
-                        const spd = 2.5 + Math.random() * 6.5;
-                        const maxLife = 70 + Math.floor(Math.random() * 40);
-                        fireworks.push({
-                            x: bx,
-                            y: by,
-                            vx: Math.cos(ang) * spd,
-                            vy: Math.sin(ang) * spd - 1.2,
-                            life: maxLife,
-                            maxLife: maxLife,
-                            color: i % 5 === 0 ? '#ffffff' : baseColor,
-                            size: 1.8 + Math.random() * 1.8
-                        });
-                    }
-                }, b * 320);
-            }
-        }
-
-        function updateAndDrawFireworks(ctx) {
-            if (fireworks.length === 0) return;
-            ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.globalCompositeOperation = 'lighter';
-            for (let i = fireworks.length - 1; i >= 0; i--) {
-                const fw = fireworks[i];
-                fw.x += fw.vx;
-                fw.y += fw.vy;
-                fw.vx *= 0.965;
-                fw.vy = fw.vy * 0.965 + 0.11; // Realistic gravity pull downwards after boom expansion
-                fw.life--;
-                if (fw.life <= 0) {
-                    fireworks.splice(i, 1);
-                    continue;
-                }
-                const alpha = Math.pow(fw.life / fw.maxLife, 1.4);
-                ctx.globalAlpha = alpha;
-                ctx.fillStyle = fw.color;
-                ctx.beginPath();
-                ctx.arc(fw.x, fw.y, fw.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            ctx.restore();
-        }
-
-        function updateAndDrawParticles(ctx) {
-            ctx.globalCompositeOperation = 'lighter';
-            for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx; 
-                p.y += p.vy;
-                p.vx *= 0.98; 
-                p.vy *= 0.98;
-                p.life--;
-                
-                if (p.life <= 0) { 
-                    particles.splice(i, 1); 
-                    continue; 
-                }
-                
-                ctx.fillStyle = p.color;
-                ctx.beginPath(); 
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); 
-                ctx.fill();
-            }
-            ctx.globalCompositeOperation = 'source-over';
-        }
-
-        function lerp(start, end, amt) { 
-            return (1 - amt) * start + amt * end; 
-        }
-        
-        function lerpAngle(a, b, amt) {
-            let d = b - a;
-            while (d > Math.PI) d -= Math.PI * 2;
-            while (d < -Math.PI) d += Math.PI * 2;
-            return a + d * amt;
-        }
-
-        function drawShip(p, isMe) {
-            if (p.isDead) return;
-            ctx.save();
-            ctx.translate(Math.round(p.x), Math.round(p.y)); 
-            ctx.rotate(p.angle);
-            
-            ctx.beginPath();
-            ctx.moveTo(16, 0); 
-            ctx.lineTo(-16, 11.2); 
-            ctx.lineTo(-8, 0); 
-            ctx.lineTo(-16, -11.2);
-             
-            const shipStroke = isMe ? '#4facfe' : (p.team === 'E2' ? '#00f2fe' : '#ff4b2b');
-            ctx.shadowBlur = isMe ? 10 : 0;
-            ctx.shadowColor = isMe ? shipStroke : 'transparent';
-            ctx.strokeStyle = shipStroke;
-            ctx.lineWidth = 1.5; 
-            ctx.fillStyle = '#1a1a24';
-            
-            ctx.closePath(); 
-            ctx.fill(); 
-            ctx.stroke();
-            
-            ctx.shadowBlur = 0;
-
-            if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && p.fuel > 0) {
-                const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
-                ctx.fillStyle = '#4facfe';
-                ctx.beginPath();
-                ctx.moveTo(-8, 0); 
-                ctx.lineTo(-16 - Math.random() * 15 * scale, 0);
-                ctx.lineTo(-8, 2 * scale); 
-                ctx.lineTo(-8, -2 * scale); 
-                ctx.fill();
-            }
-
-            // Attitude Control (RCS) Side-Thrusters when rotating in flight (zero fuel cost)
-            if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right)) {
-                const rcsLen = 6 + Math.random() * 6;
-                ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
-                if (p.inputs.left) {
-                    // Counter-clockwise torque: Nose port-side fires +Y, Rear starboard wing fires -Y
-                    ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
-                    ctx.beginPath();
-                    ctx.moveTo(9, 3.2);
-                    ctx.lineTo(10.5, 3.2 + rcsLen);
-                    ctx.lineTo(12, 2.2);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    ctx.beginPath();
-                    ctx.moveTo(-12, -8.4);
-                    ctx.lineTo(-13.5, -8.4 - rcsLen * 0.85);
-                    ctx.lineTo(-9.5, -6.7);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(10, 3, 1.5, 2.2);
-                    ctx.fillRect(-12, -8.5, 1.5, 2.0);
-                } else if (p.inputs.right) {
-                    // Clockwise torque: Nose starboard-side fires -Y, Rear port wing fires +Y
-                    ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
-                    ctx.beginPath();
-                    ctx.moveTo(9, -3.2);
-                    ctx.lineTo(10.5, -3.2 - rcsLen);
-                    ctx.lineTo(12, -2.2);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    ctx.beginPath();
-                    ctx.moveTo(-12, 8.4);
-                    ctx.lineTo(-13.5, 8.4 + rcsLen * 0.85);
-                    ctx.lineTo(-9.5, 6.7);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(10, -5.2, 1.5, 2.2);
-                    ctx.fillRect(-12, 6.5, 1.5, 2.0);
-                }
-                ctx.restore();
-            }
-            ctx.restore();
-            if (debugMode && showDebugLines) {
-                ctx.save();
-                ctx.translate(Math.round(p.x), Math.round(p.y));
-                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(-14, -14, 28, 28);
-                ctx.restore();
-            }
-
-            if (!isMe && p.alias) {
-                ctx.save();
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-                ctx.font = 'bold 10px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(p.alias, Math.round(p.x), Math.round(p.y) + 26);
-                ctx.restore();
-            }
-        }
-
-        function drawTurret(t) {
-            if (!t.active) return;
-            const w = t.width || 28;
-            const h = t.height || 28;
-            ctx.save(); 
-            ctx.translate(Math.round(t.x), Math.round(t.y));
-            
-            const tileId = t.type || 0xAF;
-            
-            // Orientation and mounting alignment per Amiga tile ID
-            if (tileId === 0xB6) {
-                ctx.rotate(Math.PI); // Ceiling mounted - pointing down (Native)
-            } else if (tileId === 0xB7) {
-                ctx.rotate(Math.PI / 2); // Wall mounted - facing east
-            } else if (tileId === 0xB8) {
-                ctx.rotate(-Math.PI / 2); // Wall mounted - facing west
-            } else {
-                ctx.rotate(0); // Floor mounted / default angle (Native UP)
-            }
-            
-            // Base mount plate
-            ctx.fillStyle = '#333'; 
-            ctx.strokeStyle = '#555';
-            ctx.fillRect(-15, 0, 30, 8);
-            ctx.strokeRect(-15, 0, 30, 8);
-            
-            // Housing & Barrels matching exact firing patterns
-            ctx.fillStyle = '#666';
-            if (tileId === 0xBA || tileId === 0xB4 || tileId === 0xB5 || tileId === 0xB9) {
-                // 5-way half-circle fan
-                ctx.fillRect(-10, -12, 4, 12);
-                ctx.fillRect(-5, -16, 4, 16);
-                ctx.fillRect(-2, -18, 4, 18);
-                ctx.fillRect(1, -16, 4, 16);
-                ctx.fillRect(6, -12, 4, 12);
-                ctx.fillStyle = '#f44';
-                ctx.fillRect(-2, -20, 4, 2);
-            } else if (tileId === 0xAF || tileId === 0xB0 || tileId === 0xAE) {
-                // Multi-way cone (3-way / 4-way)
-                ctx.fillRect(-8, -12, 4, 12);
-                ctx.fillRect(-2, -16, 4, 16);
-                ctx.fillRect(4, -12, 4, 12);
-                ctx.fillStyle = '#f44';
-                ctx.fillRect(-2, -18, 4, 2);
-            } else {
-                // Standard single stream (vertical, horizontal, angled)
-                ctx.fillRect(-4, -16, 8, 16);
-                ctx.fillStyle = '#f44';
-                ctx.fillRect(-4, -18, 8, 2);
-            }
-            
-            ctx.restore();
-            if (debugMode && showDebugLines) {
-                ctx.save();
-                ctx.translate(Math.round(t.x), Math.round(t.y));
-                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(-w / 2, -h / 2, w, h);
-                ctx.restore();
-            }
-        }
-
-        function drawTank(t) {
-            if (!t.active) return;
-            const w = t.width || 32;
-            const h = t.height || 24;
-            ctx.save(); 
-            ctx.translate(Math.round(t.x), Math.round(t.y));
-            ctx.fillStyle = '#8a8a8a'; 
-            ctx.fillRect(-w / 2, -h / 2, w, h);
-            ctx.fillStyle = '#ff4b2b';
-            ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
-            ctx.restore();
-
-            if (debugMode && showDebugLines && t.debugId !== undefined) {
-                ctx.fillStyle = '#0f0';
-                ctx.font = '10px monospace';
-                ctx.fillText(`ID:${t.debugId} (TANK)`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
-            }
-            if (debugMode && showDebugLines) {
-                ctx.save();
-                ctx.translate(Math.round(t.x), Math.round(t.y));
-                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(-w / 2, -h / 2, w, h);
-                ctx.restore();
-            }
-        }
-
-        function drawFlyingEnemy(t) {
-            if (!t.active) return;
-            const w = t.width || 96;
-            const h = t.height || 64;
-            ctx.save(); 
-            ctx.translate(Math.round(t.x), Math.round(t.y));
-            ctx.rotate(t.angle);
-            
-            const img = assetManager.get('0x' + t.enemyType.toString(16).toUpperCase());
-            if (img) {
-                ctx.drawImage(img, -w / 2, -h / 2, w, h);
-            } else {
-                ctx.fillStyle = '#ff8800'; 
-                ctx.beginPath();
-                ctx.moveTo(w / 2, 0); 
-                ctx.lineTo(-w / 2, h / 2); 
-                ctx.lineTo(-w / 2, -h / 2);
-                ctx.closePath();
-                ctx.fill();
-            }
-            ctx.restore();
-
-            if (debugMode && showDebugLines && t.debugId !== undefined) {
-                ctx.fillStyle = '#0f0';
-                ctx.font = '10px monospace';
-                ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
-            }
-            if (debugMode && showDebugLines) {
-                ctx.save();
-                ctx.translate(Math.round(t.x), Math.round(t.y));
-                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(-w / 2, -h / 2, w, h);
-                ctx.restore();
-            }
-        }
-
-        function drawCargo(c) {
-            ctx.save();
-            ctx.translate(Math.round(c.x), Math.round(c.y));
-            const size = c.weight === 2 ? 24 : 18;
-            const isLarge = c.weight === 2;
-            
-            ctx.shadowBlur = 6;
-            ctx.shadowColor = isLarge ? 'rgba(230, 126, 34, 0.5)' : 'rgba(241, 196, 15, 0.5)';
-            
-            ctx.fillStyle = isLarge ? '#2c1e14' : '#1e2417';
-            ctx.strokeStyle = isLarge ? '#e67e22' : '#f1c40f';
-            ctx.lineWidth = 1.5;
-            
-            ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(-size / 2, -size / 2, size, size, 3);
-            } else {
-                ctx.rect(-size / 2, -size / 2, size, size);
-            }
-            ctx.fill();
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            
-            ctx.fillStyle = isLarge ? '#f39c12' : '#f1c40f';
-            ctx.font = 'bold 10px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(isLarge ? 'C2' : 'C1', 0, 1);
-            
-            ctx.restore();
-        }
-
-        function drawPowerup(p) {
-            ctx.save();
-            ctx.translate(Math.round(p.x), Math.round(p.y));
-            const radius = 10;
-            let label = 'PWR';
-            let color = '#3498db';
-            
-            if (p.typeId === 0xD0) { label = 'FUEL'; color = '#e67e22'; }
-            if (p.typeId === 0xD5) { label = 'PWR'; color = '#e74c3c'; }
-            else if (p.typeId === 0xD6) { label = '2X'; color = '#2ecc71'; }
-            else if (p.typeId === 0xD7) { label = '3X'; color = '#9b59b6'; }
-            else if (p.typeId === 0xD8) { label = 'UTL'; color = '#f39c12'; }
-            
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = color;
-            
-            ctx.fillStyle = 'rgba(10, 14, 20, 0.9)';
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 1.5;
-            
-            ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 9px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, 0, 1);
-            
-            ctx.restore();
-        }
-
-        // Global debug function to dump the enemy map to the console
-        window.printEnemyPathMap = function() {
-            if (!level || !level.rawMap) {
-                console.log("Map not loaded yet.");
-                return;
-            }
-
-            let out = `\n--- ENEMY PATH DEBUG MAP: ${level.name} ---\n`;
-            for (let y = 0; y < level.rawMap.length; y++) {
-                let rowStr = "";
-                for (let x = 0; x < level.rawMap[y].length; x++) {
-                    const t = level.rawMap[y][x];
-                    if (t >= 0xE4 && t <= 0xEF) {
-                        rowStr += t.toString(16).toUpperCase();
-                    }
-                    else if (t >= 0xF0 && t <= 0xFF) rowStr += t.toString(16).toUpperCase();
-                    else if (t >= 0x32 && t <= 0x3A) rowStr += "T" + (t - 0x32);
-                    else if (tileDictionary[t] && tileDictionary[t].solid) {
-                        rowStr += "██";
-                    } else if (t >= 0xAE && t <= 0xCB) {
-                        // Turrets and zones: 0xAE to 0xCB
-                        rowStr += "~~";
-                    } else if (t == 0x0) {
-                        rowStr += "  ";
-                    } else {
-                        rowStr += "..";
-                    }
-                }
-                // Only print rows that actually have enemies or paths to save console space
-                if (rowStr.match(/[EFT][0-9A-F]/)) {
-                    out += `${y.toString().padStart(3, '0')} | ${rowStr}\n`;
-                }
-            }
-            console.log(out);
-        };
-
-        let _gameLoopCrashed = false;
-        function gameLoop() {
-            if (_gameLoopCrashed) return;
-            requestAnimationFrame(gameLoop);
-            inputManager.updateGamepad();
-            try {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                const timeSec = performance.now() * 0.001;
-                 let renderCamX = camera.x;
-                 let renderCamY = camera.y;
-            if (cameraShake > 0.1) {
-                renderCamX += (Math.random() - 0.5) * cameraShake;
-                renderCamY += (Math.random() - 0.5) * cameraShake;
-                cameraShake *= 0.9;
-            }
-            if (window.gfRenderer) {
-                window.gfRenderer.parallax.draw(ctx, {x: renderCamX, y: renderCamY}, timeSec);
-            } else {
-                ctx.fillStyle = '#050505';
-                ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-            }
-            if (!level) return;
-
-            // Interpolation
-            for (let id in serverState.players) {
-                let s = serverState.players[id];
-                let r = renderState.players[id];
-                if (r) {
-                    // Snap position instantly if reviving or teleporting far, otherwise lerp smoothly
-                    let dist = Math.hypot(r.x - s.x, r.y - s.y);
-                    if ((r.isDead && !s.isDead) || dist > 100) {
-                        r.x = s.x; 
-                        r.y = s.y; 
-                        r.angle = s.angle;
-                    } else {
-                        r.x = lerp(r.x, s.x, 0.3); 
-                        r.y = lerp(r.y, s.y, 0.3);
-                        r.angle = lerpAngle(r.angle, s.angle, 0.3);
-                    }
-                    r.isDead = s.isDead; 
-                    r.isLanded = s.isLanded;
-                    r.vx = s.vx;
-                    r.vy = s.vy;
-                    r.inputs = s.inputs;
-                    r.score = s.score;
-                    r.fuel = s.fuel;
-                    r.cargoStack = s.cargoStack;
-                    r.race = s.race;
-                        r.alias = s.alias;
-                        r.team = s.team;
-                        r.kills = s.kills; r.deaths = s.deaths; r.unforcedErrors = s.unforcedErrors;
-                        r.isBot = s.isBot; r.botState = s.botState; r.botPath = s.botPath;
-                }
-            }
-
-            let myServerPlayer = serverState.players[myId];
-            let myPlayer = renderState.players[myId];
-            
-            if (!myPlayer) {
-                if (!spectateTargetId || !renderState.players[spectateTargetId]) {
-                    spectateTargetId = Object.keys(renderState.players)[0];
-                }
-                myPlayer = renderState.players[spectateTargetId];
-                myServerPlayer = serverState.players[spectateTargetId];
-            }
-
-            if (freecam) {
-                const camSpeed = 15;
-                if (inputManager.state.cam.up) camera.y -= camSpeed;
-                if (inputManager.state.cam.down) camera.y += camSpeed;
-                if (inputManager.state.cam.left) camera.x -= camSpeed;
-                if (inputManager.state.cam.right) camera.x += camSpeed;
-            } else {
-                if (myPlayer && myServerPlayer) {
-                    let raceUI = '';
-                    if (myServerPlayer.race && myServerPlayer.race.state > 0) {
-                        let r = myServerPlayer.race;
-                        let diff = (r.state === 2 && r.finishTime) ? r.finishTime - r.startTime : serverState.serverTimeMs - r.startTime;
-                        let color = r.state === 2 ? '#2ecc71' : '#fff';
-                        let lapsDoneStr = (r.lapTimes && r.lapTimes.length > 0)
-                            ? ` &nbsp;|&nbsp; LAPS: <span style="color:#f1c40f">${r.lapTimes.map((lt, idx) => `L${idx+1}:${formatTimeMs(lt)}`).join(' ')}</span>`
-                            : '';
-                        raceUI = ` &nbsp;|&nbsp; LAP: <span style="color:#4facfe">${r.currentLap}/${r.totalLaps}</span> &nbsp;|&nbsp; TIME: <span style="color:${color}">${formatTimeMs(diff)}</span>${lapsDoneStr}`;
-                    }
-                    if (debugMode) {
-                        let bytesInKb = (metrics.bytesIn / 1024).toFixed(1);
-                        let bytesOutKb = (metrics.bytesOut / 1024).toFixed(1);
-                        raceUI += ` &nbsp;|&nbsp; NET: <span style="color:#2ecc71">↓${bytesInKb}KB (${metrics.packetsIn})</span> <span style="color:#e74c3c">↑${bytesOutKb}KB (${metrics.packetsOut})</span>`;
-                    }
-                    const isRaceMode = Boolean(myServerPlayer.race || raceLights.length > 0);
-                    const isDogfightMode = Boolean(myServerPlayer.team);
-                    const dogfightSeg = isDogfightMode ? ` &nbsp;|&nbsp; TEAM: <span style="color:${myServerPlayer.team === 'E2' ? '#4facfe' : '#ff4b2b'}">${myServerPlayer.team}</span> &nbsp;|&nbsp; KILLS: <span style="color:#2ecc71">${myServerPlayer.kills || 0}</span> &nbsp;|&nbsp; ERR: <span style="color:#e67e22">${myServerPlayer.unforcedErrors || 0}</span>` : '';
-                    const cargoSeg = (isRaceMode || isDogfightMode) ? '' : ` &nbsp;|&nbsp; CARGO: <span style="color:#f1c40f">${myServerPlayer.cargoStack && myServerPlayer.cargoStack.length > 0 ? myServerPlayer.cargoStack.map(c => c===0xD1?'[C1]':'[C2]').join(' ') : 'NONE'}</span> &nbsp;|&nbsp; REMAINING: <span style="color:#fff">${serverState.cargosRemaining || 0}</span>`;
-                    let newHudHTML = `<div style="font-size: 1.2em; margin-bottom: 4px; color: #4facfe">${level.name}</div><div style="font-size: 0.85em; color: #aaa;">SCORE: <span style="color:#fff">${myServerPlayer.score.toString().padStart(6, '0')}</span> &nbsp;|&nbsp; FUEL: <span style="color:#e67e22">${Math.floor(myServerPlayer.fuel)}</span> &nbsp;|&nbsp; LIVES: <span style="color:#e74c3c">${myServerPlayer.lives}</span> &nbsp;|&nbsp; PING: <span style="color:#95a5a6">${myServerPlayer.ping || 0}ms</span>${dogfightSeg}${cargoSeg}${raceUI}</div>`;
-                    if (newHudHTML !== lastHudHTML) {
-                        hud.innerHTML = newHudHTML;
-                        lastHudHTML = newHudHTML;
-                    }
-                    let targetX = myPlayer.x - VIEW_W / 2;
-                    let targetY = myPlayer.y - VIEW_H / 2;
-                    
-                     // Clamp camera strictly to map bounds
-                     targetX = Math.max(0, Math.min(targetX, level.width - VIEW_W));
-                     targetY = Math.max(0, Math.min(targetY, level.height - VIEW_H));
-
-                    camera.x += (targetX - camera.x) * 0.1;
-                    camera.y += (targetY - camera.y) * 0.1;
-                }
-            }
-
-            ctx.save();
-            ctx.translate(Math.floor(-renderCamX), Math.floor(-renderCamY));
-
-            // High-Res Single-Source-of-Truth Cavern Mesh + Prefabs
-            if (window.gfRenderer) {
-                window.gfRenderer.rock.drawRecessed(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level);
-                if (window.gfRenderer.details) {
-                    window.gfRenderer.details.drawWaterPools(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level, renderState.players, serverState.bullets, timeSec);
-                }
-                window.gfRenderer.rock.draw(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H);
-                window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
-            }
-
-            if (serverState.cargos) {
-                serverState.cargos.forEach(drawCargo);
-            }
-            
-            if (serverState.powerups) {
-                serverState.powerups.forEach(drawPowerup);
-            }
-
-            if (serverState.turrets) {
-                serverState.turrets.forEach(drawTurret);
-            }
-            
-            if (serverState.tanks) {
-                serverState.tanks.forEach(drawTank);
-            }
-            
-            if (serverState.flying) {
-                serverState.flying.forEach(drawFlyingEnemy);
-            }
-            
-            for (let id in renderState.players) {
-                drawShip(renderState.players[id], id === myId);
-            }
-            
-            // Debug Bot AI Visualizations
-            if (debugMode && showDebugLines) {
-                for (let id in renderState.players) {
-                    const p = renderState.players[id];
-                    if (p.isBot && !p.isDead) {
-                        ctx.save();
-                        if (p.botPath && p.botPath.length > 0) {
-                            ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
-                            ctx.lineWidth = 2;
-                            ctx.beginPath();
-                            ctx.moveTo(p.x, p.y);
-                            for (let pt of p.botPath) ctx.lineTo(pt.x * 32 + 16, pt.y * 32 + 16);
-                            ctx.stroke();
-                        }
-                        ctx.fillStyle = '#0f0';
-                        ctx.fillText(`[${p.botState.toUpperCase()}]`, p.x, p.y - 45);
-                        ctx.restore();
-                    }
-                }
-            }
-
-            // Debug Tile Overlay
-            if (level.rawMap) {
-                ctx.font = '600 14px system-ui, monospace';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                for (let y = 0; y < level.rawMap.length; y++) {
-                    for (let x = 0; x < level.rawMap[y].length; x++) {
-                        const tile = level.rawMap[y][x];
-                        if(tile !== 0 && tile > 0x1A && (tile < 0xBD && tile > 0xCB)) {
-                            const tDef = tileDictionary[tile];
-                            if (tDef && tDef.known) {
-                                ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
-                            } else {
-                                ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
-                            }
-                            ctx.fillText(tile.toString(16).toUpperCase().padStart(2, '0'), x * 32 + 16, y * 32 + 16);
-                        }
-                    }
-                }
-            }
-
-            for (let b of serverState.bullets) {
-                if (b.isPlayer) {
-                    ctx.fillStyle = '#ff8';
-                    ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
-                } else {
-                    ctx.fillStyle = '#f44';
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-            updateAndDrawParticles(ctx);
-
-            if (window.gfRenderer && window.gfRenderer.details) {
-                window.gfRenderer.details.updateAndDraw(
-                    ctx,
-                    {x: renderCamX, y: renderCamY},
-                    VIEW_W,
-                    VIEW_H,
-                    level,
-                    renderState.players,
-                    serverState.turrets,
-                    serverState.bullets,
-                    timeSec,
-                    window.gfRenderer.rock,
-                    window.gfRenderer.flora
-                );
-            }
-
-            // Layer +1: Foreground Interactive Flora Canopy (Renders above ships, enemies & bullets for dogfight cover!)
-            if (window.gfRenderer) {
-                window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
-                window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, {x: renderCamX, y: renderCamY}, VIEW_W, VIEW_H, level, timeSec, renderState.players);
-            }
-
-            for (let i = floatingTexts.length - 1; i >= 0; i--) {
-                let ft = floatingTexts[i];
-                ft.y -= 0.6;
-                ft.life--;
-                if (ft.life <= 0) {
-                    floatingTexts.splice(i, 1);
-                    continue;
-                }
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
-                ctx.fillStyle = ft.color;
-                ctx.font = 'bold 12px system-ui, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.shadowBlur = 4;
-                ctx.shadowColor = 'rgba(0,0,0,0.8)';
-                ctx.fillText(ft.text, Math.round(ft.x), Math.round(ft.y));
-                ctx.restore();
-            }
-
-            // Render Personal Checkpoint Pulsing Light
-            if (myServerPlayer && raceLights.length > 0) {
-                let rState = myServerPlayer.race ? myServerPlayer.race.state : 0;
-                let rNext = myServerPlayer.race ? myServerPlayer.race.nextCheckpoint : 1;
-                if (rState < 2) {
-                    let targetLight = 0x3A + rNext;
-                    let pulse = (Math.sin(Date.now() / 150) + 1) / 2;
-                    let lCfg = (window.GF_RENDER_CONFIG && window.GF_RENDER_CONFIG.lighting) || {};
-                    let baseRad = lCfg.activeCheckpointGlowRadius ?? 28;
-                    let baseAlpha = lCfg.activeCheckpointGlowAlpha ?? 0.45;
-                    ctx.save();
-                    ctx.globalCompositeOperation = 'lighter';
-                    for (let l of raceLights) {
-                        if (l.id === targetLight) {
-                            const cx = l.x + 16;
-                            const cy = l.y + 16;
-                            const rad = baseRad * (0.85 + pulse * 0.30);
-                            const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
-                            g.addColorStop(0, `rgba(0, 245, 255, ${baseAlpha * (0.7 + pulse * 0.3)})`);
-                            g.addColorStop(0.6, `rgba(255, 215, 0, ${baseAlpha * 0.4 * pulse})`);
-                            g.addColorStop(1, 'rgba(0, 245, 255, 0)');
-                            ctx.fillStyle = g;
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.strokeStyle = '#ffd700';
-                            ctx.lineWidth = 2.0;
-                            ctx.strokeRect(l.x, l.y, 32, 32);
-                        }
-                    }
-                    ctx.restore();
-                }
-            }
-
-            // Render Multiplayer Leaderboard Overlay
-            let racers = Object.entries(serverState.players).filter(([id, p]) => p.race && p.race.state === 2).map(([id, p]) => ({ id, race: p.race })).sort((a,b) => (a.race.finishTime - a.race.startTime) - (b.race.finishTime - b.race.startTime));
-            if (racers.length > 0) {
-                ctx.save();
-                ctx.setTransform(1, 0, 0, 1, 0, 0); 
-                ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                ctx.fillRect(VIEW_W/2 - 150, 60, 300, 50 + racers.length * 30);
-                ctx.fillStyle = '#f1c40f';
-                ctx.font = 'bold 18px system-ui, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText("RACE RESULTS", VIEW_W/2, 90);
-                ctx.font = 'bold 14px monospace';
-                racers.forEach((r, idx) => {
-                    let diff = r.race.finishTime - r.race.startTime;
-                    let label = r.id === myId ? "YOU" : (serverState.players[r.id]?.alias || r.id.substring(0,4));
-                    ctx.fillStyle = r.id === myId ? '#2ecc71' : '#fff';
-                    ctx.textAlign = 'left';
-                    ctx.fillText(`${idx+1}. ${label}`, VIEW_W/2 - 120, 125 + idx * 30);
-                    ctx.textAlign = 'right';
-                    ctx.fillText(formatTimeMs(diff), VIEW_W/2 + 120, 125 + idx * 30);
-                });
-                ctx.restore();
-            }
-
-            updateAndDrawFireworks(ctx);
-            ctx.restore();
-            } catch (e) {
-                _gameLoopCrashed = true;
-                console.error("CLIENT LOOP CRASH:", e);
-            }
-        }
-
-        const loginModal = document.getElementById('login-modal');
-        const aliasInput = document.getElementById('alias-input');
-        const loginError = document.getElementById('login-error');
-        const botPilotCheckbox = document.getElementById('bot-pilot-checkbox');
-        const loginModeSp = document.getElementById('login-mode-sp');
-        const loginModeMp = document.getElementById('login-mode-mp');
-        const loginRoomCode = document.getElementById('login-room-code');
-        if (botPilotCheckbox) botPilotCheckbox.checked = myIsBot;
-        if (loginModeSp && loginModeMp) {
-            if (mySessionMode === 'MP') {
-                loginModeMp.checked = true;
-                if (loginRoomCode) loginRoomCode.style.display = 'block';
-            } else {
-                loginModeSp.checked = true;
-                if (loginRoomCode) loginRoomCode.style.display = 'none';
-            }
-        }
-        if (loginModeSp && loginModeMp && loginRoomCode) {
-            loginModeSp.onchange = () => { loginRoomCode.style.display = 'none'; };
-            loginModeMp.onchange = () => { loginRoomCode.style.display = 'block'; };
-        }
-        
-        async function attemptLogin(alias) {
-            aliasInput.value = alias;
-            const isBotFlag = Boolean(botPilotCheckbox && botPilotCheckbox.checked);
-            const selectedMode = (loginModeMp && loginModeMp.checked) ? 'MP' : 'SP';
-            const selectedCode = (selectedMode === 'MP' && loginRoomCode) ? loginRoomCode.value.trim().toUpperCase() : '';
-            try {
-                const res = await fetch('/api/auth', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ alias, uuid: myUuid, isBot: isBotFlag })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    localStorage.setItem('gf_alias', alias);
-                    localStorage.setItem('gf_is_bot', String(Boolean(data.isBot ?? isBotFlag)));
-                    localStorage.setItem('gf_session_mode', selectedMode);
-                    myAlias = alias;
-                    myIsBot = Boolean(data.isBot ?? isBotFlag);
-                    mySessionMode = selectedMode;
-                    loginModal.style.display = 'none';
-                    document.getElementById('loading-screen').style.display = 'none';
-                    
-                    // Launch the Socket!
-                    const savedLvl = localStorage.getItem('gf_dev_level');
-                    const startLvl = savedLvl !== null ? parseInt(savedLvl, 10) : 0;
-                    socket.auth = { uuid: myUuid, alias: myAlias, isBot: myIsBot, mode: mySessionMode, roomCode: selectedCode, levelIndex: isNaN(startLvl) ? 0 : startLvl };
-                    socket.connect();
-                    requestAnimationFrame(gameLoop);
-                } else {
-                    loginError.innerHTML = data.message +
-                        `<br><a style="color: white;" href="https://github.com/romland/Gravity-Farce" target="_blank">It's easy to run your own server</a>`;
-                    document.getElementById('loading-screen').style.display = 'none';
-                    loginModal.style.display = 'flex';
-                }
-            } catch (e) {
-                loginError.innerText = "NETWORK ERROR";
-                document.getElementById('loading-screen').style.display = 'none';
-                loginModal.style.display = 'flex';
-            }
-        }
-
-        document.getElementById('btn-login-submit').onclick = () => attemptLogin(aliasInput.value);
-        document.getElementById('btn-login-random').onclick = async () => {
-            try { 
-                const res = await fetch('/api/auth/random'); 
-                const data = await res.json(); 
-                aliasInput.value = data.alias; 
-                loginError.innerText = '';
-            } catch (e) {}
-        };
-
-        async function bootstrapGame() {
-            const loaderImg = document.getElementById('loader-img');
-            if (loaderImg.complete) loaderImg.style.display = 'block';
-            else loaderImg.onload = () => { loaderImg.style.display = 'block'; };
-            
-            try {
-                await assetManager.loadMultiple({
-                    // '0xE4': 'assets/enemies/e4-enemy.webp',
-                    '0xE5': 'assets/enemies/e5-enemy-384x256.webp',
-                    '0xEB': 'assets/enemies/e5-enemy-384x256.webp'
-                });
-                
-                if (myAlias) {
-                    await attemptLogin(myAlias);
-                } else {
-                    document.getElementById('loading-screen').style.display = 'none';
-                    loginModal.style.display = 'flex';
-                }
-            } catch (err) {
-                document.getElementById('loading-text').innerText = 'ASSET MOUNT FAILURE';
-                console.error('Asset load error:', err);
-            }
-        }
-        bootstrapGame();
-    </script>
-    <script type="module">
-        import { ParallaxLayer } from './renderer/ParallaxLayer.js';
-        import { RockLayer } from './renderer/RockLayer.js';
-        import { PrefabLayer } from './renderer/PrefabLayer.js';
-        import { FloraLayer } from './renderer/FloraLayer.js';
-        import { MicroDetailsLayer } from './renderer/MicroDetailsLayer.js';
-
-        window.gfRenderer = {
-            parallax: new ParallaxLayer(1600, 900),
-            rock: new RockLayer(),
-            prefabs: new PrefabLayer(assetManager),
-            flora: new FloraLayer(),
-            details: new MicroDetailsLayer()
-        };
-    </script>
+    <script type="module" src="GameBootstrap.js"></script>
 </body>
 </html>

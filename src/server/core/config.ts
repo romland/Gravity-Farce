@@ -13,6 +13,8 @@ export interface ServerConfig {
     maxPlayers: number;
     defaultLives: number;
     allowAnalogControl: boolean;
+    viewWidth: number;
+    viewHeight: number;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -26,7 +28,9 @@ const DEFAULT_CONFIG: ServerConfig = {
     requireManualApproval: false, // If true, new players must be set to 'approved: true' in JSON
     maxPlayers: 50, // Global connection cap
     defaultLives: 5,
-    allowAnalogControl: false // Toggle for variable thrust/steering precision
+    allowAnalogControl: false, // Toggle for variable thrust/steering precision
+    viewWidth: 1600,
+    viewHeight: 900
 };
 
 export class ConfigManager {

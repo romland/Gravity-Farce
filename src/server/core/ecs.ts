@@ -177,6 +177,13 @@ export interface Powerup {
     height: number;
 }
 
+export interface RoomRulesComponent {
+    discipline: 'mission' | 'race' | 'dogfight';
+    flavor: string;
+    objectiveText: string;
+    customCounters?: Record<string, string | number>;
+}
+
 export class Registry {
     private nextId = 1;
     public transforms = new Map<Entity, Transform>();
@@ -193,6 +200,12 @@ export class Registry {
     public cargoBays = new Map<Entity, CargoBay>();
     public weaponMounts = new Map<Entity, WeaponMount>();
     public bots = new Map<Entity, BotState>();
+    public roomRules: RoomRulesComponent = {
+        discipline: 'mission',
+        flavor: 'STANDARD',
+        objectiveText: 'SECURE ALL CARGO',
+        customCounters: {}
+    };
     public events: GameEvent[] = [];
 
     create(): Entity { 

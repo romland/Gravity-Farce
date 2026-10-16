@@ -38,15 +38,15 @@ export const RENDER_CONFIG = {
         recessedOpacity: 1.0,   // Global opacity for the recessed cavern shadow
         recessedParallax: 0.35,  // Scroll factor for Layer -1 recessed cavern wall
         recessedCataclysmsEnabled: true,
-        recessedCataclysmSpawnChance: 0.0006, // Rare surprise event (~once every 20s at 60fps)
-        recessedCataclysmMaxActive: 2,
-        recessedCataclysmAlpha: 0.28,         // Faded into deep background layer so it never distracts
-        recessedCataclysmBaseSpeed: 1.05,     // Slow, heavy cinematic drift speed across the background cavern
-        recessedCataclysmSpeedVar: 0.75,      // Random speed variation added to base speed
-        recessedCataclysmGravity: 0.008,      // Gentle downward arc pull per frame
-        recessedCataclysmTrailLength: 34,     // Long smoldering tail segment count
-        recessedCataclysmBurnGlowMultiplier: 3.4, // Radius multiplier for the outer atmospheric burn halo
-        recessedCataclysmEmberShedChance: 0.48,   // Chance per frame to shed a slow-burning ember into the tail wake
+        recessedCataclysmSpawnChance: 0.00045, // Rare distant background event
+        recessedCataclysmMaxActive: 1,
+        recessedCataclysmAlpha: 0.11,          // Bland, deeply faded so it sits far in the background
+        recessedCataclysmBaseSpeed: 0.38,      // Very slow distant drift speed
+        recessedCataclysmSpeedVar: 0.22,       // Subtle speed variation
+        recessedCataclysmGravity: 0.0022,      // Very gentle distant downward arc
+        recessedCataclysmTrailLength: 42,      // Long slow-moving tail
+        recessedCataclysmBurnGlowMultiplier: 2.2, // Soft, understated atmospheric haze
+        recessedCataclysmEmberShedChance: 0.22,   // Sparse slow-drifting dust/embers
         recessedGhostShipEnabled: true,
         recessedGhostShipSpawnChance: 0.0015, // rare background event on sibling level flat platforms
         recessedGhostShipMaxAlpha: 0.14,      // Extremely faded so it is NEVER mistaken for an opponent
@@ -118,11 +118,11 @@ export const RENDER_CONFIG = {
         raceMarkerLocalGlowAlpha: 0.24,
         activeCheckpointGlowRadius: 28,
         activeCheckpointGlowAlpha: 0.45,
-        shipLightEnabled: true,
-        shipIdleRadius: 44,
-        shipIdleIntensity: 0.08,
-        shipThrustRadius: 90,
-        shipThrustIntensity: 0.20
+        shipLightEnabled: false,
+        shipIdleRadius: 0,
+        shipIdleIntensity: 0,
+        shipThrustRadius: 0,
+        shipThrustIntensity: 0
     },
     details: {
         enabled: true,
