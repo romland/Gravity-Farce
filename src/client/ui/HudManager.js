@@ -63,6 +63,7 @@ export class HudManager {
 
         // 1. Mode, Flavor & Score Cluster
         const cMode = this.createCluster('modeAndScore');
+        cMode.dataset.homeSlot = HUD_CONFIG.componentSlots.modeAndScore || 'bottom-bar';
         cMode.innerHTML = `
             <div class="hud-field">
                 <span class="hud-label" id="hud-lbl-mode">MISSION // STANDARD</span>
@@ -76,6 +77,7 @@ export class HudManager {
 
         // 2. Vitals Cluster (Fuel Bar & Lives Ship Glyphs)
         const cVitals = this.createCluster('vitals');
+        cVitals.dataset.homeSlot = HUD_CONFIG.componentSlots.vitals || 'bottom-bar';
         cVitals.innerHTML = `
             <div class="hud-field">
                 <span class="hud-label">FUEL RESERVES</span>
@@ -92,6 +94,7 @@ export class HudManager {
 
         // 3. Discipline Objectives Cluster (Cargo / Race Timer / Dogfight Roster)
         const cObj = this.createCluster('objectives');
+        cObj.dataset.homeSlot = HUD_CONFIG.componentSlots.objectives || 'bottom-bar';
         cObj.innerHTML = `
             <div class="hud-field" id="hud-sec-mission">
                 <span class="hud-label">CARGO BAY / REM</span>
@@ -109,6 +112,7 @@ export class HudManager {
 
         // 4. Tactical Controls Cluster (SP/MP, Highscores, +Bot, Controls Help)
         const cActions = this.createCluster('actions');
+        cActions.dataset.homeSlot = HUD_CONFIG.componentSlots.actions || 'bottom-bar';
         cActions.classList.add('hud-actions');
         cActions.innerHTML = `
             <button class="gbtn" id="btn-hud-scores" type="button">RECORDS</button>
@@ -117,6 +121,7 @@ export class HudManager {
             <button class="gbtn gbtn-amber" id="btn-hud-help" type="button" title="Flight Controls">?</button>
         `;
 
+        this.allClusters = [cMode, cVitals, cObj, cActions];
         this.bindCachedElements();
     }
 
@@ -177,69 +182,80 @@ export class HudManager {
     recalculateLayout() {
         const winW = window.innerWidth;
         const winH = window.innerHeight;
-        const targetAspect = this.viewW / this.viewH;
-        const winAspect = winW / Math.max(1, winH);
 
-        let mode = HUD_CONFIG.placementMode;
-        if (mode === 'AUTO') {
-            if (HUD_CONFIG.preferOverlayInAuto) {
-                mode = 'OVERLAY';
-            } else if (winAspect < targetAspect - 0.04) {
-                mode = 'OUTSIDE_BOTTOM';
-            } else if (winAspect > targetAspect + 0.14) {
-                mode = 'OUTSIDE_LEFT';
-            } else {
-                mode = 'OVERLAY';
-            }
-        }
+        // 1. Always give the canvas its maximum full-window scale first (never shrink canvas for HUD!)
+        this.applyBox(this.stageEl, 0, 0, winW, winH);
+        const canvasScale = Math.min(winW / this.viewW, winH / this.viewH);
+        this.canvasEl.style.transform = `translate(-50%, -50%) scale(${canvasScale})`;
+
+        const cW = Math.round(this.viewW * canvasScale);
+        const cH = Math.round(this.viewH * canvasScale);
+        const cX = Math.round((winW - cW) * 0.5);
+        const cY = Math.round((winH - cH) * 0.5);
+
+        // Natural unoccupied margins around the rendered canvas
+        const bottomSpace = winH - (cY + cH);
+        const topSpace = cY;
+        const leftSpace = cX;
+        const rightSpace = winW - (cX + cW);
 
         const scaleEstimate = Math.max(0.68, Math.min(1.35, Math.min(winW / this.viewW, winH / this.viewH)));
         document.documentElement.style.setProperty('--gf-ui-scale', scaleEstimate.toFixed(3));
 
-        let stageX = 0;
-        let stageY = 0;
-        let stageW = winW;
-        let stageH = winH;
+        const barH = Math.round(HUD_CONFIG.barThicknessPx * scaleEstimate);
+        const sideW = Math.round(HUD_CONFIG.sideThicknessPx * scaleEstimate);
 
-        this.hudRootEl.className = '';
-        if (mode === 'OVERLAY') {
-            this.hudRootEl.classList.add('hud-mode-overlay');
+        // 2. Smart Adjacent Dock vs. Overlay Selection:
+        // If natural letterbox/pillarbox space outside the canvas fits the HUD without shrinking the canvas,
+        // place the HUD outside AND flush/adjacent to the canvas! Otherwise, overlay inside the canvas.
+        let effectiveMode = 'OVERLAY';
+        const pref = HUD_CONFIG.placementMode;
+
+        if (bottomSpace >= barH) {
+            effectiveMode = (pref === 'OUTSIDE_TOP' && topSpace >= barH) ? 'OUTSIDE_TOP' : 'OUTSIDE_BOTTOM';
+        } else if (topSpace >= barH) {
+            effectiveMode = 'OUTSIDE_TOP';
+        } else if (leftSpace >= sideW && cH >= 420) {
+            effectiveMode = (pref === 'OUTSIDE_RIGHT' && rightSpace >= sideW) ? 'OUTSIDE_RIGHT' : 'OUTSIDE_LEFT';
+        } else if (rightSpace >= sideW && cH >= 420) {
+            effectiveMode = 'OUTSIDE_RIGHT';
         } else {
-            this.hudRootEl.classList.add('hud-mode-outside');
-            const barH = Math.round(HUD_CONFIG.barThicknessPx * scaleEstimate);
-            const sideW = Math.round(HUD_CONFIG.sideThicknessPx * scaleEstimate);
-
-            if (mode === 'OUTSIDE_BOTTOM') {
-                stageH = Math.max(200, winH - barH);
-                this.hudRootEl.classList.add('hud-dock-bottom');
-                this.applyBox(this.hudRootEl, 0, stageH, winW, barH);
-            } else if (mode === 'OUTSIDE_TOP') {
-                stageY = barH;
-                stageH = Math.max(200, winH - barH);
-                this.hudRootEl.classList.add('hud-dock-top');
-                this.applyBox(this.hudRootEl, 0, 0, winW, barH);
-            } else if (mode === 'OUTSIDE_LEFT') {
-                stageX = sideW;
-                stageW = Math.max(300, winW - sideW);
-                this.hudRootEl.classList.add('hud-dock-left', 'hud-dir-vertical');
-                this.applyBox(this.hudRootEl, 0, 0, sideW, winH);
-            } else if (mode === 'OUTSIDE_RIGHT') {
-                stageW = Math.max(300, winW - sideW);
-                this.hudRootEl.classList.add('hud-dock-right', 'hud-dir-vertical');
-                this.applyBox(this.hudRootEl, stageW, 0, sideW, winH);
-            }
+            effectiveMode = 'OVERLAY';
         }
 
-        this.applyBox(this.stageEl, stageX, stageY, stageW, stageH);
-        const canvasScale = Math.min(stageW / this.viewW, stageH / this.viewH);
-        this.canvasEl.style.transform = `translate(-50%, -50%) scale(${canvasScale})`;
-
-        if (mode === 'OVERLAY') {
-            const cW = Math.round(this.viewW * canvasScale);
-            const cH = Math.round(this.viewH * canvasScale);
-            const cX = stageX + Math.round((stageW - cW) * 0.5);
-            const cY = stageY + Math.round((stageH - cH) * 0.5);
+        this.hudRootEl.className = '';
+        if (effectiveMode === 'OVERLAY') {
+            // Restore clusters to their configured overlay slots
+            if (this.allClusters) {
+                for (const cl of this.allClusters) {
+                    const targetSlot = this.slots[cl.dataset.homeSlot] || this.slots['bottom-bar'];
+                    if (cl.parentElement !== targetSlot) targetSlot.appendChild(cl);
+                }
+            }
+            this.hudRootEl.classList.add('hud-mode-overlay');
             this.applyBox(this.hudRootEl, cX, cY, cW, cH);
+        } else {
+            // Gather all HUD clusters into the docked bar adjacent to the canvas edge
+            if (this.allClusters) {
+                const dockSlot = this.slots['bottom-bar'];
+                for (const cl of this.allClusters) {
+                    if (cl.parentElement !== dockSlot) dockSlot.appendChild(cl);
+                }
+            }
+            this.hudRootEl.classList.add('hud-mode-outside');
+            if (effectiveMode === 'OUTSIDE_BOTTOM') {
+                this.hudRootEl.classList.add('hud-dock-bottom');
+                this.applyBox(this.hudRootEl, cX, cY + cH, cW, barH);
+            } else if (effectiveMode === 'OUTSIDE_TOP') {
+                this.hudRootEl.classList.add('hud-dock-top');
+                this.applyBox(this.hudRootEl, cX, cY - barH, cW, barH);
+            } else if (effectiveMode === 'OUTSIDE_LEFT') {
+                this.hudRootEl.classList.add('hud-dock-left', 'hud-dir-vertical');
+                this.applyBox(this.hudRootEl, cX - sideW, cY, sideW, cH);
+            } else if (effectiveMode === 'OUTSIDE_RIGHT') {
+                this.hudRootEl.classList.add('hud-dock-right', 'hud-dir-vertical');
+                this.applyBox(this.hudRootEl, cX + cW, cY, sideW, cH);
+            }
         }
     }
 

@@ -126,10 +126,19 @@ const dialogManager = new DialogManager(
 );
 
 // Wire HUD & Modal Buttons
-document.getElementById('btn-hud-scores').onclick = () => socket.emit('request_leaderboard');
+document.getElementById('btn-hud-scores').onclick = () => {
+    const lbModal = document.getElementById('leaderboard-modal');
+    if (lbModal && lbModal.style.display && lbModal.style.display !== 'none') {
+        lbModal.style.display = 'none';
+    } else {
+        dialogManager.closeAnyOpen();
+        socket.emit('request_leaderboard');
+    }
+};
 document.getElementById('btn-room-mode').onclick = () => {
-    socket.emit('request_room_list');
-    document.getElementById('room-modal').style.display = 'flex';
+    dialogManager.toggleModal('room-modal', () => {
+        socket.emit('request_room_list');
+    });
 };
 document.getElementById('btn-spawn-bot').onclick = () => socket.emit('debug_action', 'spawn_bot');
 document.getElementById('btn-hud-help').onclick = () => dialogManager.openControlsModal();
@@ -308,6 +317,13 @@ socket.on('initLevel', (data) => {
                 if (t >= 0x3B && t <= 0x42) raceLights.push({ x: x * 32, y: y * 32, id: t });
             }
         }
+    }
+    // Immediately center camera if playfield is smaller than viewport
+    if (level.width <= VIEW_W) {
+        camera.x = (level.width - VIEW_W) * 0.5;
+    }
+    if (level.height <= VIEW_H) {
+        camera.y = (level.height - VIEW_H) * 0.5;
     }
 });
 
@@ -762,11 +778,16 @@ let _gameLoopCrashed = false;
 function gameLoop(timestamp = performance.now()) {
     if (_gameLoopCrashed) return;
     requestAnimationFrame(gameLoop);
-    clientProfiler.beginFrame(timestamp);
-    clientProfiler.markHz('Engine.RenderLoop');
-    inputManager.updateGamepad();
     try {
         const nowPerf = performance.now();
+        const rawDeltaMs = nowPerf - lastRenderPerfNow;
+        // Guard against duplicate sub-millisecond RAF dispatches
+        if (rawDeltaMs < 1.0) return;
+
+        clientProfiler.beginFrame();
+        clientProfiler.markHz('Engine.RenderLoop');
+        inputManager.updateGamepad();
+
         const dtSec = Math.min(0.05, Math.max(0.001, (nowPerf - lastRenderPerfNow) * 0.001));
         lastRenderPerfNow = nowPerf;
         const dt60 = dtSec * 60.0; // 1.0 at 60Hz, 0.4167 at 144Hz
@@ -864,8 +885,15 @@ function gameLoop(timestamp = performance.now()) {
                 hudManager.update(myServerPlayer, serverState, level, currentRoomRules, debugMode, metrics);
             });
             perfOverlay.update(timestamp, myServerPlayer, debugMode, metrics);
-            let targetX = Math.max(0, Math.min(myPlayer.x - VIEW_W / 2, level.width - VIEW_W));
-            let targetY = Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, level.height - VIEW_H));
+
+            // If cavern playfield is narrower/shorter than viewport, center it instead of pinning left/top!
+            const targetX = level.width <= VIEW_W
+                ? (level.width - VIEW_W) * 0.5
+                : Math.max(0, Math.min(myPlayer.x - VIEW_W / 2, level.width - VIEW_W));
+            const targetY = level.height <= VIEW_H
+                ? (level.height - VIEW_H) * 0.5
+                : Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, level.height - VIEW_H));
+
             const camAlpha = 1.0 - Math.pow(1.0 - 0.12, dt60);
             camera.x += (targetX - camera.x) * camAlpha;
             camera.y += (targetY - camera.y) * camAlpha;

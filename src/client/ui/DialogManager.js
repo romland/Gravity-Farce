@@ -22,9 +22,21 @@ export class DialogManager {
         return closed;
     }
 
+    toggleModal(id, onOpenFn) {
+        const el = document.getElementById(id);
+        if (!el) return false;
+        const isOpen = el.style.display && el.style.display !== 'none';
+        this.closeAnyOpen();
+        if (!isOpen) {
+            el.style.display = 'flex';
+            if (onOpenFn) onOpenFn();
+            return true;
+        }
+        return false;
+    }
+
     openControlsModal() {
-        const el = document.getElementById('controls-modal');
-        if (el) el.style.display = 'flex';
+        this.toggleModal('controls-modal');
     }
 
     showHintToast(hintData) {

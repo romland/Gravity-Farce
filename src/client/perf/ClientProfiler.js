@@ -174,15 +174,18 @@ export class ClientProfiler {
         };
     }
 
-    beginFrame(timestamp) {
-        this.frameStartTs = performance.now();
+    beginFrame() {
+        const now = performance.now();
+        this.frameStartTs = now;
         if (this.lastFrameTs > 0) {
-            const delta = timestamp - this.lastFrameTs;
-            this.getSeries('Frame.DeltaMs').add(delta);
-            const instFps = 1000 / Math.max(0.5, delta);
-            this.fps = this.fps * 0.92 + instFps * 0.08;
+            const delta = now - this.lastFrameTs;
+            if (delta >= 1.0) {
+                this.getSeries('Frame.DeltaMs').add(delta);
+                const instFps = 1000 / delta;
+                this.fps = this.fps * 0.92 + instFps * 0.08;
+            }
         }
-        this.lastFrameTs = timestamp;
+        this.lastFrameTs = now;
 
         const c = this.canvasCounters;
         c.drawCalls = 0;
