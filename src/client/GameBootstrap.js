@@ -75,6 +75,8 @@ let raceLights = [];
 let spectateTargetId = null;
 let cameraShake = 0;
 let metrics = { bytesIn: 0, bytesOut: 0, packetsIn: 0, packetsOut: 0 };
+let lastStatePerfNow = performance.now();
+let lastRenderPerfNow = performance.now();
 
 let freecam = false;
 let debugMode = false;
@@ -357,6 +359,7 @@ function playTurretSound(soundId) {
 socket.on('state', (state) => {
     const endNetState = clientProfiler.begin('Stage.NetStateReceive');
     clientProfiler.markHz('Socket.StateIn');
+    const recvNow = performance.now();
     serverState = state;
     if (state.events) {
         for (const ev of state.events) {
@@ -393,7 +396,7 @@ socket.on('state', (state) => {
         const s = serverState.players[id];
         const r = renderState.players[id];
         if (!r) {
-            renderState.players[id] = { ...s, fuel: s.fuel ?? 76464 };
+            renderState.players[id] = { ...s, authX: s.x, authY: s.y, authAngle: s.angle, fuel: s.fuel ?? 76464 };
         } else {
             if (typeof s.fuel === 'number') r.fuel = s.fuel;
             else s.fuel = r.fuel;
@@ -408,8 +411,18 @@ socket.on('state', (state) => {
                     inputManager.forceReset();
                 }
             }
+            const dist = Math.hypot(r.x - s.x, r.y - s.y);
+            if ((r.isDead && !s.isDead) || dist > 120) {
+                r.x = s.x;
+                r.y = s.y;
+                r.angle = s.angle;
+            }
+            r.authX = s.x;
+            r.authY = s.y;
+            r.authAngle = s.angle;
         }
     }
+    lastStatePerfNow = recvNow;
 
     for (const id in renderState.players) {
         if (!serverState.players[id]) {
@@ -467,18 +480,18 @@ function triggerRankOneFireworks() {
     }
 }
 
-function updateAndDrawFireworks(ctx) {
+function updateAndDrawFireworks(ctx, dt60 = 1.0) {
     if (fireworks.length === 0) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'lighter';
     for (let i = fireworks.length - 1; i >= 0; i--) {
         const fw = fireworks[i];
-        fw.x += fw.vx;
-        fw.y += fw.vy;
-        fw.vx *= 0.965;
-        fw.vy = fw.vy * 0.965 + 0.11;
-        fw.life--;
+        fw.x += fw.vx * dt60;
+        fw.y += fw.vy * dt60;
+        fw.vx *= Math.pow(0.965, dt60);
+        fw.vy = fw.vy * Math.pow(0.965, dt60) + 0.11 * dt60;
+        fw.life -= dt60;
         if (fw.life <= 0) { fireworks.splice(i, 1); continue; }
         ctx.globalAlpha = Math.pow(fw.life / fw.maxLife, 1.4);
         ctx.fillStyle = fw.color;
@@ -489,15 +502,15 @@ function updateAndDrawFireworks(ctx) {
     ctx.restore();
 }
 
-function updateAndDrawParticles(ctx) {
+function updateAndDrawParticles(ctx, dt60 = 1.0) {
     ctx.globalCompositeOperation = 'lighter';
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.x += p.vx;
+        p.x += p.vx * dt60;
         p.y += p.vy;
-        p.vx *= 0.98;
-        p.vy *= 0.98;
-        p.life--;
+        p.vx *= Math.pow(0.98, dt60);
+        p.vy *= Math.pow(0.98, dt60);
+        p.life -= dt60;
         if (p.life <= 0) { particles.splice(i, 1); continue; }
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -518,7 +531,7 @@ function lerpAngle(a, b, amt) {
 function drawShip(p, isMe) {
     if (p.isDead) return;
     ctx.save();
-    ctx.translate(Math.round(p.x), Math.round(p.y));
+    ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
     ctx.beginPath();
     ctx.moveTo(16, 0);
@@ -566,7 +579,7 @@ function drawShip(p, isMe) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.font = '10px Aldrich, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(p.alias, Math.round(p.x), Math.round(p.y) + 26);
+        ctx.fillText(p.alias, p.x, p.y + 26);
     }
 }
 
@@ -624,12 +637,14 @@ function drawTank(t) {
     }
 }
 
-function drawFlyingEnemy(t) {
+function drawFlyingEnemy(t, subTick = 0) {
     if (!t.active) return;
     const w = t.width || 96;
     const h = t.height || 64;
+    const rx = t.x + (t.vx || 0) * subTick;
+    const ry = t.y + (t.vy || 0) * subTick;
     ctx.save();
-    ctx.translate(Math.round(t.x), Math.round(t.y));
+    ctx.translate(rx, ry);
     ctx.rotate(t.angle);
     const img = assetManager.get('0x' + t.enemyType.toString(16).toUpperCase());
     if (img) {
@@ -642,9 +657,9 @@ function drawFlyingEnemy(t) {
     if (debugMode && showDebugLines) {
         ctx.fillStyle = '#0f0';
         ctx.font = '10px monospace';
-        if (t.debugId !== undefined) ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
+        if (t.debugId !== undefined) ctx.fillText(`ID:${t.debugId} (0x${t.enemyType.toString(16).toUpperCase()})`, rx, ry - h / 2 - 10);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-        ctx.strokeRect(Math.round(t.x - w / 2), Math.round(t.y - h / 2), w, h);
+        ctx.strokeRect(rx - w / 2, ry - h / 2, w, h);
     }
 }
 
@@ -720,13 +735,19 @@ function gameLoop(timestamp = performance.now()) {
     clientProfiler.markHz('Engine.RenderLoop');
     inputManager.updateGamepad();
     try {
-        const timeSec = performance.now() * 0.001;
+        const nowPerf = performance.now();
+        const dtSec = Math.min(0.05, Math.max(0.001, (nowPerf - lastRenderPerfNow) * 0.001));
+        lastRenderPerfNow = nowPerf;
+        const dt60 = dtSec * 60.0; // 1.0 at 60Hz, 0.4167 at 144Hz
+        const subTick = freecam ? 0 : Math.min(1.25, Math.max(0, (nowPerf - lastStatePerfNow) / (1000 / 60)));
+        const timeSec = nowPerf * 0.001;
+
         let renderCamX = camera.x;
         let renderCamY = camera.y;
         if (cameraShake > 0.1) {
             renderCamX += (Math.random() - 0.5) * cameraShake;
             renderCamY += (Math.random() - 0.5) * cameraShake;
-            cameraShake *= 0.9;
+            cameraShake *= Math.pow(0.9, dt60);
         }
         if (window.gfRenderer && PERF_LAYER_TOGGLES.parallax) {
             clientProfiler.measure('Pass.Parallax', () => {
@@ -742,17 +763,23 @@ function gameLoop(timestamp = performance.now()) {
         }
 
         const endInterp = clientProfiler.begin('Stage.Interpolation');
+        const blendFactor = 1.0 - Math.pow(1.0 - 0.38, dt60);
         for (const id in serverState.players) {
             const s = serverState.players[id];
             const r = renderState.players[id];
             if (r) {
-                const dist = Math.hypot(r.x - s.x, r.y - s.y);
-                if ((r.isDead && !s.isDead) || dist > 100) {
-                    r.x = s.x; r.y = s.y; r.angle = s.angle;
+                // Sub-tick velocity dead-reckoning for silky 144Hz/240Hz motion between 60Hz server packets
+                const predX = (!s.isDead && !s.isLanded) ? (s.x + (s.vx || 0) * subTick) : s.x;
+                const predY = (!s.isDead && !s.isLanded) ? (s.y + (s.vy || 0) * subTick) : s.y;
+                const dist = Math.hypot(r.x - predX, r.y - predY);
+                if ((r.isDead && !s.isDead) || dist > 120) {
+                    r.x = predX;
+                    r.y = predY;
+                    r.angle = s.angle;
                 } else {
-                    r.x = lerp(r.x, s.x, 0.3);
-                    r.y = lerp(r.y, s.y, 0.3);
-                    r.angle = lerpAngle(r.angle, s.angle, 0.3);
+                    r.x = lerp(r.x, predX, blendFactor);
+                    r.y = lerp(r.y, predY, blendFactor);
+                    r.angle = lerpAngle(r.angle, s.angle, blendFactor);
                 }
                 r.isDead = s.isDead;
                 r.isLanded = s.isLanded;
@@ -782,7 +809,7 @@ function gameLoop(timestamp = performance.now()) {
         }
 
         if (freecam) {
-            const camSpeed = 15;
+            const camSpeed = 15 * dt60;
             if (inputManager.state.cam.up) camera.y -= camSpeed;
             if (inputManager.state.cam.down) camera.y += camSpeed;
             if (inputManager.state.cam.left) camera.x -= camSpeed;
@@ -794,12 +821,13 @@ function gameLoop(timestamp = performance.now()) {
             perfOverlay.update(timestamp, myServerPlayer, debugMode, metrics);
             let targetX = Math.max(0, Math.min(myPlayer.x - VIEW_W / 2, level.width - VIEW_W));
             let targetY = Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, level.height - VIEW_H));
-            camera.x += (targetX - camera.x) * 0.1;
-            camera.y += (targetY - camera.y) * 0.1;
+            const camAlpha = 1.0 - Math.pow(1.0 - 0.12, dt60);
+            camera.x += (targetX - camera.x) * camAlpha;
+            camera.y += (targetY - camera.y) * camAlpha;
         }
 
         ctx.save();
-        ctx.translate(Math.floor(-renderCamX), Math.floor(-renderCamY));
+        ctx.translate(-renderCamX, -renderCamY);
 
         if (window.gfRenderer) {
             if (PERF_LAYER_TOGGLES.recessed) {
@@ -829,7 +857,7 @@ function gameLoop(timestamp = performance.now()) {
         if (serverState.powerups) serverState.powerups.forEach(drawPowerup);
         if (serverState.turrets) serverState.turrets.forEach(drawTurret);
         if (serverState.tanks) serverState.tanks.forEach(drawTank);
-        if (serverState.flying) serverState.flying.forEach(drawFlyingEnemy);
+        if (serverState.flying) serverState.flying.forEach(f => drawFlyingEnemy(f, subTick));
 
         for (const id in renderState.players) {
             drawShip(renderState.players[id], id === myId);
@@ -879,17 +907,19 @@ function gameLoop(timestamp = performance.now()) {
 
         const endParticles = clientProfiler.begin('Pass.Particles');
         for (const b of serverState.bullets) {
+            const bx = b.x + (b.vx || 0) * subTick;
+            const by = b.y + (b.vy || 0) * subTick;
             if (b.isPlayer) {
                 ctx.fillStyle = '#ff8';
-                ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+                ctx.fillRect(bx - 2, by - 2, 4, 4);
             } else {
                 ctx.fillStyle = '#f44';
                 ctx.beginPath();
-                ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
+                ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
-        updateAndDrawParticles(ctx);
+        updateAndDrawParticles(ctx, dt60);
         endParticles();
 
         if (window.gfRenderer?.details && PERF_LAYER_TOGGLES.details) {
@@ -905,7 +935,10 @@ function gameLoop(timestamp = performance.now()) {
         if (window.gfRenderer) {
             if (PERF_LAYER_TOGGLES.flora) {
                 clientProfiler.measure('Pass.FloraCanopy', () => {
-                    window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
+                    window.gfRenderer.flora.updateAndDraw(
+                        ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets,
+                        { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H
+                    );
                 });
             }
             if (PERF_LAYER_TOGGLES.glow) {
@@ -918,8 +951,8 @@ function gameLoop(timestamp = performance.now()) {
         const endOverlays = clientProfiler.begin('Pass.FloatingTextAndOverlays');
         for (let i = floatingTexts.length - 1; i >= 0; i--) {
             const ft = floatingTexts[i];
-            ft.y -= 0.6;
-            ft.life--;
+            ft.y -= 0.6 * dt60;
+            ft.life -= dt60;
             if (ft.life <= 0) { floatingTexts.splice(i, 1); continue; }
             ctx.save();
             ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife);
@@ -963,7 +996,7 @@ function gameLoop(timestamp = performance.now()) {
             }
         }
 
-        updateAndDrawFireworks(ctx);
+        updateAndDrawFireworks(ctx, dt60);
         endOverlays();
         ctx.restore();
         clientProfiler.endFrame();

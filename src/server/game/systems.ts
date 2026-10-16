@@ -217,7 +217,7 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
         }
         for (const [he, missile] of ecs.homingMissiles.entries()) {
             if (Math.abs(missile.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(missile.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.bullets.push({ x: Math.round(missile.x * 10) / 10, y: Math.round(missile.y * 10) / 10, isPlayer: false }); // Rendered via bullet sync channel for scannability
+                state.bullets.push({ x: Math.round(missile.x * 10) / 10, y: Math.round(missile.y * 10) / 10, vx: Math.round(missile.vx * 100) / 100, vy: Math.round(missile.vy * 100) / 100, isPlayer: false });
             }
         }
         for (const [te, tank] of ecs.tanks.entries()) {
@@ -247,8 +247,9 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
         }
         for (const [be, b] of ecs.bullets.entries()) {
             const bt = ecs.transforms.get(be)!;
+            const bv = ecs.velocities.get(be);
             if (Math.abs(bt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(bt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.bullets.push({ x: Math.round(bt.x * 10) / 10, y: Math.round(bt.y * 10) / 10, isPlayer: b.isPlayer });
+                state.bullets.push({ x: Math.round(bt.x * 10) / 10, y: Math.round(bt.y * 10) / 10, vx: bv ? Math.round(bv.vx * 100) / 100 : 0, vy: bv ? Math.round(bv.vy * 100) / 100 : 0, isPlayer: b.isPlayer });
             }
         }
         

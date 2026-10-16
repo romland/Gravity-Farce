@@ -75,7 +75,7 @@ export class PerfReportGenerator {
 
         const hzRows = Array.from(profiler.hzCounters.entries())
             .sort((a, b) => b[1].hz - a[1].hz)
-            .map(([k, v]) => `| ${k.padEnd(24)} \vert{}${v.hz.toFixed(1)} Hz |`);
+            .map(([k, v]) => `| ${k.padEnd(24)} | ${v.hz.toFixed(1)} Hz |`);
 
         return [
             `### Gravity Farce — Client 2D & Network Performance Report`,
@@ -89,34 +89,34 @@ export class PerfReportGenerator {
             `#### 1. Frame Pacing & Main Thread Summary`,
             `| Metric | Avg | Median | P95 | P99 (1% Low) | Min / Max |`,
             `| :--- | :--- | :--- | :--- | :--- | :--- |`,
-            `| **Framerate (FPS)** | **${avgFps.toFixed(1)}** \vert{}${(1000 / Math.max(0.1, sDelta.med)).toFixed(1)} | ${(1000 / Math.max(0.1, sDelta.p95)).toFixed(1)} \vert{} **${p99Fps.toFixed(1)}** | ${minFps.toFixed(1)} /${maxFps.toFixed(1)} |`,
-            `| **Frame Delta (ms)** | **${sDelta.avg.toFixed(2)}ms** \vert{}${sDelta.med.toFixed(2)}ms | ${sDelta.p95.toFixed(2)}ms \vert{} **${sDelta.p99.toFixed(2)}ms** | ${sDelta.min.toFixed(2)} /${sDelta.max.toFixed(2)}ms |`,
-            `| **Total JS CPU (ms)** | **${sCpu.avg.toFixed(2)}ms** \vert{}${sCpu.med.toFixed(2)}ms | ${sCpu.p95.toFixed(2)}ms \vert{} **${sCpu.p99.toFixed(2)}ms** | ${sCpu.min.toFixed(2)} /${sCpu.max.toFixed(2)}ms |`,
+            `| **Framerate (FPS)** | **${avgFps.toFixed(1)}** | ${(1000 / Math.max(0.1, sDelta.med)).toFixed(1)} | ${(1000 / Math.max(0.1, sDelta.p95)).toFixed(1)} | **${p99Fps.toFixed(1)}** | ${minFps.toFixed(1)} /${maxFps.toFixed(1)} |`,
+            `| **Frame Delta (ms)** | **${sDelta.avg.toFixed(2)}ms** | ${sDelta.med.toFixed(2)}ms | ${sDelta.p95.toFixed(2)}ms | **${sDelta.p99.toFixed(2)}ms** | ${sDelta.min.toFixed(2)} /${sDelta.max.toFixed(2)}ms |`,
+            `| **Total JS CPU (ms)** | **${sCpu.avg.toFixed(2)}ms** | ${sCpu.med.toFixed(2)}ms | ${sCpu.p95.toFixed(2)}ms | **${sCpu.p99.toFixed(2)}ms** | ${sCpu.min.toFixed(2)} /${sCpu.max.toFixed(2)}ms |`,
             ``,
             `#### 2. Subsystem & Render Pass Breakdown (Sorted by Avg Cost)`,
             `| Stage / Pass | Avg (ms) | Med (ms) | P95 (ms) | P99 (ms) | Max (ms) | 60Hz Budget |`,
             `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |`,
             ...passRows.map(p =>
-                `| **${p.key}** | **${p.avg.toFixed(3)}** \vert{}${p.med.toFixed(3)} | ${p.p95.toFixed(3)} \vert{}${p.p99.toFixed(3)} | ${p.max.toFixed(2)} \vert{}${p.budgetPct.toFixed(1)}% |`
+                `| **${p.key}** | **${p.avg.toFixed(3)}** | ${p.med.toFixed(3)} | ${p.p95.toFixed(3)} | ${p.p99.toFixed(3)} | ${p.max.toFixed(2)} | ${p.budgetPct.toFixed(1)}% |`
             ),
             ``,
             `#### 3. Canvas 2D API & Network JSON Telemetry (Per Frame)`,
             `| Counter | Avg / Frame | Med | P99 | Max |`,
             `| :--- | :--- | :--- | :--- | :--- |`,
-            `| **Total 2D Draw Calls** | **${cDraws.avg.toFixed(0)}** \vert{}${cDraws.med.toFixed(0)} | ${cDraws.p99.toFixed(0)} \vert{}${cDraws.max.toFixed(0)} |`,
-            `| **ctx.drawImage (Blits)** | **${cImgs.avg.toFixed(1)}** \vert{}${cImgs.med.toFixed(0)} | ${cImgs.p99.toFixed(0)} \vert{}${cImgs.max.toFixed(0)} |`,
-            `| **ctx.fill (Polys/Arcs)** | **${cFills.avg.toFixed(0)}** \vert{}${cFills.med.toFixed(0)} | ${cFills.p99.toFixed(0)} \vert{}${cFills.max.toFixed(0)} |`,
-            `| **ctx.stroke (Lines)** | **${cStrokes.avg.toFixed(0)}** \vert{}${cStrokes.med.toFixed(0)} | ${cStrokes.p99.toFixed(0)} \vert{}${cStrokes.max.toFixed(0)} |`,
-            `| **Radial Gradients Created** | **${cGrads.avg.toFixed(1)}** \vert{}${cGrads.med.toFixed(0)} | ${cGrads.p99.toFixed(0)} \vert{}${cGrads.max.toFixed(0)} |`,
-            `| **ctx.save / restore** | **${cSaves.avg.toFixed(0)}** \vert{}${cSaves.med.toFixed(0)} | ${cSaves.p99.toFixed(0)} \vert{}${cSaves.max.toFixed(0)} |`,
-            `| **JSON.parse Time (ms)** | **${jTime.avg.toFixed(3)}ms** \vert{}${jTime.med.toFixed(3)}ms | ${jTime.p99.toFixed(3)}ms \vert{}${jTime.max.toFixed(2)}ms |`,
-            `| **JSON Payload (Bytes/f)** | **${jBytes.avg.toFixed(0)} B** \vert{}${jBytes.med.toFixed(0)} B | ${jBytes.p99.toFixed(0)} B \vert{}${jBytes.max.toFixed(0)} B |`,
-            `| **JSON Calls / Frame** | **${jCalls.avg.toFixed(2)}** \vert{}${jCalls.med.toFixed(0)} | ${jCalls.p99.toFixed(0)} \vert{}${jCalls.max.toFixed(0)} |`,
+            `| **Total 2D Draw Calls** | **${cDraws.avg.toFixed(0)}** | ${cDraws.med.toFixed(0)} | ${cDraws.p99.toFixed(0)} | ${cDraws.max.toFixed(0)} |`,
+            `| **ctx.drawImage (Blits)** | **${cImgs.avg.toFixed(1)}** | ${cImgs.med.toFixed(0)} | ${cImgs.p99.toFixed(0)} | ${cImgs.max.toFixed(0)} |`,
+            `| **ctx.fill (Polys/Arcs)** | **${cFills.avg.toFixed(0)}** | ${cFills.med.toFixed(0)} | ${cFills.p99.toFixed(0)} | ${cFills.max.toFixed(0)} |`,
+            `| **ctx.stroke (Lines)** | **${cStrokes.avg.toFixed(0)}** | ${cStrokes.med.toFixed(0)} | ${cStrokes.p99.toFixed(0)} | ${cStrokes.max.toFixed(0)} |`,
+            `| **Radial Gradients Created** | **${cGrads.avg.toFixed(1)}** | ${cGrads.med.toFixed(0)} | ${cGrads.p99.toFixed(0)} | ${cGrads.max.toFixed(0)} |`,
+            `| **ctx.save / restore** | **${cSaves.avg.toFixed(0)}** | ${cSaves.med.toFixed(0)} | ${cSaves.p99.toFixed(0)} | ${cSaves.max.toFixed(0)} |`,
+            `| **JSON.parse Time (ms)** | **${jTime.avg.toFixed(3)}ms** | ${jTime.med.toFixed(3)}ms | ${jTime.p99.toFixed(3)}ms | ${jTime.max.toFixed(2)}ms |`,
+            `| **JSON Payload (Bytes/f)** | **${jBytes.avg.toFixed(0)} B** | ${jBytes.med.toFixed(0)} B | ${jBytes.p99.toFixed(0)} B | ${jBytes.max.toFixed(0)} B |`,
+            `| **JSON Calls / Frame** | **${jCalls.avg.toFixed(2)}** | ${jCalls.med.toFixed(0)} | ${jCalls.p99.toFixed(0)} | ${jCalls.max.toFixed(0)} |`,
             ``,
             `#### 4. Active World Entities & Particle Counts`,
             `| Entity Pool | Count |`,
             `| :--- | :--- |`,
-            ...Object.entries(ctxData.entityCounts || {}).map(([k, v]) => `| **${k}** \vert{}${v} |`),
+            ...Object.entries(ctxData.entityCounts || {}).map(([k, v]) => `| **${k}** | ${v} |`),
             ``,
             ...(hzRows.length > 0 ? [
                 `#### 5. Event & Subsystem Update Rates (Hz)`,

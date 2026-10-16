@@ -10,6 +10,28 @@ export class FloraLayer {
         this.leafConfetti = [];
         this.builtForLevel = null;
         this.lastTimeSec = 0;
+        this.haloSprites = new Map();
+    }
+
+    getHaloSprite(rgbStr) {
+        let spr = this.haloSprites.get(rgbStr);
+        if (spr) return spr;
+        if (typeof document === 'undefined') return null;
+        const sz = 64;
+        const c = document.createElement('canvas');
+        c.width = sz;
+        c.height = sz;
+        const gCtx = c.getContext('2d');
+        const g = gCtx.createRadialGradient(32, 32, 2, 32, 32, 32);
+        g.addColorStop(0, `rgba(${rgbStr}, 1.0)`);
+        g.addColorStop(0.5, `rgba(${rgbStr}, 0.35)`);
+        g.addColorStop(1, `rgba(${rgbStr}, 0.0)`);
+        gCtx.fillStyle = g;
+        gCtx.beginPath();
+        gCtx.arc(32, 32, 32, 0, Math.PI * 2);
+        gCtx.fill();
+        this.haloSprites.set(rgbStr, c);
+        return c;
     }
 
     initLevel(level) {
@@ -132,7 +154,7 @@ export class FloraLayer {
         }
     }
 
-    updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level, bullets) {
+    updateAndDraw(ctx, players, timeSec, spawnParticlesFn, level, bullets, camera, viewW = 1600, viewH = 900) {
         const cfg = RENDER_CONFIG.flora;
         const dCfg = RENDER_CONFIG.details || {};
         if (!cfg.enabled) return;
@@ -144,6 +166,10 @@ export class FloraLayer {
         const dt = this.lastTimeSec > 0 ? Math.min(0.1, Math.max(0.004, timeSec - this.lastTimeSec)) : (1 / 60);
         this.lastTimeSec = timeSec;
 
+        const camMinX = camera ? camera.x - 110 : -Infinity;
+        const camMaxX = camera ? camera.x + viewW + 110 : Infinity;
+        const camMinY = camera ? camera.y - 140 : -Infinity;
+        const camMaxY = camera ? camera.y + viewH + 140 : Infinity;
         const shipList = Object.values(players).filter(p => !p.isDead);
         const bulletList = Array.isArray(bullets) ? bullets : [];
 
@@ -153,6 +179,11 @@ export class FloraLayer {
                 if (Math.random() < cfg.dripSpawnChance && this.drips.length < cfg.maxDrips) {
                     this.drips.push({ x: a.x, y: a.y + 4, vy: 1.5, life: 110 });
                 }
+                continue;
+            }
+
+            // Frustum cull offscreen flora anchors (huge reduction in per-frame draw calls)
+            if (a.x < camMinX || a.x > camMaxX || a.y < camMinY || a.y > camMaxY) {
                 continue;
             }
 
@@ -533,30 +564,47 @@ export class FloraLayer {
         const charColor = cfg.burnCharColor || '#181512';
         const charScale = cfg.burnCharWidthScale ?? 0.68;
 
-        for (let s = 1; s <= segments; s++) {
-            const t0 = (s - 1) / segments;
-            const t = s / segments;
-            // Quadratic bend curve (t^2) so root stays locked to rock contour
-            const segBurned = this.isIntervalBurned(a, t0, t);
-            const windAmp = segBurned ? cfg.vineWindAmp * 0.25 : cfg.vineWindAmp;
-            const wind = Math.sin(timeSec * cfg.windSpeed + a.seed + t * 2.0) * windAmp;
-            const washOffset = a.bendAngle * a.length * cfg.vineWashScale;
-            tipX = a.x + (wind + washOffset) * (t * t);
-            tipY = a.y + a.length * t;
-
-            ctx.strokeStyle = segBurned ? charColor : '#2ea355';
-            ctx.lineWidth = segBurned ? (4.0 * charScale) : 4.0;
+        if (!a.burning && !a.charred) {
+            // Fast path: 1 batched stroke for the entire unburned vine instead of 7 separate strokes!
+            ctx.strokeStyle = '#2ea355';
+            ctx.lineWidth = 4.0;
             ctx.beginPath();
             ctx.moveTo(prevX, prevY);
-            ctx.lineTo(tipX, tipY);
+            const washOffset = a.bendAngle * a.length * cfg.vineWashScale;
+            for (let s = 1; s <= segments; s++) {
+                const t = s / segments;
+                const wind = Math.sin(timeSec * cfg.windSpeed + a.seed + t * 2.0) * cfg.vineWindAmp;
+                tipX = a.x + (wind + washOffset) * (t * t);
+                tipY = a.y + a.length * t;
+                ctx.lineTo(tipX, tipY);
+            }
             ctx.stroke();
+        } else {
+            for (let s = 1; s <= segments; s++) {
+                const t0 = (s - 1) / segments;
+                const t = s / segments;
+                const segBurned = this.isIntervalBurned(a, t0, t);
+                const windAmp = segBurned ? cfg.vineWindAmp * 0.25 : cfg.vineWindAmp;
+                const wind = Math.sin(timeSec * cfg.windSpeed + a.seed + t * 2.0) * windAmp;
+                const washOffset = a.bendAngle * a.length * cfg.vineWashScale;
+                tipX = a.x + (wind + washOffset) * (t * t);
+                tipY = a.y + a.length * t;
 
-            prevX = tipX;
-            prevY = tipY;
+                ctx.strokeStyle = segBurned ? charColor : '#2ea355';
+                ctx.lineWidth = segBurned ? (4.0 * charScale) : 4.0;
+                ctx.beginPath();
+                ctx.moveTo(prevX, prevY);
+                ctx.lineTo(tipX, tipY);
+                ctx.stroke();
+
+                prevX = tipX;
+                prevY = tipY;
+            }
         }
 
         // Secondary side-leaf nodes along the vine (burned off where fire has passed)
         ctx.fillStyle = '#38b862';
+        ctx.beginPath();
         for (let s = 2; s < segments; s += 2) {
             const t = s / segments;
             if (this.isPointBurned(a, t)) continue;
@@ -565,10 +613,10 @@ export class FloraLayer {
             const lx = a.x + (wind + washOffset) * (t * t);
             const ly = a.y + a.length * t;
             const side = (s % 4 === 0 ? 1 : -1) * 7;
-            ctx.beginPath();
+            ctx.moveTo(lx + side + 6, ly);
             ctx.ellipse(lx + side, ly, 6, 2.5, side > 0 ? 0.4 : -0.4, 0, Math.PI * 2);
-            ctx.fill();
         }
+        ctx.fill();
 
         // Hanging blossoms along mature vines
         if (cfg.vineBlossomsEnabled !== false && a.seed > 52 && !this.isPointBurned(a, 0.55)) {
@@ -665,18 +713,17 @@ export class FloraLayer {
         const charColor = cfg.burnCharColor || '#181512';
         const charScale = cfg.burnCharWidthScale ?? 0.68;
 
-        // Outer bioluminescent aura
+        // Outer bioluminescent aura (uses pre-baked sprite instead of per-frame createRadialGradient!)
         if (!capBurned && cfg.localHaloEnabled !== false) {
             const haloR = (cfg.shroomHaloRadius ?? 16.0) * pulse;
             const haloA = (cfg.shroomHaloAlpha ?? 0.22) * (1.0 - (a.shyness || 0) * 0.65);
-            const grad = ctx.createRadialGradient(tipX, tipY, 2, tipX, tipY, haloR);
-            grad.addColorStop(0, `rgba(0, 242, 254, ${haloA})`);
-            grad.addColorStop(0.5, `rgba(79, 172, 254, ${haloA * 0.35})`);
-            grad.addColorStop(1, 'rgba(0, 242, 254, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(tipX, tipY, haloR, 0, Math.PI * 2);
-            ctx.fill();
+            const spr = this.getHaloSprite('0, 242, 254');
+            if (spr) {
+                ctx.save();
+                ctx.globalAlpha = haloA;
+                ctx.drawImage(spr, tipX - haloR, tipY - haloR, haloR * 2, haloR * 2);
+                ctx.restore();
+            }
         }
 
         // Segmented stem so fire chars progressively along the stalk
@@ -819,14 +866,13 @@ export class FloraLayer {
         if (cfg.localHaloEnabled !== false) {
             const haloR = (cfg.flowerHaloRadius ?? 14.0) * pulse;
             const haloA = (cfg.flowerHaloAlpha ?? 0.20) * (1.0 - (a.shyness || 0) * 0.65);
-            const glowRgba = `rgba(${glowRgb}, ${haloA})`;
-            const grad = ctx.createRadialGradient(tipX, tipY, 2, tipX, tipY, haloR);
-            grad.addColorStop(0, glowRgba);
-            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(tipX, tipY, haloR, 0, Math.PI * 2);
-            ctx.fill();
+            const spr = this.getHaloSprite(glowRgb);
+            if (spr) {
+                ctx.save();
+                ctx.globalAlpha = haloA;
+                ctx.drawImage(spr, tipX - haloR, tipY - haloR, haloR * 2, haloR * 2);
+                ctx.restore();
+            }
         }
 
         // Cupped bioluminescent petals (contract inward when shy!)

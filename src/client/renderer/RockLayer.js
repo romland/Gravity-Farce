@@ -567,7 +567,13 @@ export class RockLayer {
         const oy = camera.y * cfg.recessedParallax;
         ctx.save();
         if (cfg.recessedOpacity !== undefined) ctx.globalAlpha = cfg.recessedOpacity;
-        ctx.drawImage(this.recessedCanvas, ox, oy);
+        const sx = Math.max(0, Math.floor(camera.x - ox));
+        const sy = Math.max(0, Math.floor(camera.y - oy));
+        const sw = Math.min(this.recessedCanvas.width - sx, viewW + 4);
+        const sh = Math.min(this.recessedCanvas.height - sy, viewH + 4);
+        if (sw > 0 && sh > 0) {
+            ctx.drawImage(this.recessedCanvas, sx, sy, sw, sh, ox + sx, oy + sy, sw, sh);
+        }
         if (cfg.recessedCataclysmsEnabled !== false) {
             this.updateAndDrawRecessedCataclysms(ctx, camera, viewW, viewH, ox, oy, level, cfg);
         }
