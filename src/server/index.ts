@@ -495,7 +495,18 @@ io.on('connection', (socket) => {
             leaveCurrentRoom(socket.id);
 
             const rId = nextReplayRoomId--;
-            const newRoom = new Room(rId, replay.levelIndex, getLevelData(replay.levelIndex), io, handleTransition, SERVER_CONFIG.lethalRacingEnemies, SERVER_CONFIG.raceBumpModifier, true);
+            const replayMode: 'SP' | 'MP' = replay.mode === 'MP' ? 'MP' : 'SP';
+            const newRoom = new Room(
+                rId,
+                replay.levelIndex,
+                getLevelData(replay.levelIndex),
+                io,
+                handleTransition,
+                SERVER_CONFIG.lethalRacingEnemies,
+                SERVER_CONFIG.raceBumpModifier,
+                true,
+                replayMode
+            );
             newRoom.seed = replay.replayData.seed;
             newRoom.prng = createPRNG(newRoom.seed);
 
@@ -511,8 +522,26 @@ io.on('connection', (socket) => {
                 return { t: f.t, i: mappedInputs };
             });
 
-            for (const [pid, pstat] of Object.entries(replay.playerStats)) {
-                newRoom.addReplayActor(`REPLAY_${pid}`, (pstat as any).shipType || 'classic', pstat as any);
+            const statsEntries = Object.entries(replay.playerStats || {});
+            for (let idx = 0; idx < statsEntries.length; idx++) {
+                const [pid, rawStat] = statsEntries[idx];
+                const pstat = { ...(rawStat as any) };
+                // Fallback for older dogfight replays recorded before team/homeSpawnX were saved in playerStats
+                if (newRoom.category === 'dogfight' && !pstat.team) {
+                    const isBotId = pid.includes('BOT_') || pid.includes('RACER_') || pid.includes('MBOT_') || Boolean(pstat.isBot);
+                    pstat.team = (replayMode === 'SP') ? (isBotId ? 'E3' : 'E2') : (idx % 2 === 0 ? 'E2' : 'E3');
+                }
+                const joinTick = pstat.joinedAtTick ?? 0;
+                if (joinTick > 0) {
+                    newRoom.pendingReplayActors.push({
+                        actorId: `REPLAY_${pid}`,
+                        type: pstat.shipType || 'classic',
+                        stats: pstat,
+                        joinedAtTick: joinTick
+                    });
+                } else {
+                    newRoom.addReplayActor(`REPLAY_${pid}`, pstat.shipType || 'classic', pstat);
+                }
             }
             rooms.set(rId, newRoom);
 
@@ -689,11 +718,45 @@ io.on('connection', (socket) => {
                 stats.score = 0;
             }
             socket.emit('hide_game_over');
+            socket.emit('hide_leaderboard');
+            if (curRoom && (curRoom.category === 'dogfight' || curRoom.category === 'race')) {
+                curRoom.resetLevel(true);
+                for (const cid of curRoom.activeClientIds) {
+                    const cStats = playerSessionStats.get(cid);
+                    if (cStats) {
+                        cStats.lives = SERVER_CONFIG.defaultLives;
+                        cStats.score = 0;
+                    }
+                    const pe = curRoom.ecs.getPlayerEntity(cid);
+                    const oldP = pe !== undefined ? curRoom.ecs.players.get(pe) : undefined;
+                    curRoom.trySpawnPlayer(cid, oldP?.type || cStats?.shipType || 'classic', {
+                        score: 0,
+                        race: undefined,
+                        uuid: oldP?.uuid ?? cStats?.uuid ?? cid,
+                        alias: oldP?.alias ?? cStats?.alias ?? 'UNK',
+                        isBot: oldP?.isBotPilot ?? cStats?.isBot,
+                        lives: SERVER_CONFIG.defaultLives,
+                        joinedAtTick: 0,
+                        shotsFired: 0,
+                        fuelConsumed: 0,
+                        streakStartLevel: curRoom.levelIndex,
+                        streakLastLevel: curRoom.levelIndex,
+                        homeSpawnX: oldP?.homeSpawnX,
+                        homeSpawnY: oldP?.homeSpawnY,
+                        team: oldP?.team
+                    });
+                    curRoom.emitToPlayer(cid, 'hide_game_over', {});
+                    curRoom.emitToPlayer(cid, 'hide_leaderboard', {});
+                }
+                return;
+            }
             handleTransitionToLevel(socket.id, targetLvl, true);
         }
     });
 
     socket.on('disconnect', () => {
+        const disconnectedAlias = playerSessionStats.get(socket.id)?.alias || alias || 'UNK';
+        console.log(`Pilot "${disconnectedAlias}" disconnected:`, socket.id);
         const prevRId = playerRooms.get(socket.id);
         leaveCurrentRoom(socket.id);
         if (prevRId !== undefined && rooms.has(prevRId)) {

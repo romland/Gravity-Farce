@@ -148,8 +148,10 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
 export function checkPvPCollisions(ecs: Registry, e: Entity, t: Transform, radius: number = 18, room?: Room): boolean {
     let crashed = false;
     const me = ecs.players.get(e);
+    const amIBot = ecs.bots.has(e);
     for (const [oe, op] of ecs.players.entries()) {
         if (oe === e || op.isDead) continue;
+        if (amIBot && ecs.bots.has(oe)) continue;
         const ot = ecs.transforms.get(oe)!;
         if (Math.hypot(t.x - ot.x, t.y - ot.y) < radius) { 
             if (room && me) {
@@ -207,7 +209,7 @@ export function sysBullets(ecs: Registry, room: Room) {
             const tx = Math.floor(t.x / 32);
             const ty = Math.floor(t.y / 32);
             const tId = room.level.rawMap[ty]?.[tx];
-            if (tId !== undefined && TILE_DICTIONARY[tId]?.solid) {
+            if (tId !== undefined && (TILE_DICTIONARY[tId]?.solid || TILE_DICTIONARY[tId]?.pad)) {
                 hit = true;
             }
         }

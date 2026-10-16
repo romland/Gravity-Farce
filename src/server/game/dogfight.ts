@@ -316,7 +316,9 @@ export function buildDogfightLeaderboards(
         const k = x.metadata?.kills ?? 0;
         const d = x.metadata?.deaths ?? 0;
         const err = x.metadata?.unforcedErrors ?? 0;
-        return `${x.value} PTS (K:${k} D:${d} E:${err}) | ${formatTimeMs(x.secondaryValue ?? 0)}`;
+        const bc = x.metadata?.botCount;
+        const bcTag = bc ? `[${bc}B] ` : '';
+        return `${bcTag}${x.value} PTS (K:${k} D:${d} E:${err}) | ${formatTimeMs(x.secondaryValue ?? 0)}`;
     };
 
     const formatPvpRating = (x: any) => {

@@ -29,6 +29,12 @@ export interface LogEntry {
     playerStats: Record<string, {
         uuid: string;
         alias: string;
+        shipType?: 'classic' | 'modern';
+        team?: 'E2' | 'E3';
+        homeSpawnX?: number;
+        homeSpawnY?: number;
+        isBot?: boolean;
+        joinedAtTick?: number;
         deaths: number;
         powerupsTaken: number;
         fuelTaken: number;
@@ -101,9 +107,37 @@ export class GameTracker {
         this.logEvent(undefined, { type: 'game_start', levelIndex, category });
     }
 
-    public initPlayer(playerId: string, uuid: string, alias: string) {
+    public initPlayer(
+        playerId: string,
+        uuid: string,
+        alias: string,
+        meta?: { shipType?: 'classic' | 'modern'; team?: 'E2' | 'E3'; homeSpawnX?: number; homeSpawnY?: number; isBot?: boolean; joinedAtTick?: number }
+    ) {
         if (!this.entry.playerStats[playerId]) {
-            this.entry.playerStats[playerId] = { uuid, alias, deaths: 0, powerupsTaken: 0, fuelTaken: 0, cargoDelivered: 0, fuelConsumed: 0, shotsFired: 0, _pingSamples: [] };
+            this.entry.playerStats[playerId] = {
+                uuid,
+                alias,
+                shipType: meta?.shipType,
+                team: meta?.team,
+                homeSpawnX: meta?.homeSpawnX,
+                homeSpawnY: meta?.homeSpawnY,
+                isBot: meta?.isBot,
+                joinedAtTick: meta?.joinedAtTick ?? 0,
+                deaths: 0,
+                powerupsTaken: 0,
+                fuelTaken: 0,
+                cargoDelivered: 0,
+                fuelConsumed: 0,
+                shotsFired: 0,
+                _pingSamples: []
+            };
+        } else if (meta) {
+            const st = this.entry.playerStats[playerId];
+            if (meta.shipType !== undefined) st.shipType = meta.shipType;
+            if (meta.team !== undefined) st.team = meta.team;
+            if (meta.homeSpawnX !== undefined) st.homeSpawnX = meta.homeSpawnX;
+            if (meta.homeSpawnY !== undefined) st.homeSpawnY = meta.homeSpawnY;
+            if (meta.isBot !== undefined) st.isBot = meta.isBot;
         }
     }
 

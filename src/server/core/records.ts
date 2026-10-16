@@ -185,6 +185,32 @@ export class RecordManager {
     }
 
     public getRecords(metric: string, level: number, mode: 'SP' | 'MP', physicsHash: string, isBotPilot: boolean = false): RecordEntry[] {
+        if (metric === 'sp_dogfight') {
+            const merged: RecordEntry[] = [];
+            const seen = new Set<string>();
+            for (let b = 0; b <= 32; b++) {
+                const bHash = getActivePhysicsHash(b);
+                const bKey = this.getCompositeKey(metric, level, mode, bHash, isBotPilot);
+                const list = this.db[bKey]?.entries;
+                if (list) {
+                    for (const entry of list) {
+                        const uid = `${entry.playerId}_${entry.timestamp}_${entry.value}`;
+                        if (!seen.has(uid)) {
+                            seen.add(uid);
+                            merged.push(entry);
+                        }
+                    }
+                }
+            }
+            merged.sort((a, b) => {
+                if (a.value !== b.value) return b.value - a.value;
+                const secA = a.secondaryValue ?? 0;
+                const secB = b.secondaryValue ?? 0;
+                if (secA !== secB) return secA - secB;
+                return a.timestamp - b.timestamp;
+            });
+            return merged;
+        }
         const key = this.getCompositeKey(metric, level, mode, physicsHash, isBotPilot);
         return this.db[key]?.entries || [];
     }

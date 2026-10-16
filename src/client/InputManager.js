@@ -12,7 +12,7 @@ const DEFAULT_INPUT_CONFIG = {
         right: ['ArrowRight']
     },
     system: {
-        leaveReplay: ['Escape'],
+        escape: ['Escape'],
         watchReplay: ['KeyR'],
         pause: ['KeyP'],
         toggleDebugLines: ['KeyV'],
@@ -64,7 +64,18 @@ class InputManager {
     }
 
     handleKey(e, isPressed) {
-        if (document.activeElement.tagName === 'INPUT') return;
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.tagName === 'INPUT') {
+            if (isPressed && !e.repeat) {
+                if (this.config.system?.escape?.includes(e.code)) {
+                    activeEl.blur();
+                    if (this.onAction) this.onAction('escape');
+                } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+                    if (this.onAction) this.onAction('inputEnter', activeEl.id);
+                }
+            }
+            return;
+        }
         let changed = false;
         
         if (isPressed && !e.repeat && this.config.system) {

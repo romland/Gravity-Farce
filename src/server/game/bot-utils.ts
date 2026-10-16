@@ -301,10 +301,16 @@ export function logRacingCrash(ecs: Registry, room: Room, e: Entity, bot: import
 	const maxVy = rec.length > 0 ? Math.max(...rec.map((r: any) => r.vy)) : v.vy;
 	const firstUnsafe = rec.find((r: any) => !r.safe);
 	const unsafeTicksAgo = firstUnsafe ? (currentTick - firstUnsafe.tick) : 0;
+    const fuel = ecs.fuelTanks.get(e);
+    const fuelCurr = fuel ? Math.floor(fuel.current) : 0;
+    const fuelMax = fuel ? fuel.max : 99999;
+    const fuelPct = ((fuelCurr / Math.max(1, fuelMax)) * 100).toFixed(1);
+    const fuelUsed = fuel ? Math.floor(fuel.consumed) : 0;
 
     console.log(`\n=== [${new Date().toISOString()}] [BOT-RACING ${isCrash ? 'CRASH ' : ''}TELEMETRY] ${p.alias} ${isCrash ? 'crashed' : 'dumped state'} at tile (${bx}, ${by}) ===`);
 	console.log(`- Target Checkpoint  : Gate #${cpNum} ${targetCp ? `at Center (${Math.floor(targetCp.center.x / 32)},${Math.floor(targetCp.center.y / 32)})` : 'NOT FOUND'}`);
 	console.log(`- Impact Speed       : ${speed.toFixed(2)} px/tick (Vy: ${v.vy.toFixed(2)}, Max Downward Vy: ${maxVy.toFixed(2)})`);
+    console.log(`- Fuel Tank Status   : ${fuelCurr} / ${fuelMax} (${fuelPct}% left | Consumed: ${fuelUsed}F)`);
 	console.log(`- Trajectory vs Face : Motion: ${motionAngleDeg}° | Facing: ${facingAngleDeg}° | Drift Angle: ${driftAngleDeg}°`);
 	if ((bot as any).lastDesiredAngle !== undefined) {
 		const steerErr = (Math.abs(getAngleDiff((bot as any).lastDesiredAngle, t.angle)) * 180 / Math.PI).toFixed(1);
@@ -602,8 +608,14 @@ export function logDogfightCrash(ecs: Registry, room: Room, e: Entity, bot: any,
 
     const tx = Math.floor(t.x / 32);
     const ty = Math.floor(t.y / 32);
+    const fuel = ecs.fuelTanks.get(e);
+    const fuelCurr = fuel ? Math.floor(fuel.current) : 0;
+    const fuelMax = fuel ? fuel.max : 99999;
+    const fuelPct = ((fuelCurr / Math.max(1, fuelMax)) * 100).toFixed(1);
+    const fuelUsed = fuel ? Math.floor(fuel.consumed) : 0;
     
     console.log(`\n=== [${new Date().toISOString()}] [BOT-COMBAT ${isCrash ? 'CRASH ' : ''}TELEMETRY] ${p.alias} ${isCrash ? 'crashed' : 'dumped state'} at tile (${tx}, ${ty}) ===`);
+    console.log(`- Fuel Tank Status : ${fuelCurr} / ${fuelMax} (${fuelPct}% left | Consumed: ${fuelUsed}F)`);
     
     if (bot.targetId) {
         console.log(`- Target ID        : ${bot.targetId}`);

@@ -45,6 +45,7 @@ export class Room {
     public assignedHomes = new Map<string, { x: number; y: number }>();
     private gameOverResetTimer: any = null;
     public dogfightCompleted: boolean = false;
+    public pendingReplayActors: { actorId: string; type: 'classic' | 'modern'; stats: any; joinedAtTick: number }[] = [];
 
     constructor(
         public roomId: number,
@@ -145,6 +146,16 @@ export class Room {
             if (!this.isReplayMode) {
                 const frameInputs: Record<string, number> = {};
                 for (const [e, p] of this.ecs.players.entries()) {
+                    if (!this.tracker['entry'].playerStats[p.id]) {
+                        this.tracker.initPlayer(p.id, p.uuid, p.alias, {
+                            shipType: p.type,
+                            team: p.team,
+                            homeSpawnX: p.homeSpawnX,
+                            homeSpawnY: p.homeSpawnY,
+                            isBot: this.ecs.bots.has(e) || Boolean(p.isBotPilot),
+                            joinedAtTick: p.joinedAtTick
+                        });
+                    }
                     let mask = 0;
                     if (p.inputs.up) mask |= 1;
                     if (p.inputs.left) mask |= 2;
@@ -161,6 +172,15 @@ export class Room {
                     this.tracker.logReplayFrame({ t: this.globalWaveTimer, i: frameInputs });
                 }
             } else {
+                if (this.pendingReplayActors.length > 0) {
+                    for (let i = this.pendingReplayActors.length - 1; i >= 0; i--) {
+                        const pa = this.pendingReplayActors[i];
+                        if (pa.joinedAtTick <= this.globalWaveTimer) {
+                            this.addReplayActor(pa.actorId, pa.type, pa.stats);
+                            this.pendingReplayActors.splice(i, 1);
+                        }
+                    }
+                }
                 const frame = this.replayFrames.find(f => f.t === this.globalWaveTimer);
                 if (frame && frame.i) {
                     for (const [pid, mask] of Object.entries(frame.i)) {
@@ -255,7 +275,16 @@ export class Room {
             this.tracker['entry'].mode = 'MP';
         }
         this.trySpawnPlayer(id, type, { ...stats, joinedAtTick: this.globalWaveTimer });
-        this.tracker.initPlayer(id, stats?.uuid || id, stats?.alias || 'UNK');
+        const pe = this.ecs.getPlayerEntity(id);
+        const p = pe !== undefined ? this.ecs.players.get(pe) : undefined;
+        this.tracker.initPlayer(id, stats?.uuid || id, stats?.alias || 'UNK', {
+            shipType: p?.type || type,
+            team: p?.team,
+            homeSpawnX: p?.homeSpawnX,
+            homeSpawnY: p?.homeSpawnY,
+            isBot: Boolean(stats?.isBot),
+            joinedAtTick: this.globalWaveTimer
+        });
         if (this.floraBurns.size > 0) {
             const burns = Array.from(this.floraBurns.entries()).map(([idx, b]) => ({ idx, originT: b.originT }));
             this.emitToPlayer(id, 'flora_burn_sync', burns);
@@ -418,6 +447,16 @@ export class Room {
                         v.vy = 0;
                         v.angularVelocity = 0;
                     }
+                    if (!this.isReplayMode) {
+                        this.tracker.initPlayer(id, p.uuid, p.alias, {
+                            shipType: p.type,
+                            team: p.team,
+                            homeSpawnX: p.homeSpawnX,
+                            homeSpawnY: p.homeSpawnY,
+                            isBot: this.ecs.bots.has(playerEntity) || Boolean(p.isBotPilot),
+                            joinedAtTick: p.joinedAtTick
+                        });
+                    }
                     if (wasRespawn) {
                         this.ecs.events.push({
                             type: 'floating_text',
@@ -465,11 +504,42 @@ export class Room {
         botPathWorker.removeRoom(this.roomId);
     }
 
-    resetLevel() {
+    resetLevel(keepTeamsAndBots: boolean = false) {
         if (this.isReplayMode) return;
         if (this.gameOverResetTimer) {
             clearTimeout(this.gameOverResetTimer);
             this.gameOverResetTimer = null;
+        }
+        const savedBots: { id: string; type: 'classic' | 'modern'; stats: Partial<PlayerStats>; botState: any }[] = [];
+        if (keepTeamsAndBots) {
+            for (const [be, bState] of this.ecs.bots.entries()) {
+                const bp = this.ecs.players.get(be);
+                if (bp) {
+                    savedBots.push({
+                        id: bp.id,
+                        type: bp.type,
+                        stats: {
+                            score: 0,
+                            uuid: bp.uuid,
+                            alias: bp.alias,
+                            isBot: true,
+                            shipType: bp.type,
+                            lives: SERVER_CONFIG.defaultLives,
+                            team: bp.team,
+                            homeSpawnX: bp.homeSpawnX,
+                            homeSpawnY: bp.homeSpawnY
+                        },
+                        botState: {
+                            ...bState,
+                            state: 'takeoff',
+                            stateTimer: 20,
+                            path: [],
+                            pathTimer: 0,
+                            pathPending: false
+                        }
+                    });
+                }
+            }
         }
         this.tracker.finishAndSave();
         this.tracker = new GameTracker(this.levelIndex, this.category, this.getRoomMode(), this.getPhysicsHash(), SERVER_CONFIG.debugMode);
@@ -480,7 +550,9 @@ export class Room {
         this.lastInputMasks.clear();
         this.floraBurns.clear();
         this.floraHeat.clear();
-        this.assignedHomes.clear();
+        if (!keepTeamsAndBots) {
+            this.assignedHomes.clear();
+        }
         this.dogfightCompleted = false;
         if (this.initialRawMap) {
             this.level.rawMap = JSON.parse(JSON.stringify(this.initialRawMap));
@@ -490,10 +562,21 @@ export class Room {
         for (const [e] of Array.from(this.ecs.flyingEnemies.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.cargos.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.powerups.entries())) this.ecs.destroy(e);
-        for (const [e] of Array.from(this.ecs.bots.entries())) this.ecs.destroy(e);
+        for (const [e] of Array.from(this.ecs.bots.entries())) {
+            this.ecs.destroy(e);
+        }
         for (const [e] of Array.from(this.ecs.bullets.entries())) this.ecs.destroy(e);
         for (const [e] of Array.from(this.ecs.homingMissiles.entries())) this.ecs.destroy(e);
         this.spawnEntities();
+        if (keepTeamsAndBots && savedBots.length > 0) {
+            for (const sb of savedBots) {
+                this.trySpawnPlayer(sb.id, sb.type, { ...sb.stats, joinedAtTick: 0 }, true);
+                const newEnt = this.ecs.getPlayerEntity(sb.id);
+                if (newEnt !== undefined) {
+                    this.ecs.bots.set(newEnt, sb.botState);
+                }
+            }
+        }
         botPathWorker.syncLevel(this.roomId, this.level, true);
         this.io.to(this.channel).emit('initLevel', this.level);
         this.io.to(this.channel).emit('flora_burn_reset');
