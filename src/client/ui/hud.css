@@ -300,16 +300,116 @@ html, body {
 /* Isolated Debug Telemetry Panel */
 #debug-hud-panel {
     position: absolute;
-    z-index: 45;
-    pointer-events: none;
-    background: rgba(5, 8, 12, 0.78);
-    border: 1px solid rgba(100, 116, 139, 0.35);
-    padding: calc(4px * var(--gf-ui-scale)) calc(8px * var(--gf-ui-scale));
+    z-index: 95;
+    pointer-events: auto;
+    background: rgba(6, 10, 16, 0.90);
+    border: 1px solid rgba(0, 242, 254, 0.32);
+    padding: calc(5px * var(--gf-ui-scale)) calc(9px * var(--gf-ui-scale));
     font-family: var(--font-hud);
     font-size: var(--fs-xs);
-    color: var(--col-text-dim);
+    color: var(--col-text-main);
     display: flex;
+    flex-direction: column;
+    gap: calc(6px * var(--gf-ui-scale));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+.perf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: calc(10px * var(--gf-ui-scale));
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.perf-hdr-left {
+    display: flex;
+    align-items: center;
+    gap: calc(6px * var(--gf-ui-scale));
+}
+
+.perf-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--col-emerald);
+    display: inline-block;
+}
+
+.perf-dot.recording {
+    background: var(--col-crimson);
+    box-shadow: 0 0 8px var(--col-crimson);
+}
+
+.perf-sep { color: var(--col-text-dim); }
+.perf-metric b { color: var(--col-cyan); }
+
+.perf-hdr-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.perf-btn {
+    font-family: var(--font-hud);
+    font-size: var(--fs-xs);
+    background: rgba(15, 25, 38, 0.9);
+    border: 1px solid rgba(0, 242, 254, 0.35);
+    color: #fff;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+
+.perf-btn:hover { background: rgba(0, 242, 254, 0.22); }
+
+.perf-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid rgba(0, 242, 254, 0.2);
+    padding-top: 6px;
+    width: calc(290px * var(--gf-ui-scale));
+}
+
+.perf-section-title {
+    color: var(--col-gold);
+    font-size: var(--fs-xs);
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 2px;
+}
+
+.perf-kv-grid, .perf-toggle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+
+.perf-pass-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.perf-pass-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.perf-toggle-btn {
+    font-family: var(--font-hud);
+    font-size: 9px;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid var(--col-crimson);
+    color: var(--col-crimson);
+    padding: 3px 4px;
+    cursor: pointer;
+}
+
+.perf-toggle-btn.active {
+    background: rgba(16, 185, 129, 0.16);
+    border-color: var(--col-emerald);
+    color: var(--col-emerald);
 }
 
 .debug-pos-top-left     { top: calc(8px * var(--gf-ui-scale)); left: calc(8px * var(--gf-ui-scale)); }

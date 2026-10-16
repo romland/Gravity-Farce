@@ -141,15 +141,6 @@ export class HudManager {
         for (const id of ids) {
             this.els[id] = document.getElementById(id);
         }
-
-        this.debugEl.innerHTML = `
-            <span>PING <b id="dbg-ping">0</b>ms</span>
-            <span id="dbg-net" style="display:none;">NET ↓<b id="dbg-in">0.0</b>KB ↑<b id="dbg-out">0.0</b>KB</span>
-        `;
-        this.els['dbg-ping'] = document.getElementById('dbg-ping');
-        this.els['dbg-net'] = document.getElementById('dbg-net');
-        this.els['dbg-in'] = document.getElementById('dbg-in');
-        this.els['dbg-out'] = document.getElementById('dbg-out');
         this.applyDebugPlacement();
     }
 
@@ -316,17 +307,6 @@ export class HudManager {
             }
         } else if (category === 'dogfight') {
             this.updateDogfightRoster(serverState.players);
-        }
-
-        // 5. Isolated Debug Telemetry (TODO #14)
-        const showDebugPanel = Boolean(HUD_CONFIG.debugVisible);
-        this.setDisplay('dbgRootDisp', this.debugEl, showDebugPanel ? 'flex' : 'none');
-        if (!showDebugPanel) return;
-        this.setVal('dbgPing', this.els['dbg-ping'], String(myServerPlayer.ping || 0));
-        this.setDisplay('dbgNetDisp', this.els['dbg-net'], debugMode ? 'inline' : 'none');
-        if (debugMode) {
-            this.setVal('dbgIn', this.els['dbg-in'], (metrics.bytesIn / 1024).toFixed(1));
-            this.setVal('dbgOut', this.els['dbg-out'], (metrics.bytesOut / 1024).toFixed(1));
         }
     }
 

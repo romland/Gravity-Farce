@@ -5,10 +5,13 @@ import { FloraLayer } from './renderer/FloraLayer.js';
 import { MicroDetailsLayer } from './renderer/MicroDetailsLayer.js';
 import { HudManager, formatRaceClock } from './ui/HudManager.js';
 import { DialogManager } from './ui/DialogManager.js';
+import { clientProfiler } from './perf/ClientProfiler.js';
+import { PerfOverlay, PERF_LAYER_TOGGLES } from './ui/PerfOverlay.js';
 
 const stageEl = document.getElementById('canvas-stage');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+clientProfiler.instrumentCanvasContext(ctx);
 const hudRootEl = document.getElementById('hud-layer');
 const debugHudEl = document.getElementById('debug-hud-panel');
 
@@ -28,6 +31,25 @@ window.gfRenderer = {
     flora: new FloraLayer(),
     details: new MicroDetailsLayer()
 };
+
+const perfOverlay = new PerfOverlay(debugHudEl, clientProfiler, () => ({
+    gfRenderer: window.gfRenderer,
+    canvas,
+    levelName: level?.name || 'CAVERN',
+    mode: mySessionMode,
+    viewW: VIEW_W,
+    viewH: VIEW_H,
+    entityCounts: {
+        Players: Object.keys(renderState.players || {}).length,
+        Bullets: (serverState.bullets || []).length,
+        Turrets: (serverState.turrets || []).length,
+        Tanks: (serverState.tanks || []).length,
+        Flying: (serverState.flying || []).length,
+        Particles: particles.length,
+        FloraAnchors: window.gfRenderer?.flora?.anchors?.length || 0,
+        WaterPools: window.gfRenderer?.details?.waterPools?.length || 0
+    }
+}));
 
 let myUuid = localStorage.getItem('gf_uuid');
 if (!myUuid) {
@@ -333,6 +355,8 @@ function playTurretSound(soundId) {
 }
 
 socket.on('state', (state) => {
+    const endNetState = clientProfiler.begin('Stage.NetStateReceive');
+    clientProfiler.markHz('Socket.StateIn');
     serverState = state;
     if (state.events) {
         for (const ev of state.events) {
@@ -395,6 +419,7 @@ socket.on('state', (state) => {
             renderState.players[id].missingFrames = 0;
         }
     }
+    endNetState();
 });
 
 function spawnParticles(x, y, vx, vy, color, count, lifeSpan) {
@@ -688,9 +713,11 @@ window.printEnemyPathMap = function() {
 };
 
 let _gameLoopCrashed = false;
-function gameLoop() {
+function gameLoop(timestamp = performance.now()) {
     if (_gameLoopCrashed) return;
     requestAnimationFrame(gameLoop);
+    clientProfiler.beginFrame(timestamp);
+    clientProfiler.markHz('Engine.RenderLoop');
     inputManager.updateGamepad();
     try {
         const timeSec = performance.now() * 0.001;
@@ -701,14 +728,20 @@ function gameLoop() {
             renderCamY += (Math.random() - 0.5) * cameraShake;
             cameraShake *= 0.9;
         }
-        if (window.gfRenderer) {
-            window.gfRenderer.parallax.draw(ctx, { x: renderCamX, y: renderCamY }, timeSec);
+        if (window.gfRenderer && PERF_LAYER_TOGGLES.parallax) {
+            clientProfiler.measure('Pass.Parallax', () => {
+                window.gfRenderer.parallax.draw(ctx, { x: renderCamX, y: renderCamY }, timeSec);
+            });
         } else {
             ctx.fillStyle = '#050505';
             ctx.fillRect(0, 0, VIEW_W, VIEW_H);
         }
-        if (!level) return;
+        if (!level) {
+            clientProfiler.endFrame();
+            return;
+        }
 
+        const endInterp = clientProfiler.begin('Stage.Interpolation');
         for (const id in serverState.players) {
             const s = serverState.players[id];
             const r = renderState.players[id];
@@ -736,6 +769,7 @@ function gameLoop() {
                 r.isBot = s.isBot; r.botState = s.botState; r.botPath = s.botPath;
             }
         }
+        endInterp();
 
         let myServerPlayer = serverState.players[myId];
         let myPlayer = renderState.players[myId];
@@ -754,7 +788,10 @@ function gameLoop() {
             if (inputManager.state.cam.left) camera.x -= camSpeed;
             if (inputManager.state.cam.right) camera.x += camSpeed;
         } else if (myPlayer && myServerPlayer) {
-            hudManager.update(myServerPlayer, serverState, level, currentRoomRules, debugMode, metrics);
+            clientProfiler.measure('Stage.HudUpdate', () => {
+                hudManager.update(myServerPlayer, serverState, level, currentRoomRules, debugMode, metrics);
+            });
+            perfOverlay.update(timestamp, myServerPlayer, debugMode, metrics);
             let targetX = Math.max(0, Math.min(myPlayer.x - VIEW_W / 2, level.width - VIEW_W));
             let targetY = Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, level.height - VIEW_H));
             camera.x += (targetX - camera.x) * 0.1;
@@ -765,14 +802,29 @@ function gameLoop() {
         ctx.translate(Math.floor(-renderCamX), Math.floor(-renderCamY));
 
         if (window.gfRenderer) {
-            window.gfRenderer.rock.drawRecessed(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level);
-            if (window.gfRenderer.details) {
-                window.gfRenderer.details.drawWaterPools(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level, renderState.players, serverState.bullets, timeSec);
+            if (PERF_LAYER_TOGGLES.recessed) {
+                clientProfiler.measure('Pass.RecessedRock', () => {
+                    window.gfRenderer.rock.drawRecessed(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level);
+                });
             }
-            window.gfRenderer.rock.draw(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H);
-            window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
+            if (window.gfRenderer.details && PERF_LAYER_TOGGLES.water) {
+                clientProfiler.measure('Pass.WaterPools', () => {
+                    window.gfRenderer.details.drawWaterPools(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level, renderState.players, serverState.bullets, timeSec);
+                });
+            }
+            if (PERF_LAYER_TOGGLES.rock) {
+                clientProfiler.measure('Pass.ForegroundRock', () => {
+                    window.gfRenderer.rock.draw(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H);
+                });
+            }
+            if (PERF_LAYER_TOGGLES.prefabs) {
+                clientProfiler.measure('Pass.Prefabs', () => {
+                    window.gfRenderer.prefabs.draw(ctx, level, timeSec, renderState.players);
+                });
+            }
         }
 
+        const endEnts = clientProfiler.begin('Pass.EntitiesAndShips');
         if (serverState.cargos) serverState.cargos.forEach(drawCargo);
         if (serverState.powerups) serverState.powerups.forEach(drawPowerup);
         if (serverState.turrets) serverState.turrets.forEach(drawTurret);
@@ -782,6 +834,7 @@ function gameLoop() {
         for (const id in renderState.players) {
             drawShip(renderState.players[id], id === myId);
         }
+        endEnts();
 
         if (debugMode && showDebugLines) {
             for (const id in renderState.players) {
@@ -824,6 +877,7 @@ function gameLoop() {
             }
         }
 
+        const endParticles = clientProfiler.begin('Pass.Particles');
         for (const b of serverState.bullets) {
             if (b.isPlayer) {
                 ctx.fillStyle = '#ff8';
@@ -836,20 +890,32 @@ function gameLoop() {
             }
         }
         updateAndDrawParticles(ctx);
+        endParticles();
 
-        if (window.gfRenderer?.details) {
-            window.gfRenderer.details.updateAndDraw(
-                ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H,
-                level, renderState.players, serverState.turrets, serverState.bullets,
-                timeSec, window.gfRenderer.rock, window.gfRenderer.flora
-            );
+        if (window.gfRenderer?.details && PERF_LAYER_TOGGLES.details) {
+            clientProfiler.measure('Pass.MicroDetails', () => {
+                window.gfRenderer.details.updateAndDraw(
+                    ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H,
+                    level, renderState.players, serverState.turrets, serverState.bullets,
+                    timeSec, window.gfRenderer.rock, window.gfRenderer.flora
+                );
+            });
         }
 
         if (window.gfRenderer) {
-            window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
-            window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level, timeSec, renderState.players);
+            if (PERF_LAYER_TOGGLES.flora) {
+                clientProfiler.measure('Pass.FloraCanopy', () => {
+                    window.gfRenderer.flora.updateAndDraw(ctx, renderState.players, timeSec, spawnParticles, level, serverState.bullets);
+                });
+            }
+            if (PERF_LAYER_TOGGLES.glow) {
+                clientProfiler.measure('Pass.EnvGlow', () => {
+                    window.gfRenderer.prefabs.drawEnvironmentalGlow(ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H, level, timeSec, renderState.players);
+                });
+            }
         }
 
+        const endOverlays = clientProfiler.begin('Pass.FloatingTextAndOverlays');
         for (let i = floatingTexts.length - 1; i >= 0; i--) {
             const ft = floatingTexts[i];
             ft.y -= 0.6;
@@ -898,7 +964,9 @@ function gameLoop() {
         }
 
         updateAndDrawFireworks(ctx);
+        endOverlays();
         ctx.restore();
+        clientProfiler.endFrame();
     } catch (e) {
         _gameLoopCrashed = true;
         console.error("CLIENT LOOP CRASH:", e);
