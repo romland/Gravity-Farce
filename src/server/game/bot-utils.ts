@@ -4,7 +4,7 @@ import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
 import { getTurretSpecByTile } from './turret-defs';
-import { CLASSIC_GRAVITY } from './player-classic';
+import { GRAVITY } from './player-classic';
 
 export interface CheckpointGate {
 	tileId: number;
@@ -97,7 +97,7 @@ export function applyAngularControl(p: import('../core/types').Player, t: import
 }
 
 export function predictGlideCollision(t: { x: number, y: number }, v: { vx: number, vy: number }, ticks: number, room: Room, weight: number = 0): boolean {
-    const baseGravity = CLASSIC_GRAVITY;
+    const baseGravity = GRAVITY;
 	const gravity = baseGravity * (1.0 + (weight * 0.40));
 	let prevX = t.x;
 	let prevY = t.y;
@@ -581,7 +581,7 @@ export function dumpAsciiMap(ecs: Registry, room: Room, botX: number, botY: numb
 			} else if (pathSet.has(`${x},${y}`)) {
 				row += '*';
 			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id === 0x15 || TILE_DICTIONARY[map[y]?.[x]]?.id === 0x29) {
-				row += '—';
+				row += '-';
 			} else if (TILE_DICTIONARY[map[y]?.[x]]?.id >= 0xD1 && TILE_DICTIONARY[map[y]?.[x]]?.id <= 0xD8) {
 				// pickup stuff
 				row += '•';

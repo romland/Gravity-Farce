@@ -800,4 +800,4 @@ setInterval(() => {
     profiler.end();
 }, 1000 / SERVER_CONFIG.tickRate);
 
-server.listen(SERVER_CONFIG.port, () => console.log(`Gravity Farce is running on http://localhost:${SERVER_CONFIG.port}`));
+server.listen(SERVER_CONFIG.port, () => console.log(`Gravity-Farce is running on http://localhost:${SERVER_CONFIG.port}`));

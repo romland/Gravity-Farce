@@ -1,6 +1,6 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { spawnClassicPlayer, CLASSIC_GRAVITY } from './player-classic';
+import { spawnClassicPlayer, GRAVITY } from './player-classic';
 import { SERVER_CONFIG } from '../core/config';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, findSafePadPosition, logDogfightCrash, predictGlideCollision } from './bot-utils';
@@ -279,7 +279,7 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
 
     const desVx = (dirX / distToAim) * targetSpeed;
     const desVy = (dirY / distToAim) * targetSpeed;
-    const weightGravity = CLASSIC_GRAVITY * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
+    const weightGravity = GRAVITY * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
     const forceX = desVx - v.vx + repelX;
     const forceY = desVy - v.vy - weightGravity + repelY; // Compensate for dynamic cargo weight!
 

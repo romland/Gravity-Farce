@@ -271,7 +271,7 @@ export class DialogManager {
             const empty = document.createElement('div');
             empty.className = 'hud-label';
             empty.style.textAlign = 'center';
-            empty.textContent = 'NO ACTIVE SECTORS DETECTED';
+            empty.textContent = 'NO ACTIVE CAVERNS DETECTED';
             container.appendChild(empty);
             return;
         }

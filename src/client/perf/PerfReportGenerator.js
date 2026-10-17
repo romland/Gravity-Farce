@@ -78,7 +78,7 @@ export class PerfReportGenerator {
             .map(([k, v]) => `| ${k.padEnd(24)} | ${v.hz.toFixed(1)} Hz |`);
 
         return [
-            `### Gravity Farce — Client 2D & Network Performance Report`,
+            `### Gravity Farce - Client 2D & Network Performance Report`,
             isSnapshot ? `> **60-FRAME ROLLING SNAPSHOT**` : `> **RECORDED BENCHMARK (${samples} frames / ${durSec.toFixed(2)}s)**`,
             ``,
             `**Date:** ${new Date().toISOString()}  `,

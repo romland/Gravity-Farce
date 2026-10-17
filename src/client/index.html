@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Gravity Farce — Zarkos Subterranean Transit</title>
+    <title>Gravity-Farce</title>
     <link rel="stylesheet" href="ui/hud.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="AssetManager.js"></script>
@@ -86,7 +86,7 @@
         <!-- Room / Session Mode Modal -->
         <div id="room-modal" class="gmodal" style="width:460px;">
             <div class="gmodal-header">
-                <span class="gmodal-title">SECTOR DEPLOYMENT</span>
+                <span class="gmodal-title">CAVERN DEPLOYMENT</span>
                 <button class="gmodal-close" data-close-modal="room-modal" type="button">✕</button>
             </div>
             <div id="room-modal-current" class="hud-label" style="text-align:center; margin-bottom:12px;">CURRENT: SOLO INSTANCE</div>
@@ -94,12 +94,12 @@
                 <button class="gbtn gbtn-emerald gbtn-lg" id="btn-room-sp" style="flex:1;" type="button">NEW SOLO (SP)</button>
                 <button class="gbtn gbtn-amber gbtn-lg" id="btn-room-mp" style="flex:1;" type="button">PUBLIC MP</button>
             </div>
-            <div class="hud-label" style="margin-bottom:6px;">JOIN / CREATE MP SECTOR BY 4-CHAR CODE</div>
+            <div class="hud-label" style="margin-bottom:6px;">JOIN / CREATE MP CAVERN BY 4-CHAR CODE</div>
             <div style="display:flex; gap:8px; margin-bottom:14px;">
                 <input type="text" id="room-code-input" class="ginput" maxlength="4" placeholder="CODE" style="font-size:var(--fs-lg);">
                 <button class="gbtn gbtn-lg" id="btn-room-join-code" type="button">JOIN MP</button>
             </div>
-            <div class="hud-label" style="margin-bottom:6px;">ACTIVE SECTORS ON SERVER</div>
+            <div class="hud-label" style="margin-bottom:6px;">ACTIVE CAVERNS ON SERVER</div>
             <div id="active-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
         </div>
 
@@ -134,7 +134,7 @@
         <!-- Pilot Registration Modal -->
         <div id="login-modal" class="gmodal" style="width:400px;">
             <div class="gmodal-header">
-                <span class="gmodal-title">PILOT REGISTRATION // 2312</span>
+                <span class="gmodal-title">ZARKOS PILOT REGISTRATION</span>
             </div>
             <div class="hud-label" style="text-align:center; margin-bottom:6px;">ENTER 3-LETTER CALLSIGN</div>
             <input type="text" autofocus id="alias-input" class="ginput" maxlength="3" placeholder="AAA" style="margin-bottom:12px;">

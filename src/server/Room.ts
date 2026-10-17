@@ -316,7 +316,7 @@ export class Room {
         if (!this.isReplayMode) {
             this.emitToPlayer(id, 'game_hint', {
                 id: `deploy_${this.category}`,
-                title: `${this.category.toUpperCase()} — ${this.ecs.roomRules.flavor}`,
+                title: `${this.category.toUpperCase()} - ${this.ecs.roomRules.flavor}`,
                 body: this.ecs.roomRules.objectiveText,
                 showKeys: this.levelIndex === 0
             });

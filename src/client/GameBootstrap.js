@@ -193,7 +193,7 @@ const inputManager = new InputManager(null, (inputs) => {
     }
 });
 
-// Fast O(1) packet byte estimator — NEVER call JSON.stringify on every 60Hz state frame!
+// Fast O(1) packet byte estimator, NEVER call JSON.stringify on every 60Hz state frame!
 function estimatePayloadBytes(eventName, arg) {
     if (!arg) return eventName.length;
     if (typeof arg === 'string') return eventName.length + arg.length;
@@ -256,7 +256,7 @@ socket.on('room_info', (info) => {
     }
     const curEl = document.getElementById('room-modal-current');
     if (curEl) {
-        curEl.textContent = `SECTOR: ${mySessionMode} #${info.joinCode} | PILOTS: ${info.playerCount || 1}`;
+        curEl.textContent = `CAVERN: ${mySessionMode} #${info.joinCode} | PILOTS: ${info.playerCount || 1}`;
     }
 });
 
@@ -291,7 +291,7 @@ socket.on('playfield_announce', (data) => {
 socket.on('game_over', (data) => {
     const modal = document.getElementById('gameover-modal');
     const sub = document.getElementById('gameover-sub');
-    if (sub) sub.textContent = `FINAL SCORE: ${String(data?.score || 0).padStart(6, '0')} — FLEET DEPLETED`;
+    if (sub) sub.textContent = `FINAL SCORE: ${String(data?.score || 0).padStart(6, '0')} - FLEET DEPLETED`;
     if (modal) modal.style.display = 'flex';
 });
 

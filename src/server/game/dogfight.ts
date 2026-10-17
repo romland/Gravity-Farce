@@ -108,8 +108,8 @@ export function sysDogfight(ecs: Registry, room: Room) {
         }
 
         const winBanner = winningTeam === 'DRAW'
-            ? 'DRAW — MUTUAL ELIMINATION!'
-            : `VICTORY — TEAM ${winningTeam} STANDS TRIUMPHANT!`;
+            ? 'DRAW - MUTUAL ELIMINATION!'
+            : `VICTORY - TEAM ${winningTeam} STANDS TRIUMPHANT!`;
 
         for (const cid of room.activeClientIds) {
             room.emitToPlayer(cid, 'playfield_announce', {

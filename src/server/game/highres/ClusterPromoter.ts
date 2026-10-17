@@ -62,7 +62,7 @@ export class ClusterPromoter {
             cluster.push({ x: cx, y: cy, tid });
 
             const neighbors: [number, number][] = family === 'RACE_MARKER'
-                ? [] // Race markers are strictly individual 32x32 tiles — never merge!
+                ? [] // Race markers are strictly individual 32x32 tiles - never merge!
                 : (family === 'PAD'
                     ? [[cx + 1, cy], [cx - 1, cy]] // Pads group strictly horizontally
                     : [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]]);
