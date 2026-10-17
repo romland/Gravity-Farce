@@ -648,13 +648,21 @@ io.on('connection', (socket) => {
 
             if (!p.isDead) {
                 const prevShootInput = p.inputs.shoot;
+
+                let aX = undefined;
+                let aUp = undefined;
+                if (SERVER_CONFIG.allowAnalogControl) {
+                    if (Number.isFinite(rawInputs?.analogX)) aX = Math.max(-1, Math.min(1, rawInputs.analogX));
+                    if (Number.isFinite(rawInputs?.analogUp)) aUp = Math.max(0, Math.min(1, rawInputs.analogUp));
+                }
+
                 p.inputs = {
                     up: Boolean(rawInputs?.up),
                     left: Boolean(rawInputs?.left),
                     right: Boolean(rawInputs?.right),
                     shoot: Boolean(rawInputs?.shoot),
-                    analogX: SERVER_CONFIG.allowAnalogControl && typeof rawInputs?.analogX === 'number' ? Math.max(-1, Math.min(1, rawInputs.analogX)) : undefined,
-                    analogUp: SERVER_CONFIG.allowAnalogControl && typeof rawInputs?.analogUp === 'number' ? Math.max(0, Math.min(1, rawInputs.analogUp)) : undefined
+                    analogX: aX,
+                    analogUp: aUp
                 };
 
                 // 0x00031AF6 Debounce Lock: Latch a shot only on rising edge or explicit client tap edge
