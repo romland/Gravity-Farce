@@ -57,13 +57,14 @@ export class Room {
         public raceBumpModifier: number = 0.4,
         public isReplayMode: boolean = false,
         public sessionMode: 'SP' | 'MP' = 'SP',
-        public joinCode: string = ''
+        public joinCode: string = '',
+        initialSeed?: number
     ) {
         if (level.rawMap) {
             this.initialRawMap = JSON.parse(JSON.stringify(level.rawMap));
         }
         this.category = getLevelCategory(levelIndex);
-        this.seed = Date.now();
+        this.seed = initialSeed !== undefined ? initialSeed : Date.now();
         this.prng = createPRNG(this.seed);
         this.tracker = new GameTracker(levelIndex, this.category, this.sessionMode, getActivePhysicsHash(), SERVER_CONFIG.debugMode);
         if (this.isReplayMode) {
@@ -183,11 +184,14 @@ export class Room {
                     if (p.inputs.left) mask |= 2;
                     if (p.inputs.right) mask |= 4;
                     if (p.inputs.shoot) mask |= 8;
+                    const w = this.ecs.weaponMounts.get(e);
+                    if (w?.shootLatch) mask |= 16;
                     if (p.inputs.analogX) mask |= ((Math.round(p.inputs.analogX * 127) & 0xFF) << 8);
                     if (p.inputs.analogUp) mask |= ((Math.round(p.inputs.analogUp * 255) & 0xFF) << 16);
-                    if (this.lastInputMasks.get(p.id) !== mask) {
+                    // Always log if shootLatch (bit 16) is present or if continuous input state changed
+                    if ((mask & 16) !== 0 || this.lastInputMasks.get(p.id) !== (mask & ~16)) {
                         frameInputs[p.id] = mask;
-                        this.lastInputMasks.set(p.id, mask);
+                        this.lastInputMasks.set(p.id, mask & ~16);
                     }
                 }
                 if (Object.keys(frameInputs).length > 0) {
@@ -209,23 +213,27 @@ export class Room {
                         const e = this.ecs.getPlayerEntity(pid);
                         if (e !== undefined) {
                             const p = this.ecs.players.get(e)!;
-                            p.inputs.up = ((mask as number) & 1) !== 0;
-                            p.inputs.left = ((mask as number) & 2) !== 0;
-                            p.inputs.right = ((mask as number) & 4) !== 0;
-                            p.inputs.shoot = ((mask as number) & 8) !== 0;
-                            const analogByte = ((mask as number) >> 8) & 0xFF;
+                            const prevShoot = p.inputs.shoot;
+                            const numMask = mask as number;
+                            p.inputs.up = (numMask & 1) !== 0;
+                            p.inputs.left = (numMask & 2) !== 0;
+                            p.inputs.right = (numMask & 4) !== 0;
+                            p.inputs.shoot = (numMask & 8) !== 0;
+                            const analogByte = (numMask >> 8) & 0xFF;
                             if (analogByte !== 0) {
                                 p.inputs.analogX = ((analogByte << 24) >> 24) / 127.0; // Bitwise sign extension
                             } else {
                                 p.inputs.analogX = undefined;
                             }
-                            const analogUpByte = ((mask as number) >> 16) & 0xFF;
+                            const analogUpByte = (numMask >> 16) & 0xFF;
                             if (analogUpByte !== 0) {
                                 p.inputs.analogUp = analogUpByte / 255.0;
                             } else {
                                 p.inputs.analogUp = undefined;
-                            }                            
-                            if (p.inputs.shoot) {
+                            }
+                            // CRITICAL FIX: Only latch a shot on an explicit shootLatch bit (16) OR a true rising edge (!prevShoot && p.inputs.shoot).
+                            // Never re-latch just because left/right/up changed while shoot was held down!
+                            if ((numMask & 16) !== 0 || (!prevShoot && p.inputs.shoot)) {
                                 const w = this.ecs.weaponMounts.get(e);
                                 if (w) w.shootLatch = true;
                             }
@@ -235,6 +243,13 @@ export class Room {
             }
             this.globalWaveTimer++;
             for (const [e, p] of this.ecs.players.entries()) {
+                if (p.isDead && p.respawnTimer !== undefined && p.respawnTimer > 0) {
+                    p.respawnTimer--;
+                    if (p.respawnTimer <= 0) {
+                        p.respawnTimer = undefined;
+                        p.respawnRequest = true;
+                    }
+                }
                 if (p.respawnRequest) { p.respawnRequest = false; if (p.lives > 0) this.trySpawnPlayer(p.id, p.type); }
             }
 

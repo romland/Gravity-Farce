@@ -9,6 +9,7 @@ import { recordDB, getActivePhysicsHash } from '../core/records';
 import { tagPlayerDamage, attributeDogfightDeath } from './dogfight';
 import { checkShipBoxCollision, isNearSolidTile } from './player-shared';
 import { SERVER_CONFIG } from '../core/config';
+import { scaleAmigaFrameTimer } from '../core/math';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -141,7 +142,8 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
             room.checkAllPlayersOutOfLives();
         }
     } else {
-        setTimeout(() => { p.respawnRequest = true; }, 3000);
+        // Deterministic tick-based respawn timer (3.0 seconds = 150 Amiga PAL frames = 180 ticks at 60Hz)
+        p.respawnTimer = Math.round(scaleAmigaFrameTimer(150));
     }
 }
 

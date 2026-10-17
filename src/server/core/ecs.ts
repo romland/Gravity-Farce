@@ -47,6 +47,7 @@ export interface Player {
     isDead: boolean;
     inputs: Inputs;
     respawnRequest: boolean;
+    respawnTimer?: number;
     angleAcc: number;
     angleStep: number;
     isLanded: boolean;

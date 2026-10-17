@@ -505,10 +505,10 @@ io.on('connection', (socket) => {
                 SERVER_CONFIG.lethalRacingEnemies,
                 SERVER_CONFIG.raceBumpModifier,
                 true,
-                replayMode
+                replayMode,
+                '',
+                replay.replayData.seed
             );
-            newRoom.seed = replay.replayData.seed;
-            newRoom.prng = createPRNG(newRoom.seed);
 
             // Namespace replay actor IDs so they can NEVER collide with live socket IDs
             const rawFrames = Array.isArray(replay.replayData.frames) ? replay.replayData.frames : [];
