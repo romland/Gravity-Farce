@@ -11,10 +11,9 @@ export function getShipPolygon(x: number, y: number, angle: number, baseSize: nu
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const nose = { x: x + cos * w, y: y + sin * h };
-    const lw = { x: x - cos * w - sin * (w * 0.7), y: y - sin * h + cos * (w * 0.7) };
-    const rw = { x: x - cos * w + sin * (w * 0.7), y: y - sin * h - cos * (w * 0.7) };
-    const eng = { x: x - cos * (w * 0.5), y: y - sin * (h * 0.5) };
-    return [[nose, rw], [rw, eng], [eng, lw], [lw, nose]];
+    const lw = { x: x - cos * (w * 0.8) - sin * h, y: y - sin * (h * 0.8) + cos * h };
+    const rw = { x: x - cos * (w * 0.8) + sin * h, y: y - sin * (h * 0.8) - cos * h };
+    return [[nose, rw], [rw, lw], [lw, nose]];
 }
 
 

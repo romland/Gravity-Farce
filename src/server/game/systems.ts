@@ -54,7 +54,7 @@ export function sysWeapons(ecs: Registry) {
                 mount.charges--;
             } else if (mount.activeModeId === 0xD6) {
                 // PARALLEL Double Shot Mode
-                // This is NOT used in game; does not exist in any level
+                // This is NOT used in game (yet), but keeping it around!
                 const perpX = -Math.sin(t.angle) * 6;
                 const perpY = Math.cos(t.angle) * 6;
                 const noseX = t.x + Math.cos(t.angle) * offset;

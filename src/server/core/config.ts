@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: ServerConfig = {
     allowAnalogControl: false, // Toggle for variable thrust/steering precision
     viewWidth: 1600,
     viewHeight: 900,
-    shipScale: 1.0, // Scales both visual ship and collision polygon 1:1 (baked into physicsHash)
+    shipScale: 1.2, // Scales both visual ship and collision polygon 1:1 (baked into physicsHash)
     classicLandingBounce: false // Optional toggle for 0x000352A8 landing bounce
 };
 

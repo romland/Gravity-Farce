@@ -7,6 +7,7 @@ import { HudManager, formatRaceClock } from './ui/HudManager.js';
 import { DialogManager } from './ui/DialogManager.js';
 import { clientProfiler } from './perf/ClientProfiler.js';
 import { PerfOverlay, PERF_LAYER_TOGGLES } from './ui/PerfOverlay.js';
+import { ShipRenderer } from './renderer/ShipRenderer.js';
 
 const stageEl = document.getElementById('canvas-stage');
 const canvas = document.getElementById('gameCanvas');
@@ -18,6 +19,7 @@ const debugHudEl = document.getElementById('debug-hud-panel');
 let VIEW_W = 1600;
 let VIEW_H = 900;
 
+const shipRenderer = new ShipRenderer();
 const hudManager = new HudManager(stageEl, canvas, hudRootEl, debugHudEl);
 hudManager.setViewportSize(VIEW_W, VIEW_H);
 window.addEventListener('resize', () => hudManager.recalculateLayout());
@@ -589,73 +591,7 @@ function lerpAngle(a, b, amt) {
 }
 
 function drawShip(p, isMe) {
-    if (p.isDead) return;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.angle);
-    if (shipScale !== 1.0) {
-        ctx.scale(shipScale, shipScale);
-    }
-    ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-16, 11.2);
-    ctx.lineTo(-8, 0);
-    ctx.lineTo(-16, -11.2);
-
-    const shipStroke = isMe ? '#4facfe' : (p.team === 'E2' ? '#00f2fe' : '#ff4b2b');
-    ctx.strokeStyle = shipStroke;
-    ctx.lineWidth = 1.5;
-    ctx.fillStyle = '#1a1a24';
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0)) {
-        const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
-        ctx.fillStyle = '#4facfe';
-        ctx.beginPath();
-        ctx.moveTo(-8, 0);
-        ctx.lineTo(-16 - Math.random() * 15 * scale, 0);
-        ctx.lineTo(-8, 2 * scale);
-        ctx.lineTo(-8, -2 * scale);
-        ctx.fill();
-    }
-
-    if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right)) {
-        const rcsLen = 6 + Math.random() * 6;
-        ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
-        if (p.inputs.left) {
-            ctx.beginPath(); ctx.moveTo(9, 3.2); ctx.lineTo(10.5, 3.2 + rcsLen); ctx.lineTo(12, 2.2); ctx.closePath(); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(-12, -8.4); ctx.lineTo(-13.5, -8.4 - rcsLen * 0.85); ctx.lineTo(-9.5, -6.7); ctx.closePath(); ctx.fill();
-        } else if (p.inputs.right) {
-            ctx.beginPath(); ctx.moveTo(9, -3.2); ctx.lineTo(10.5, -3.2 - rcsLen); ctx.lineTo(12, -2.2); ctx.closePath(); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(-12, 8.4); ctx.lineTo(-13.5, 8.4 + rcsLen * 0.85); ctx.lineTo(-9.5, 6.7); ctx.closePath(); ctx.fill();
-        }
-    }
-    ctx.restore();
-
-    if (debugMode && showDebugLines) {
-        // Render the exact 4-point dart collision polygon used by getShipPolygon on the server
-        const w = 16 * shipScale;
-        const h = 16 * shipScale;
-        const cos = Math.cos(p.angle);
-        const sin = Math.sin(p.angle);
-        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(p.x + cos * w, p.y + sin * h);
-        ctx.lineTo(p.x - cos * w + sin * (w * 0.7), p.y - sin * h - cos * (w * 0.7));
-        ctx.lineTo(p.x - cos * (w * 0.5), p.y - sin * (h * 0.5));
-        ctx.lineTo(p.x - cos * w - sin * (w * 0.7), p.y - sin * h + cos * (w * 0.7));
-        ctx.closePath();
-        ctx.stroke();
-    }
-    if (!isMe && p.alias) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.font = '10px Aldrich, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.alias, p.x, p.y + 26);
-    }
+    shipRenderer.drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale);
 }
 
 function drawTurret(t) {
@@ -883,11 +819,7 @@ function gameLoop(timestamp = performance.now()) {
                     r.y = predY;
                     r.angle = s.angle;
                 } else {
-                    // const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
-                    // r.x = lerp(r.x, predX, posBlend);
-                    // r.y = lerp(r.y, predY, posBlend);
-                    // r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
-                    const posBlend = id === myId ? 1.0 : blendFactor;
+                    const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
                     r.x = lerp(r.x, predX, posBlend);
                     r.y = lerp(r.y, predY, posBlend);
                     r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
