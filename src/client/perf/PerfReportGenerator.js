@@ -32,7 +32,14 @@ export class PerfReportGenerator {
             'Pass.MicroDetails',
             'Pass.FloraCanopy',
             'Pass.EnvGlow',
-            'Pass.FloatingTextAndOverlays'
+            'Pass.FloatingTextAndOverlays',
+            'Pass.Ship.Setup',
+            'Pass.Ship.Vectors',
+            'Pass.Ship.Flames',
+            'Pass.Ship.RCS',
+            'Pass.Ship.Lights',
+            'Pass.Ship.Debug',
+            'Pass.Ship.Text'
         ];
 
         const passRows = passKeys.map(k => {

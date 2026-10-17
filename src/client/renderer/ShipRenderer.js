@@ -1,3 +1,5 @@
+import { clientProfiler } from '../perf/ClientProfiler.js';
+
 export class ShipRenderer {
     constructor() {
         this.paths = {
@@ -19,12 +21,15 @@ export class ShipRenderer {
 
         const timeSec = performance.now() * 0.001;
 
+        const endSetup = clientProfiler.begin('Pass.Ship.Setup');
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
         if (shipScale !== 1.0) ctx.scale(shipScale, shipScale);
+        endSetup();
 
         // --- NATIVE VECTOR SVG RENDERING (No raster aliasing on rotation) ---
+        const endVectors = clientProfiler.begin('Pass.Ship.Vectors');
         ctx.save();
         ctx.scale(1, 0.85);       // 15% lateral squeeze (Y-axis in this local rotated space)
         ctx.scale(0.671875, 0.671875); // Scale up (43/64) to compensate for SVG transparent padding
@@ -75,18 +80,22 @@ export class ShipRenderer {
         ctx.fill(this.paths.glassRefl);
 
         ctx.restore();
+        endVectors();
 
         // --- CUSTOMIZED DUAL-ENGINE FLAME & RCS ANIMATIONS ---
         if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0)) {
+            const endFlames = clientProfiler.begin('Pass.Ship.Flames');
             const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
             ctx.fillStyle = '#4facfe';
             const flameLen = 14 * scale + Math.random() * 6 * scale;
             
             ctx.beginPath(); ctx.moveTo(-14.5, -3.5); ctx.lineTo(-14.5 - flameLen, -2.25); ctx.lineTo(-14.5, -1.0); ctx.fill();
             ctx.beginPath(); ctx.moveTo(-14.5, 1.0); ctx.lineTo(-14.5 - flameLen, 2.25); ctx.lineTo(-14.5, 3.5); ctx.fill();
+            endFlames();
         }
 
         if (!p.isLanded && p.inputs && (p.inputs.left !== p.inputs.right)) {
+            const endRCS = clientProfiler.begin('Pass.Ship.RCS');
             const rcsLen = 4 + Math.random() * 4;
             ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
             if (p.inputs.left) {
@@ -94,15 +103,19 @@ export class ShipRenderer {
             } else if (p.inputs.right) {
                 ctx.beginPath(); ctx.moveTo(-7.5, -12.3); ctx.lineTo(-9.5, -12.3); ctx.lineTo(-8.5, -12.3 - rcsLen); ctx.fill();
             }
+            endRCS();
         }
 
         if ((timeSec * 2) % 1 > 0.5) {
+            const endLights = clientProfiler.begin('Pass.Ship.Lights');
             ctx.fillStyle = '#ff1133'; ctx.beginPath(); ctx.arc(-11, -11, 1.5, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#11ff55'; ctx.beginPath(); ctx.arc(-11, 11, 1.5, 0, Math.PI * 2); ctx.fill();
+            endLights();
         }
 
         // --- DIAGNOSTICS & DEBUG ---
         if (debugMode && showDebugLines) {
+            const endDebug = clientProfiler.begin('Pass.Ship.Debug');
             const len = 16;
             const halfW = 16 * 0.85;
             ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -113,15 +126,18 @@ export class ShipRenderer {
             ctx.lineTo(-len * 0.8, halfW);
             ctx.closePath();
             ctx.stroke();
+            endDebug();
         }
 
         ctx.restore();
 
         if (!isMe && p.alias) {
+            const endText = clientProfiler.begin('Pass.Ship.Text');
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.font = '10px Aldrich, monospace';
             ctx.textAlign = 'center';
             ctx.fillText(p.alias, p.x, p.y + 26);
+            endText();
         }
     }
 }

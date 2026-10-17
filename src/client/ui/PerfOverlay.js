@@ -180,7 +180,8 @@ export class PerfOverlay {
             'Pass.ForegroundRock', 'Pass.RecessedRock', 'Pass.Parallax',
             'Pass.FloraCanopy', 'Pass.MicroDetails', 'Pass.WaterPools',
             'Pass.Prefabs', 'Pass.EnvGlow', 'Pass.EntitiesAndShips',
-            'Pass.Particles', 'Stage.HudUpdate', 'Stage.NetStateReceive'
+            'Pass.Particles', 'Stage.HudUpdate', 'Stage.NetStateReceive',
+            'Pass.Ship.Setup', 'Pass.Ship.Vectors', 'Pass.Ship.Flames', 'Pass.Ship.RCS', 'Pass.Ship.Lights', 'Pass.Ship.Debug', 'Pass.Ship.Text'
         ];
 
         for (const k of keys) {

@@ -15,18 +15,16 @@ const AMIGA_ANGLE_STEPS = 72;
 const AMIGA_UPRIGHT_STEP = 54;
 const AMIGA_UPRIGHT_ACC = AMIGA_UPRIGHT_STEP * 1000;
 const AMIGA_FULL_CIRCLE_ACC = AMIGA_ANGLE_STEPS * 1000;
+
 // 50Hz PAL rotation rate (1,000 units = 1 step = 5 deg per 50Hz frame = 250 deg/sec)
 const ROTATION_SPEED = scaleAmigaPerFrameDelta(1000);
 
 // 0x00037F78: Baseline gravity (0.010 in 50Hz PAL, tuned to 0.014 so descents pull you down firmly without floatiness)
-export const GRAVITY = scaleAmigaPerFrameDelta(0.014);
-
-// Extra downward gravity added per unit of cargo weight (1 weight = +40%, 3 weight = +120% gravity pull)
-const CARGO_GRAVITY_MULT = 0.40 * 2;
+export const GRAVITY = scaleAmigaPerFrameDelta(0.020);
 
 // 0x0002E196 & 0x00037FBA: Thrust vector multiplied by [02, 05, 00, 00] (2.5x).
 // Scaled from 0.070 at 50Hz PAL with a 1.05x responsiveness trim (was 1.20x when *(60/50) was present).
-const THRUST_IMPULSE = scaleAmigaPerFrameDelta(0.070 * 1.12);
+const THRUST_IMPULSE = scaleAmigaPerFrameDelta(0.070 * 1.40);
 
 // Takeoff constants when lifting off from a landed state
 const TAKEOFF_THRUST_THRESHOLD = 0.5;
@@ -41,12 +39,14 @@ const TAKEOFF_VY = -scaleAmigaPerFrameDelta(1.2);
 const COAST_DRAG_X = scaleAmigaDrag(0.9945);
 
 // Horizontal drag while actively firing the thruster (slight air-stabilization under power).
-// Set equal to CLASSIC_COAST_DRAG_X if you want zero difference between powered and unpowered glide.
+// Set equal to COAST_DRAG_X for zero difference between powered and unpowered glide.
 const THRUST_DRAG_X = scaleAmigaDrag(0.9935);
 
 // Vertical drag applied when ascending (vy < 0) so upward hops peak crisply,
-// and during powered flight. Free-fall (vy > 0, no thrust) uses CLASSIC_FREEFALL_DRAG_Y.
+// and during powered flight. Free-fall (vy > 0, no thrust) uses FREEFALL_DRAG_Y.
+// const ASCENT_DRAG_Y = scaleAmigaDrag(0.9950);
 const ASCENT_DRAG_Y = scaleAmigaDrag(0.9950);
+
 // 1.0 = zero air-resistance braking when falling downward so gravity pulls you down hard
 const FREEFALL_DRAG_Y = 1.0;
 
@@ -54,16 +54,11 @@ const FREEFALL_DRAG_Y = 1.0;
 //   - 1.00 = symmetric thrust (accelerating and braking have identical force)
 //   - 0.85 = stiffer momentum (harder to arrest a fast sideways slide; requires earlier braking)
 //   - 1.15 = snappier braking (easier to catch a slide)
-const RETRO_BRAKE_MULT = 0.90;
+const RETRO_BRAKE_MULT = 1.0;
 const RETRO_THRESHOLD_VX = scaleAmigaPerFrameDelta(0.2);
-const DRAG = COAST_DRAG_X;
-
-// 0x0003580E & 0x00035852: Gravity well force vectors (tiles 0xCC..0xCF) = [02, 00, 00, 00] (0.020 units/frame = 2x gravity)
-const MAGNET_FORCE_X = scaleAmigaPerFrameDelta(0.020);
-const MAGNET_FORCE_Y = scaleAmigaPerFrameDelta(0.020);
 
 // Top speed cap (scaled from 7.5 at 50Hz PAL with 1.05x trim = ~6.56 px/tick at 60Hz instead of 7.5)
-const MAX_SPEED = scaleAmigaPerFrameDelta(7.5 * 1.15);
+const MAX_SPEED = scaleAmigaPerFrameDelta(7.5 * 1.35);
 
 // 0x000352A8 & 0x000352CE: Safe landing velocity bounds (Y bounce threshold: 0x30000, X crash threshold: 0x02000000 = 2.000)
 const MAX_SAFE_LANDING_VY = scaleAmigaPerFrameDelta(2.0);
@@ -76,6 +71,10 @@ const BOUNCE_DAMP_X = 0.50;
 const UPRIGHT_TOLERANCE_STEPS = 2;
 const SHIP_BASE_SIZE = 16;
 const PVP_HIT_RADIUS = 20;
+
+// Extra downward gravity added per unit of cargo weight (1 weight = +40%, 3 weight = +120% gravity pull)
+const CARGO_GRAVITY_MULT = 0.40 * 2;
+
 const SMALL_CARGO_ID = 0xD1;
 const SMALL_CARGO_WEIGHT = 1;
 const LARGE_CARGO_WEIGHT = 2;
@@ -84,6 +83,10 @@ const LARGE_CARGO_WEIGHT = 2;
 const FUEL_DRAIN = scaleAmigaPerFrameDelta(15);
 const INITIAL_FUEL = 76464;
 const MAX_FUEL = 99999;
+
+// 0x0003580E & 0x00035852: Gravity well force vectors (tiles 0xCC..0xCF) = [02, 00, 00, 00] (0.020 units/frame = 2x gravity)
+const MAGNET_FORCE_X = scaleAmigaPerFrameDelta(0.020);
+const MAGNET_FORCE_Y = scaleAmigaPerFrameDelta(0.020);
 
 // Actually NEVER auto-fire when holding fire button (30 ticks), fast pulse when spamming fire (6 Amiga frames)
 const AUTOFIRE_COOLDOWN = Math.round(scaleAmigaFrameTimer(25));
