@@ -6,26 +6,39 @@ import { sysFlyingEnemies } from './flying-ai';
 import { sysBotAI } from './bot-dogfighting';
 import type { Room } from '../Room';
 import { SERVER_CONFIG } from '../core/config';
+import { scaleAmigaFrameTimer, scaleAmigaPerFrameDelta } from '../core/math';
+
+// 0x00031BEC: Manual tap cooldown is 6 frames at 50Hz (4 frames for 0xD6 Double Shot at 0x00033996).
+// Double shot (0xD6) reduces cooldown to 4 frames (move.b #$04, $00033996).
+const MANUAL_TAP_COOLDOWN_BASE = Math.max(1, Math.round(scaleAmigaFrameTimer(5)));
+const MANUAL_TAP_COOLDOWN_DOUBLE = Math.max(1, Math.round(scaleAmigaFrameTimer(3.5)));
+const CLASSIC_BULLET_SPEED = scaleAmigaPerFrameDelta(4.0 * (60 / 50));
+const MODERN_BULLET_SPEED = scaleAmigaPerFrameDelta(2.2 * (60 / 50));
 
 // Maybe in the future an option would be extracting weapons into a data-driven pattern and make a `game/weapons.ts` but ah...
 export function sysWeapons(ecs: Registry) {
     for (const [e, mount] of ecs.weaponMounts.entries()) {
         const p = ecs.players.get(e);
-        if (p.isDead) continue;
+        if (!p || p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
 
-        if (mount.cooldown > 0) mount.cooldown--;
+        if (mount.cooldown > 0) mount.cooldown = Math.max(0, mount.cooldown - 1);
         
-        let activeShoot = p.inputs.shoot || mount.shootLatch;
-        
-        if (activeShoot && !mount.prevShoot) {
-            mount.cooldown = Math.min(mount.cooldown, 4);
+        // 0x00031AF6 & 0x00031BD0: Hardware debounce lock ($00031BA6).
+        // Autofire is strictly disabled: holding the button only fires once.
+        // You must release the trigger (!p.inputs.shoot) to reset triggerReleased,
+        // or tap rapidly (captured via shootLatch on rising edge).
+        if (!p.inputs.shoot) {
+            mount.triggerReleased = true;
         }
+
+        const tapCooldown = mount.activeModeId === 0xD6 ? MANUAL_TAP_COOLDOWN_DOUBLE : MANUAL_TAP_COOLDOWN_BASE;
+        const wantsToFire = mount.shootLatch || (p.inputs.shoot && mount.triggerReleased !== false);
         
-        if (activeShoot && mount.cooldown <= 0) {
+        if (wantsToFire && mount.cooldown <= 0) {
             const offset = 14; 
-            const bSpeed = p.type === 'classic' ? 4.0 : 2.2; 
+            const bSpeed = p.type === 'classic' ? CLASSIC_BULLET_SPEED : MODERN_BULLET_SPEED; 
 
             if (mount.activeModeId === 0xD6) { // Double Shot Mode (2 linear bullets per press)
                 const bx = t.x + Math.cos(t.angle) * offset;
@@ -109,16 +122,16 @@ export function sysWeapons(ecs: Registry) {
                 if (mount.activeModeId !== 0xD5) mount.charges--;
              }
             
-            // Auto-fire is deliberately slow. Fast firing requires manual pressing.
              if (mount.charges <= 0 && mount.activeModeId !== 0xD5) {
                  mount.activeModeId = 0xD5;
              }
             
-             mount.cooldown = mount.baseCooldown;
+             mount.cooldown = tapCooldown;
+             mount.triggerReleased = false;
+             mount.shootLatch = false;
         }
         
-        mount.prevShoot = activeShoot; 
-        mount.shootLatch = false;
+        mount.prevShoot = p.inputs.shoot; 
     }
 }
 

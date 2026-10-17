@@ -1,7 +1,13 @@
 import { checkPolyIntersect } from '../core/math';
 import type { LevelData, Point } from '../core/types';
+import { SERVER_CONFIG } from '../core/config';
 
-export function getShipPolygon(x: number, y: number, angle: number, w: number, h: number): Point[][] {
+// Matches the exact 4-point dart geometry rendered in GameBootstrap.js drawShip:
+// Nose at (+16, 0), Wingtips at (-16, ±11.2), Engine notch at (-8, 0).
+export function getShipPolygon(x: number, y: number, angle: number, baseSize: number = 16): Point[][] {
+    const scale = SERVER_CONFIG.shipScale || 1.0;
+    const w = baseSize * scale;
+    const h = baseSize * scale;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const nose = { x: x + cos * w, y: y + sin * h };
@@ -10,6 +16,33 @@ export function getShipPolygon(x: number, y: number, angle: number, w: number, h
     const eng = { x: x - cos * (w * 0.5), y: y - sin * (h * 0.5) };
     return [[nose, rw], [rw, eng], [eng, lw], [lw, nose]];
 }
+
+
+/**
+ * Tests exact intersection between the ship's 4-point dart polygon and a rectangular entity (turret, tank, flying enemy).
+ */
+export function checkShipBoxCollision(shipX: number, shipY: number, shipAngle: number, boxX: number, boxY: number, boxW: number, boxH: number): boolean {
+    const scale = SERVER_CONFIG.shipScale || 1.0;
+    const hw = boxW * 0.5;
+    const hh = boxH * 0.5;
+    // Fast broad-phase reject
+    if (Math.abs(shipX - boxX) > hw + 18 * scale || Math.abs(shipY - boxY) > hh + 18 * scale) {
+        return false;
+    }
+    if (Math.abs(shipX - boxX) <= hw && Math.abs(shipY - boxY) <= hh) {
+        return true;
+    }
+    const shipLines = getShipPolygon(shipX, shipY, shipAngle, 16);
+    const boxPoly: Point[] = [
+        { x: boxX - hw, y: boxY - hh },
+        { x: boxX + hw, y: boxY - hh },
+        { x: boxX + hw, y: boxY + hh },
+        { x: boxX - hw, y: boxY + hh },
+        { x: boxX - hw, y: boxY - hh }
+    ];
+    return checkPolyIntersect(shipLines, boxPoly) !== null;
+}
+
 
 export function checkEnvironmentCollisions(
     shipLines: Point[][],

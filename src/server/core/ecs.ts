@@ -90,6 +90,7 @@ export interface WeaponMount {
     shotsFired: number;
     shootLatch: boolean;
     prevShoot: boolean;
+    triggerReleased?: boolean;
 }
 
 export interface Turret {

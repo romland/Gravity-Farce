@@ -2,10 +2,15 @@ import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { killPlayer, bumpPlayer } from './combat';
 import { spawnBullet } from './combat';
+import { scaleAmigaPerFrameDelta, scaleAmigaFrameTimer } from '../core/math';
+import { checkShipBoxCollision } from './player-shared';
 
-const TANK_SPEED = 1.0;
+// Derived from 0x0003181A: Amiga 8px tile scaled 4x to 32px.
+// At 50Hz PAL, tank moves 32px over 32 frames, evaluated every 60 ticks.
 const TILE_SIZE = 32;
-const MOVEMENT_FRAMES = 32; // Amiga tile scaled up (8 pixels * 4)
+const TANK_SPEED = scaleAmigaPerFrameDelta(1.0 * (60 / 50));
+const MOVEMENT_FRAMES = Math.round(scaleAmigaFrameTimer(32 * (50 / 60)));
+const AI_EVAL_INTERVAL_TICKS = Math.max(1, Math.round(scaleAmigaFrameTimer(50)));
 
 export function spawnTank(ecs: Registry, x: number, y: number, debugId: number): Entity {
     // Tanks sit ON the ground. Amiga size is 16x12 (64x48 scaled).
@@ -40,7 +45,7 @@ export function sysTanks(ecs: Registry, room: Room) {
     // Synchronization ($0003181A)
     // The original engine evaluated pathing exactly once every 32 frames.
     // Movement took 16 frames, creating a guaranteed 16-frame pause at every tile.
-    const evaluateAI = room.globalWaveTimer % 60 === 0;
+    const evaluateAI = room.globalWaveTimer % AI_EVAL_INTERVAL_TICKS === 0;
 
     for (const [e, tank] of ecs.tanks.entries()) {
         if (!tank.active) continue;
@@ -116,7 +121,7 @@ function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: nu
 
         const pt = ecs.transforms.get(pe);
 
-        if (pt && Math.abs(pt.x - tx) <= (tWidth / 2 + 14) && Math.abs(pt.y - ty) <= (tHeight / 2 + 14)) {
+        if (pt && checkShipBoxCollision(pt.x, pt.y, pt.angle, tx, ty, tWidth, tHeight)) {
             if (room.category === 'race' && !room.isLethalRacing) {
                 bumpPlayer(ecs, room, pe, tx, ty, 6.0);
             } else {

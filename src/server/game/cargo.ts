@@ -49,6 +49,7 @@ export function sysCargo(ecs: Registry, room: Room) {
             const tileX = Math.floor(pt.x / 32);
             const tileY = Math.floor(pt.y / 32) + 1; // Inspect the tile directly beneath the ship
             const tileId = room.level.rawMap[tileY]?.[tileX];
+            // Verified against 0x00035172..0x0003518A: 0x15, 0x28, 0x1B, and 0x29 are the exact landing pad tile IDs
             const isHomePad = tileId === 0x15 || tileId === 0x1B || tileId === 0x28 || tileId === 0x29;
 
             // Only allow unloading at YOUR specific spawn base, ignoring other players' spawns
@@ -84,12 +85,17 @@ export function sysCargo(ecs: Registry, room: Room) {
         }
 
         // 2. Authoritative World Pickup
+        // Verified against 0x00036366: Item collection checks if the ship's center grid coordinate ($00035850)
+        // occupies the item's tile (or the tile immediately above it when resting on a pad).
         const currentWeight = inv.stack.reduce((sum, id) => sum + (id === 0xD1 ? 1 : 2), 0);
+        const shipTileX = Math.floor(pt.x / 32);
+        const shipTileY = Math.floor(pt.y / 32);
         for (const [ce, cargo] of ecs.cargos.entries()) {
             if (!cargo.active) continue;
             const ct = ecs.transforms.get(ce)!;
 
-            if (p.isLanded && Math.hypot(pt.x - ct.x, pt.y - ct.y) < 48 && currentWeight + cargo.weight <= inv.maxWeight) {
+            const isOnCargoTile = shipTileX === cargo.tileX && (shipTileY === cargo.tileY || shipTileY + 1 === cargo.tileY);
+            if (p.isLanded && isOnCargoTile && currentWeight + cargo.weight <= inv.maxWeight) {
                 cargo.active = false;
                 cargo.heldBy = p.id;
                 inv.stack.push(cargo.typeId);

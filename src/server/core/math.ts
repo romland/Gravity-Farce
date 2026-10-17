@@ -1,4 +1,32 @@
 import type { Point, LevelData } from './types';
+import { SERVER_CONFIG } from './config';
+
+// Original Amiga Gravity Force runs at a strict 50Hz PAL vertical blank interrupt.
+export const AMIGA_PAL_HZ = 50;
+
+/**
+ * Scales a per-frame Amiga PAL (50Hz) addition (thrust, gravity, velocity, fuel drain)
+ * to the authoritative server tick rate (e.g. 60Hz or 90Hz) so per-second accumulation is identical.
+ */
+export function scaleAmigaPerFrameDelta(amigaVal: number, tickRate: number = SERVER_CONFIG.tickRate): number {
+    return (amigaVal * AMIGA_PAL_HZ) / Math.max(1, tickRate);
+}
+
+/**
+ * Scales an Amiga PAL (50Hz) frame count timer (weapon cooldowns, AI intervals)
+ * to the authoritative server tick rate so real-time duration is identical.
+ */
+export function scaleAmigaFrameTimer(amigaFrames: number, tickRate: number = SERVER_CONFIG.tickRate): number {
+    return (amigaFrames * Math.max(1, tickRate)) / AMIGA_PAL_HZ;
+}
+
+/**
+ * Scales an Amiga PAL (50Hz) per-frame multiplicative drag factor (e.g. 0.990 from $00037FA2)
+ * exponentially so velocity retention per second is identical across any server tick rate.
+ */
+export function scaleAmigaDrag(amigaDragPerFrame: number, tickRate: number = SERVER_CONFIG.tickRate): number {
+    return Math.pow(amigaDragPerFrame, AMIGA_PAL_HZ / Math.max(1, tickRate));
+}
 
 export function lineIntersect(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number): Point | null {
     const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);

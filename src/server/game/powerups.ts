@@ -30,12 +30,18 @@ export function sysPowerups(ecs: Registry, room: Room) {
         const pt = ecs.transforms.get(pe)!;
         const f = ecs.fuelTanks.get(pe);
         const w = ecs.weaponMounts.get(pe);
+        const shipTileX = Math.floor(pt.x / 32);
+        const shipTileY = Math.floor(pt.y / 32);
 
         for (const [pue, powerup] of ecs.powerups.entries()) {
             if (!powerup.active) continue;
             const put = ecs.transforms.get(pue)!;
+            const puTileX = Math.floor(put.x / 32);
+            const puTileY = Math.floor(put.y / 32);
 
-            if (p.isLanded && Math.hypot(pt.x - put.x, pt.y - put.y) < 48) {
+            // 0x00036366: Tight tile-coordinate intersection check instead of wide radius overlap
+            const isOnPowerupTile = shipTileX === puTileX && (shipTileY === puTileY || shipTileY + 1 === puTileY);
+            if (p.isLanded && isOnPowerupTile) {
                 powerup.active = false;
                 if (powerup.typeId === 0xD0 && f) {
                     f.current = Math.min(f.max, (f.current || 0) + powerup.charges);

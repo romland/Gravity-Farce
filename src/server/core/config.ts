@@ -15,6 +15,8 @@ export interface ServerConfig {
     allowAnalogControl: boolean;
     viewWidth: number;
     viewHeight: number;
+    shipScale: number;
+    classicLandingBounce: boolean;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -30,7 +32,9 @@ const DEFAULT_CONFIG: ServerConfig = {
     defaultLives: 5,
     allowAnalogControl: false, // Toggle for variable thrust/steering precision
     viewWidth: 1600,
-    viewHeight: 900
+    viewHeight: 900,
+    shipScale: 1.0, // Scales both visual ship and collision polygon 1:1 (baked into physicsHash)
+    classicLandingBounce: false // Optional toggle for 0x000352A8 landing bounce
 };
 
 export class ConfigManager {

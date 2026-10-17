@@ -3,6 +3,7 @@ import type { Room } from '../Room';
 import { killPlayer, spawnBullet, bumpPlayer } from './combat';
 import { getPathManager } from './flying-paths';
 import { SERVER_CONFIG } from '../core/config';
+import { checkShipBoxCollision } from './player-shared';
 
 const TILE_SIZE = 32;
 
@@ -170,7 +171,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             const pt = ecs.transforms.get(pe);
-            if (pt && Math.abs(pt.x - t.x) <= (enemy.width / 2 + 14) && Math.abs(pt.y - t.y) <= (enemy.height / 2 + 14)) {
+            if (pt && checkShipBoxCollision(pt.x, pt.y, pt.angle, t.x, t.y, enemy.width, enemy.height)) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, pe, t.x, t.y, 6.0);
                 } else {

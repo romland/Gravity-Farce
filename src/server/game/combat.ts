@@ -7,6 +7,8 @@ import { spawnExplosionFragments } from './debris';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { recordDB, getActivePhysicsHash } from '../core/records';
 import { tagPlayerDamage, attributeDogfightDeath } from './dogfight';
+import { checkShipBoxCollision } from './player-shared';
+import { SERVER_CONFIG } from '../core/config';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
     const e = ecs.create();
@@ -72,15 +74,13 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
         for (const [te, turret] of ecs.turrets.entries()) {
             if (!turret.active) continue;
             const tt = ecs.transforms.get(te)!;
-            if (Math.abs(pt.x - tt.x) <= (turret.width / 2 + 14) && Math.abs(pt.y - tt.y) <= (turret.height / 2 + 14)) {
+            if (checkShipBoxCollision(pt.x, pt.y, pt.angle, tt.x, tt.y, turret.width, turret.height)) {
                 if (room.category === 'race' && !room.isLethalRacing) {
                     bumpPlayer(ecs, room, e, tt.x, tt.y, 7.0); // Heavy repulsion from solid turret
                 } else {
+                    // Verified at 0x0002FB36 & 0x0002E2BA: Static turrets are part of the background bitplane ($056000).
+                    // Crashing into a turret destroys the player, leaving the turret and map intact.
                     killPlayer(ecs, e, room);
-                    turret.hp = 0;
-                    turret.active = false;
-                    ecs.events.push({ type: 'turret_explosion', x: tt.x, y: tt.y });
-                    destroyTurretTile(room, turret.tileX, turret.tileY);
                 }
             }
         }
@@ -185,7 +185,10 @@ export function sysBullets(ecs: Registry, room: Room) {
         
         t.x += v.vx;
         t.y += v.vy;
-        b.life--;
+
+        // Verified at 0x000348EA & 0x0003498C: Bullets do not decay over a fixed lifespan timer.
+        // They travel infinitely until hitting a solid terrain bitplane pixel or leaving map bounds.
+        const outOfBounds = t.x < 0 || t.y < 0 || t.x >= room.level.width || t.y >= room.level.height;
 
         let hit = false;
         let hitX = t.x; let hitY = t.y;
@@ -218,8 +221,9 @@ export function sysBullets(ecs: Registry, room: Room) {
             if (p.isDead) continue;
             
             const pt = ecs.transforms.get(pe)!;
-            if (Math.hypot(t.x - pt.x, t.y - pt.y) < 16) {
-                if (b.ownerId !== p.id || b.life < 390) {
+            const hitRadius = 14 * (SERVER_CONFIG.shipScale || 1.0);
+            if (Math.hypot(t.x - pt.x, t.y - pt.y) < hitRadius) {
+                if (b.ownerId !== p.id) {
                     if (b.isPlayer && room.category === 'dogfight') {
                         const shooterEnt = ecs.getPlayerEntity(b.ownerId);
                         const shooter = shooterEnt !== undefined ? ecs.players.get(shooterEnt) : undefined;
@@ -277,6 +281,8 @@ export function sysBullets(ecs: Registry, room: Room) {
                             tank.active = false;
                             room.tracker.logEvent(b.ownerId, { type: 'enemy_killed', enemyCategory: 'tank', enemyTypeId: 0, contributors: getContributors(ecs, tank.damageHistory) });
                             ecs.events.push({ type: 'large_explosion', x: tt.x, y: tt.y });
+                            // 0x000368B6 (Tank Death Routine): Spawns persistent wreckage/debris entity at dead tank's X/Y ($36CAC/$36CB0, state $06)
+                            ecs.events.push({ type: 'tank_debris', x: tt.x, y: tt.y });
                             spawnExplosionFragments(ecs, tt.x, tt.y, 'tank');
                             
                             const shooterEntity = ecs.getPlayerEntity(b.ownerId);
@@ -321,7 +327,7 @@ export function sysBullets(ecs: Registry, room: Room) {
             }
         }
 
-        if (b.life <= 0 || hit) {
+        if (outOfBounds || hit) {
             if (hit) {
                 ecs.events.push({ type: 'poof', x: t.x, y: t.y });
             }

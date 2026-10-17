@@ -647,6 +647,7 @@ io.on('connection', (socket) => {
             const p = room.ecs.players.get(e)!;
 
             if (!p.isDead) {
+                const prevShootInput = p.inputs.shoot;
                 p.inputs = {
                     up: Boolean(rawInputs?.up),
                     left: Boolean(rawInputs?.left),
@@ -656,7 +657,8 @@ io.on('connection', (socket) => {
                     analogUp: SERVER_CONFIG.allowAnalogControl && typeof rawInputs?.analogUp === 'number' ? Math.max(0, Math.min(1, rawInputs.analogUp)) : undefined
                 };
 
-                if (rawInputs?.shoot) {
+                // 0x00031AF6 Debounce Lock: Latch a shot only on rising edge or explicit client tap edge
+                if (rawInputs?.shootEdge || (rawInputs?.shoot && !prevShootInput)) {
                     const w = room.ecs.weaponMounts.get(e);
                     if (w) w.shootLatch = true;
                 }

@@ -69,6 +69,7 @@ let renderState = { players: {}, flying: {}, tanks: {} };
 let level = null;
 let camera = { x: 0, y: 0 };
 let particles = [];
+let tankDebrisPiles = [];
 let fireworks = [];
 let floatingTexts = [];
 let raceLights = [];
@@ -81,6 +82,7 @@ let lastRenderPerfNow = performance.now();
 let freecam = false;
 let debugMode = false;
 let showDebugLines = false;
+let shipScale = 1.0;
 let tileDictionary = {};
 
 function requestNextLevel() {
@@ -223,6 +225,9 @@ socket.on('ping', (serverTime) => socket.emit('pong', serverTime));
 socket.on('serverConfig', (config) => {
     debugMode = Boolean(config.debugMode);
     document.getElementById('btn-spawn-bot').style.display = debugMode ? 'inline-block' : 'none';
+    if (typeof config.shipScale === 'number' && config.shipScale > 0) {
+        shipScale = config.shipScale;
+    }
     if (config.viewWidth && config.viewHeight) {
         VIEW_W = config.viewWidth;
         VIEW_H = config.viewHeight;
@@ -303,6 +308,7 @@ socket.on('initLevel', (data) => {
     renderState.players = {};
     renderState.flying = {};
     renderState.tanks = {};
+    tankDebrisPiles = [];
     document.getElementById('loading-screen').style.display = 'none';
     if (window.gfRenderer) {
         window.gfRenderer.rock.buildLevelCache(level);
@@ -398,6 +404,13 @@ socket.on('state', (state) => {
                 if (dist < 800) { cameraShake = Math.max(cameraShake, 18 * (1 - dist / 800)); inputManager.vibrate(300, 0.8 * (1 - dist / 800), 0.8 * (1 - dist / 800)); }
                 window.gfRenderer?.flora?.triggerShock(ev.x, ev.y, 200, 1.0);
                 window.gfRenderer?.details?.onExplosion(ev.x, ev.y, ev.vx || 0, ev.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0);
+            } else if (ev.type === 'tank_debris') {
+                // 0x000368B6: Tank death leaves a persistent wreckage pile on the cavern floor
+                tankDebrisPiles.push({
+                    x: ev.x,
+                    y: ev.y,
+                    seed: Math.random() * 100
+                });
             } else if (ev.type === 'sound') {
                 playTurretSound(ev.soundId);
                 if (ev.soundId === 10) {
@@ -580,6 +593,9 @@ function drawShip(p, isMe) {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
+    if (shipScale !== 1.0) {
+        ctx.scale(shipScale, shipScale);
+    }
     ctx.beginPath();
     ctx.moveTo(16, 0);
     ctx.lineTo(-16, 11.2);
@@ -619,8 +635,20 @@ function drawShip(p, isMe) {
     ctx.restore();
 
     if (debugMode && showDebugLines) {
+        // Render the exact 4-point dart collision polygon used by getShipPolygon on the server
+        const w = 16 * shipScale;
+        const h = 16 * shipScale;
+        const cos = Math.cos(p.angle);
+        const sin = Math.sin(p.angle);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-        ctx.strokeRect(Math.round(p.x) - 14, Math.round(p.y) - 14, 28, 28);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x + cos * w, p.y + sin * h);
+        ctx.lineTo(p.x - cos * w + sin * (w * 0.7), p.y - sin * h - cos * (w * 0.7));
+        ctx.lineTo(p.x - cos * (w * 0.5), p.y - sin * (h * 0.5));
+        ctx.lineTo(p.x - cos * w - sin * (w * 0.7), p.y - sin * h + cos * (w * 0.7));
+        ctx.closePath();
+        ctx.stroke();
     }
     if (!isMe && p.alias) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
@@ -682,6 +710,32 @@ function drawTank(t) {
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
         ctx.strokeRect(Math.round(t.x - w / 2), Math.round(t.y - h / 2), w, h);
     }
+}
+
+function drawTankDebris(d) {
+    ctx.save();
+    ctx.translate(Math.round(d.x), Math.round(d.y + 12));
+    // Charred chassis base & twisted turret scraps (16x12 Amiga tank footprint scaled to 64x24)
+    ctx.fillStyle = '#24201e';
+    ctx.strokeStyle = '#4a3f39';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-26, 12);
+    ctx.lineTo(-20, -2);
+    ctx.lineTo(-8, -7);
+    ctx.lineTo(4, -3);
+    ctx.lineTo(14, -8);
+    ctx.lineTo(25, 4);
+    ctx.lineTo(28, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#7a3020';
+    ctx.fillRect(-10, 1, 14, 6);
+    ctx.fillStyle = '#3b3532';
+    ctx.fillRect(6, -1, 12, 8);
+    ctx.restore();
 }
 
 function drawFlyingEnemy(t) {
@@ -829,9 +883,10 @@ function gameLoop(timestamp = performance.now()) {
                     r.y = predY;
                     r.angle = s.angle;
                 } else {
-                    r.x = lerp(r.x, predX, blendFactor);
-                    r.y = lerp(r.y, predY, blendFactor);
-                    r.angle = lerpAngle(r.angle, s.angle, blendFactor);
+                    const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
+                    r.x = lerp(r.x, predX, posBlend);
+                    r.y = lerp(r.y, predY, posBlend);
+                    r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
                 }
                 r.isDead = s.isDead;
                 r.isLanded = s.isLanded;
@@ -928,6 +983,7 @@ function gameLoop(timestamp = performance.now()) {
         const endEnts = clientProfiler.begin('Pass.EntitiesAndShips');
         if (serverState.cargos) serverState.cargos.forEach(drawCargo);
         if (serverState.powerups) serverState.powerups.forEach(drawPowerup);
+        if (tankDebrisPiles.length > 0) tankDebrisPiles.forEach(drawTankDebris);
         if (serverState.turrets) serverState.turrets.forEach(drawTurret);
         for (const k in renderState.tanks) drawTank(renderState.tanks[k]);
         for (const k in renderState.flying) drawFlyingEnemy(renderState.flying[k]);

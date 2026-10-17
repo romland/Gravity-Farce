@@ -51,9 +51,18 @@ export class RecordManager {
      * Generates a deterministic hash representing the current physical constraints.
      * Highscores MUST be connected to the settings they were achieved under.
      */
-    public generatePhysicsHash(settings: { gravity: number; thrust: number; maxSpeed: number; lethalRacingEnemies?: boolean; raceBumpModifier?: number; botCount?: number }): string {
+    public generatePhysicsHash(settings: {
+        gravity: number;
+        thrust: number;
+        maxSpeed: number;
+        shipScale?: number;
+        lethalRacingEnemies?: boolean;
+        raceBumpModifier?: number;
+        botCount?: number;
+    }): string {
         // Simple lightweight string hash for physics vars
-        const payload = `${settings.gravity}_${settings.thrust}_${settings.maxSpeed}${settings.botCount ? `_bots_${settings.botCount}` : ''}`;
+        const scalePart = settings.shipScale && settings.shipScale !== 1.0 ? `_scale_${settings.shipScale}` : '';
+        const payload = `${settings.gravity}_${settings.thrust}_${settings.maxSpeed}${scalePart}${settings.botCount ? `_bots_${settings.botCount}` : ''}`;
         let hash = 0;
         for (let i = 0; i < payload.length; i++) {
             hash = Math.imul(31, hash) + payload.charCodeAt(i) | 0;
@@ -427,9 +436,26 @@ TODO add:
     SERVER_CONFIG.raceBumpModifier: 0.6, // Modifier for the bump force
 
 */
+    const shipScale = SERVER_CONFIG.shipScale || 1.0;
     return SERVER_CONFIG.useClassicPhysics 
-        ? recordDB.generatePhysicsHash({ gravity: 0.010, thrust: 0.070, maxSpeed: 7.5, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier, botCount }) // Classic constants
-        : recordDB.generatePhysicsHash({ gravity: 0.015, thrust: 0.100, maxSpeed: 10.0, lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies, raceBumpModifier: SERVER_CONFIG.raceBumpModifier, botCount }); // Modern constants
+        ? recordDB.generatePhysicsHash({
+            gravity: 0.010,
+            thrust: 0.070,
+            maxSpeed: 7.5,
+            shipScale,
+            lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies,
+            raceBumpModifier: SERVER_CONFIG.raceBumpModifier,
+            botCount
+        }) // Classic constants
+        : recordDB.generatePhysicsHash({
+            gravity: 0.010,
+            thrust: 0.070,
+            maxSpeed: 7.5,
+            shipScale,
+            lethalRacingEnemies: SERVER_CONFIG.lethalRacingEnemies,
+            raceBumpModifier: SERVER_CONFIG.raceBumpModifier,
+            botCount
+        }); // Modern constants (preserved previous classic baseline)
 }
 
 export function formatTimeMs(diff: number): string {

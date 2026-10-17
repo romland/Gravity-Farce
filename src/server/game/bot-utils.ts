@@ -4,6 +4,7 @@ import { raycastEnvironment } from '../core/math';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { SERVER_CONFIG } from '../core/config';
 import { getTurretSpecByTile } from './turret-defs';
+import { CLASSIC_GRAVITY } from './player-classic';
 
 export interface CheckpointGate {
 	tileId: number;
@@ -77,9 +78,9 @@ export function applyAngularControl(p: import('../core/types').Player, t: import
 	const diff = getAngleDiff(desiredAngle, t.angle);
 
 	if (p.type === 'classic') {
-		// Classic ship has instant rotation velocity, no inertia. 10 deg/tick.
-		if (diff < -0.1) p.inputs.left = true;
-		else if (diff > 0.1) p.inputs.right = true;
+        // Classic ship has 72 discrete steps (5 deg = 0.087 rad per step)
+        if (diff < -0.05) p.inputs.left = true;
+        else if (diff > 0.05) p.inputs.right = true;
 		return Math.abs(diff);
 	}
 
@@ -96,7 +97,7 @@ export function applyAngularControl(p: import('../core/types').Player, t: import
 }
 
 export function predictGlideCollision(t: { x: number, y: number }, v: { vx: number, vy: number }, ticks: number, room: Room, weight: number = 0): boolean {
-	const baseGravity = SERVER_CONFIG.useClassicPhysics ? 0.010 : 0.015;
+    const baseGravity = CLASSIC_GRAVITY;
 	const gravity = baseGravity * (1.0 + (weight * 0.40));
 	let prevX = t.x;
 	let prevY = t.y;

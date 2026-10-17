@@ -1,6 +1,6 @@
 import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
-import { spawnClassicPlayer } from './player-classic';
+import { spawnClassicPlayer, CLASSIC_GRAVITY } from './player-classic';
 import { SERVER_CONFIG } from '../core/config';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { applyAngularControl, getAngleDiff, hasClearPath, prunePath, calculatePath, findSafePadPosition, logDogfightCrash, predictGlideCollision } from './bot-utils';
@@ -184,12 +184,12 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     bot.state = 'seek_cargo';
     let isLandingFinal = false;
 
-    // 3. Landing Approach Injection
+    // 3. Landing Approach Injection (Tightened horizontal alignment to 10px for 0x00036366 tile-center pickup rule)
     if ((targetType === 'base' || targetType === 'cargo' || targetType === 'end') && distToTarget < 200 && hasClearPath({x: t.x, y: t.y}, {x: targetObj.x, y: targetObj.y - 20}, room.level)) {
         const dx = targetObj.x - t.x;
         const dy = targetObj.y - t.y;
 
-        if (dy > 70 || Math.abs(dx) > 30) {
+        if (dy > 70 || Math.abs(dx) > 12) {
             bot.state = 'land_approach';
             targetObj = { x: targetObj.x, y: targetObj.y - 70 }; // Override aim point to hover above
         } else {
@@ -279,7 +279,7 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
 
     const desVx = (dirX / distToAim) * targetSpeed;
     const desVy = (dirY / distToAim) * targetSpeed;
-    const weightGravity = 0.010 * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
+    const weightGravity = CLASSIC_GRAVITY * (1.0 + (currentWeight * 0.40)); // Match classic physics gravity scaling
     const forceX = desVx - v.vx + repelX;
     const forceY = desVy - v.vy - weightGravity + repelY; // Compensate for dynamic cargo weight!
 
@@ -300,8 +300,8 @@ function processMissionFlight(ecs: Registry, room: Room, e: Entity, bot: import(
     if (isLandingFinal) {
         steerAngle = -Math.PI / 2; // Force upright
         const dx = targetObj.x - t.x;
-        if (dx < -4) steerAngle -= 0.12; // Gentle left tilt
-        if (dx > 4) steerAngle += 0.12;  // Gentle right tilt
+        if (dx < -2) steerAngle -= 0.09; // Gentle left tilt within 5-deg step gate
+        if (dx > 2) steerAngle += 0.09;  // Gentle right tilt within 5-deg step gate
     }
 
     // Hostile clearing & Turret aiming
