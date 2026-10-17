@@ -42,6 +42,50 @@ export class MicroDetailsLayer {
         this.turretPrevCooldown = new Map();
         this.lastWaterTimeSec = 0;
         this.lastUpdateTimeSec = 0;
+        this.smokeSprites = new Map();
+    }
+
+    getSmokeCloudSprite(rgbStr, variant = 0) {
+        const key = `${rgbStr}_${variant}`;
+        let spr = this.smokeSprites.get(key);
+        if (spr) return spr;
+        if (typeof document === 'undefined') return null;
+
+        const sz = 96;
+        const c = document.createElement('canvas');
+        c.width = sz;
+        c.height = sz;
+        const gCtx = c.getContext('2d');
+        const half = sz * 0.5;
+
+        let seed = (variant + 1) * 7919 + rgbStr.charCodeAt(0) * 31;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        // Bake 11 overlapping soft radial-gradient lobes into a single fluffy cloud texture
+        const lobes = 11;
+        for (let i = 0; i < lobes; i++) {
+            const ang = (i / lobes) * Math.PI * 2 + (rng() - 0.5) * 0.5;
+            const dist = i === 0 ? 0 : (6 + rng() * 14);
+            const lx = half + Math.cos(ang) * dist;
+            const ly = half + Math.sin(ang) * dist * 0.82;
+            const rad = i === 0 ? 26 : (14 + rng() * 13);
+
+            const g = gCtx.createRadialGradient(lx - rad * 0.18, ly - rad * 0.18, rad * 0.05, lx, ly, rad);
+            g.addColorStop(0, `rgba(${rgbStr}, 0.36)`);
+            g.addColorStop(0.45, `rgba(${rgbStr}, 0.18)`);
+            g.addColorStop(0.78, `rgba(${rgbStr}, 0.05)`);
+            g.addColorStop(1, `rgba(${rgbStr}, 0.0)`);
+            gCtx.fillStyle = g;
+            gCtx.beginPath();
+            gCtx.arc(lx, ly, rad, 0, Math.PI * 2);
+            gCtx.fill();
+        }
+
+        this.smokeSprites.set(key, c);
+        return c;
     }
 
     initLevel(level) {
@@ -1481,21 +1525,25 @@ export class MicroDetailsLayer {
                 if (!p.isDead) {
                     // Huge billowing launch pad smoke cloud strictly when taking off from a landed state!
                     if (cfg.takeoffSmokeEnabled !== false && prev && prev.isLanded && !p.isLanded) {
-                        for (let k = 0; k < 16 && this.smokePuffs.length < 95; k++) {
-                            const spreadX = (Math.random() - 0.5) * 20;
-                            const sideVx = spreadX * 0.014 + (Math.random() - 0.5) * 0.14;
+                        for (let k = 0; k < 18 && this.smokePuffs.length < 105; k++) {
+                            const spreadX = (Math.random() - 0.5) * 22;
+                            const sideVx = spreadX * 0.015 + (Math.random() - 0.5) * 0.15;
                             const lifeTicks = 135 + Math.floor(Math.random() * 65);
                             this.smokePuffs.push({
                                 x: p.x + spreadX,
-                                y: p.y + 11 + Math.random() * 4,
+                                y: p.y + 10 + Math.random() * 5,
                                 vx: sideVx,
                                 vy: -0.05 - Math.random() * 0.16,
-                                r: 5.5 + Math.random() * 4.5,
-                                grow: 0.11,
+                                r: 9.0 + Math.random() * 6.5,
+                                grow: 0.15,
                                 life: lifeTicks,
                                 maxLife: lifeTicks,
-                                rgb: k % 3 === 0 ? '210, 222, 235' : '165, 178, 192',
-                                peakAlpha: 0.52
+                                rgb: k % 3 === 0 ? '220, 230, 242' : (k % 3 === 1 ? '175, 188, 202' : '140, 152, 168'),
+                                peakAlpha: 0.72,
+                                angle: Math.random() * Math.PI * 2,
+                                spin: (Math.random() - 0.5) * 0.028,
+                                squashX: 1.15 + Math.random() * 0.35,
+                                variant: k % 4
                             });
                         }
                     }
@@ -1925,6 +1973,7 @@ export class MicroDetailsLayer {
                 sm.x += (sm.vx + Math.sin(timeSec * 3 + i) * 0.08) * dt60;
                 sm.y += sm.vy * dt60;
                 sm.r += (sm.grow ?? 0.09) * dt60;
+                if (sm.spin) sm.angle = (sm.angle || 0) + sm.spin * dt60;
                 sm.vx *= Math.pow(0.96, dt60);
                 sm.vy *= Math.pow(0.97, dt60);
                 sm.life -= dt60;
@@ -1933,13 +1982,26 @@ export class MicroDetailsLayer {
                     continue;
                 }
                 const lifeRatio = sm.life / sm.maxLife;
-                const env = lifeRatio > 0.85 ? (1.0 - lifeRatio) / 0.15 : lifeRatio / 0.85;
+                const env = lifeRatio > 0.85 ? (1.0 - lifeRatio) / 0.15 : Math.pow(lifeRatio / 0.85, 0.85);
                 const a = env * (sm.peakAlpha ?? 0.28);
                 const rgb = sm.rgb || '175, 185, 195';
-                ctx.fillStyle = `rgba(${rgb}, ${a})`;
-                ctx.beginPath();
-                ctx.arc(sm.x, sm.y, sm.r, 0, Math.PI * 2);
-                ctx.fill();
+                const spr = this.getSmokeCloudSprite(rgb, sm.variant || (i % 4));
+                if (spr) {
+                    const drawR = sm.r * 1.65;
+                    const sx = sm.squashX || 1.15;
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, Math.min(1, a));
+                    ctx.translate(sm.x, sm.y);
+                    ctx.rotate(sm.angle || (i * 1.1));
+                    ctx.scale(sx, 1.0);
+                    ctx.drawImage(spr, -drawR, -drawR, drawR * 2, drawR * 2);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = `rgba(${rgb}, ${a})`;
+                    ctx.beginPath();
+                    ctx.arc(sm.x, sm.y, sm.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
