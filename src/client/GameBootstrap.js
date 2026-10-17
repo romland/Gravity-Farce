@@ -212,8 +212,8 @@ if (chkSpSpectators) {
         socket.emit('set_allow_spectators', myAllowSpectators);
     };
 }
-document.getElementById('btn-spawn-bot').onclick = () => socket.emit('debug_action', 'spawn_bot');
-document.getElementById('btn-debug-life').onclick = () => socket.emit('debug_action', 'add_life');
+// document.getElementById('btn-spawn-bot').onclick = () => socket.emit('debug_action', 'spawn_bot');
+// document.getElementById('btn-debug-life').onclick = () => socket.emit('debug_action', 'add_life');
 document.getElementById('btn-hud-help').onclick = () => dialogManager.openControlsModal();
 document.getElementById('btn-gameover-spectate').onclick = () => {
     document.getElementById('gameover-modal').style.display = 'none';

@@ -45,7 +45,7 @@ export class PerfOverlay {
                 </div>
             </div>
             <div class="perf-body" id="perf-body" style="display:none;">
-                <div class="perf-section-title">2D PIPELINE &amp; JSON TELEMETRY (EMA)</div>
+                <div class="perf-section-title">2D &amp; JSON</div>
                 <div class="perf-kv-grid">
                     <span>Draws / Frame: <b id="pf-draws">0</b></span>
                     <span>Blits / Grads: <b id="pf-grads">0 / 0</b></span>
