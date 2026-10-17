@@ -226,7 +226,10 @@ export class DialogManager {
             const tabBtn = document.createElement('button');
             tabBtn.type = 'button';
             tabBtn.className = `board-tab ${tabIdx === 0 ? 'active' : ''} ${(shouldHighlightTop10Tabs && top10TabIndices.includes(tabIdx)) ? 'top10-highlight' : ''}`;
-            tabBtn.textContent = tabIdx < 9 ? `${b.title} [${tabIdx + 1}]` : b.title;
+
+            //show tabindex or not?
+            // tabBtn.textContent = tabIdx < 9 ? `${b.title} [${tabIdx + 1}]` : b.title;
+            tabBtn.textContent = b.title;
             tabBtn.onclick = () => this.switchBoardTab(tabIdx);
             tabsRoot.appendChild(tabBtn);
 
