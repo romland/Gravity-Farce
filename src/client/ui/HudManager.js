@@ -41,6 +41,7 @@ export class HudManager {
         this.viewH = 900;
         this.playW = 1600;
         this.playH = 900;
+        this.bottomPadWorldPx = 0;
         this.lastfuelVal = 76464;
         this.lastFuelMax = 99999;
 
@@ -117,9 +118,10 @@ export class HudManager {
         cActions.dataset.homeSlot = HUD_CONFIG.componentSlots.actions || 'bottom-bar';
         cActions.classList.add('hud-actions');
         cActions.innerHTML = `
-            <button class="gbtn" id="btn-hud-scores" type="button">RECORDS</button>
+            <button class="gbtn" id="btn-hud-scores" type="button">LEADERBOARDS</button>
             <button class="gbtn gbtn-emerald" id="btn-room-mode" type="button">SOLO (SP)</button>
             <button class="gbtn gbtn-crimson" id="btn-spawn-bot" type="button" style="display:none;">+ BOT</button>
+            <button class="gbtn gbtn-emerald" id="btn-debug-life" type="button" style="display:none;" title="Add +1 Debug Life">+ LIFE</button>
             <button class="gbtn gbtn-amber" id="btn-hud-help" type="button" title="Flight Controls">?</button>
         `;
 
@@ -143,7 +145,7 @@ export class HudManager {
             'hud-sec-mission', 'hud-val-cargo',
             'hud-sec-race', 'hud-lbl-race', 'hud-val-race',
             'hud-sec-dogfight', 'hud-lbl-df', 'hud-val-roster',
-            'btn-hud-scores', 'btn-room-mode', 'btn-spawn-bot', 'btn-hud-help'
+            'btn-hud-scores', 'btn-room-mode', 'btn-spawn-bot', 'btn-debug-life', 'btn-hud-help'
         ];
         for (const id of ids) {
             this.els[id] = document.getElementById(id);
@@ -249,7 +251,9 @@ export class HudManager {
             }
             this.hudRootEl.classList.add('hud-mode-overlay');
             this.applyBox(this.hudRootEl, playSpanX, cY, playSpanW, cH);
+            this.bottomPadWorldPx = Math.round((barH + 18) / Math.max(0.25, canvasScale));
         } else {
+            this.bottomPadWorldPx = 0;
             // Gather all HUD clusters into the docked bar adjacent to the canvas edge
             if (this.allClusters) {
                 const dockSlot = this.slots['bottom-bar'];

@@ -6,9 +6,36 @@ export class DialogManager {
         this.onRetryLevel = onRetryLevel;
         this.onSwitchSession = onSwitchSession;
 
-        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal'];
+        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal', 'fullscreen-modal'];
         this.hintTimer = null;
+        this.lastBoards = null;
+        this.lastIsHud = false;
+        this.lastCategory = 'mission';
+        this.lastLevelName = 'CAVERN 00';
         this.bindGlobalKeyboard();
+    }
+
+    getFollowedBoards() {
+        try {
+            const raw = localStorage.getItem('gf_followed_boards');
+            if (raw) return new Set(JSON.parse(raw));
+        } catch (e) {}
+        return new Set(['BLITZ', 'PACIFIST', '5-LIVES STREAK', 'CAMPAIGN SCORE', 'TOP SP RACE TIMES', 'SP BOT ELIMINATION']);
+    }
+
+    toggleFollowBoard(title) {
+        const set = this.getFollowedBoards();
+        if (set.has(title)) set.delete(title);
+        else set.add(title);
+        localStorage.setItem('gf_followed_boards', JSON.stringify(Array.from(set)));
+    }
+
+    promptFullscreenOnce() {
+        if (document.fullscreenElement) return;
+        const suppressUntil = parseInt(localStorage.getItem('gf_fs_prompt_until') || '0', 10);
+        if (Date.now() < suppressUntil) return;
+        const modal = document.getElementById('fullscreen-modal');
+        if (modal) modal.style.display = 'flex';
     }
 
     closeAnyOpen() {
@@ -131,45 +158,98 @@ export class DialogManager {
         }, 7000);
     }
 
-    renderLeaderboard(boards, isHud, currentCategory, onRankOne) {
+    renderLeaderboard(boards, isHud, currentCategory, onRankOne, levelName = 'CAVERN 00') {
         const modal = document.getElementById('leaderboard-modal');
         if (!modal || !Array.isArray(boards)) return;
 
+        this.lastBoards = boards;
+        this.lastIsHud = isHud;
+        this.lastCategory = currentCategory || 'mission';
+        this.lastLevelName = levelName || 'CAVERN 00';
+
+        const titleEl = document.getElementById('leaderboard-modal-title');
+        if (titleEl) {
+            const discLabel = (this.lastCategory || 'mission').toUpperCase();
+            titleEl.textContent = `ZARKOS LEADERBOARDS: ${(this.lastLevelName || 'CAVERN').toUpperCase()} | ${discLabel}`;
+        }
+
         const summaryRoot = document.getElementById('run-summary-container');
+        const catsRoot = document.getElementById('board-cats-container');
         const tabsRoot = document.getElementById('board-tabs-container');
         const contentRoot = document.getElementById('leaderboard-content');
         const footerRoot = document.getElementById('modal-footer');
 
         summaryRoot.textContent = '';
+        if (catsRoot) catsRoot.textContent = '';
         tabsRoot.textContent = '';
         contentRoot.textContent = '';
         footerRoot.textContent = '';
 
-        let boardIndex = 0;
-        let flatteringIndex = 0;
-        let bestScore = 9999;
-        let top10TabIndices = [];
+        const followedSet = this.getFollowedBoards();
+        const followOnly = localStorage.getItem('gf_follow_filter_active') === '1';
+        const savedCatKey = `gf_last_board_cat_${this.lastCategory}`;
+        const savedTabKey = `gf_last_board_tab_${this.lastCategory}`;
+
         let gotRankOne = false;
+
+        const scoredBoards = new Set();
+        const hasCategories = boards.some(b => b.category);
 
         boards.forEach((b) => {
             if (b.isFootnote || (b.title && b.title.includes('SUMMARY'))) return;
-            let hasTop10InTab = false;
             (b.entries || []).forEach(e => {
                 if (e.isMe && (e.isCurrentRun || !isHud)) {
                     const parsed = e.rank ?? parseInt(String(e.rankLabel).replace('#', ''), 10);
                     if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
-                        hasTop10InTab = true;
+                        if (e.isCurrentRun || e.isNewPb) scoredBoards.add(b.title);
                         if (parsed === 1 && e.isCurrentRun) gotRankOne = true;
                     }
                 }
             });
-            if (hasTop10InTab) top10TabIndices.push(boardIndex);
-            boardIndex++;
         });
 
-        const shouldHighlightTop10Tabs = !isHud && top10TabIndices.length > 0 && top10TabIndices.length <= 2;
-        boardIndex = 0;
+        let activeGroup = localStorage.getItem(savedCatKey) || 'cavern';
+        if (!['cavern', 'arcade', 'campaign'].includes(activeGroup)) activeGroup = 'cavern';
 
+        if (catsRoot && hasCategories) {
+            catsRoot.style.display = 'flex';
+            const leftWrap = document.createElement('div');
+            leftWrap.className = 'board-cats-left';
+            const groups = [
+                { id: 'cavern', label: 'PER CAVERN' },
+                { id: 'arcade', label: 'ARCADE (5 LIVES)' },
+                { id: 'campaign', label: 'CAMPAIGN' }
+            ];
+            for (const g of groups) {
+                const cBtn = document.createElement('button');
+                cBtn.type = 'button';
+                cBtn.className = `board-cat-btn ${(!followOnly && activeGroup === g.id) ? 'active' : ''}`;
+                cBtn.textContent = g.label;
+                cBtn.onclick = () => {
+                    localStorage.setItem('gf_follow_filter_active', '0');
+                    localStorage.setItem(savedCatKey, g.id);
+                    this.renderLeaderboard(this.lastBoards, this.lastIsHud, this.lastCategory, null, this.lastLevelName);
+                };
+                leftWrap.appendChild(cBtn);
+            }
+
+            const fBtn = document.createElement('button');
+            fBtn.type = 'button';
+            fBtn.className = `board-cat-btn follow-filter ${followOnly ? 'active' : ''}`;
+            fBtn.textContent = `★ FOLLOWED (${followedSet.size})`;
+            fBtn.onclick = () => {
+                localStorage.setItem('gf_follow_filter_active', followOnly ? '0' : '1');
+                this.renderLeaderboard(this.lastBoards, this.lastIsHud, this.lastCategory, null, this.lastLevelName);
+            };
+            catsRoot.append(leftWrap, fBtn);
+        } else if (catsRoot) {
+            catsRoot.style.display = 'none';
+        }
+
+        let boardIndex = 0;
+        let targetTabIndex = 0;
+        const rememberedTabTitle = localStorage.getItem(savedTabKey);
+        
         boards.forEach((b) => {
             if (b.isFootnote) {
                 const fn = document.createElement('div');
@@ -207,29 +287,39 @@ export class DialogManager {
                 return;
             }
 
-            let myRankScore = 999;
-            (b.entries || []).forEach(e => {
-                if (e.isMe) {
-                    if (e.isNewPb) myRankScore = 0;
-                    else {
-                        const parsed = parseInt(String(e.rankLabel).replace('#', ''), 10);
-                        if (!isNaN(parsed)) myRankScore = parsed;
-                    }
+            // Filter boards by category or ★ Followed (always include boards where player just scored!)
+            if (hasCategories) {
+                if (followOnly) {
+                    if (!followedSet.has(b.title) && !scoredBoards.has(b.title)) return;
+                } else if (b.category && b.category !== activeGroup) {
+                    return;
                 }
-            });
-            if (myRankScore < bestScore) {
-                bestScore = myRankScore;
-                flatteringIndex = boardIndex;
             }
 
             const tabIdx = boardIndex;
+            if (rememberedTabTitle && b.title === rememberedTabTitle) {
+                targetTabIndex = tabIdx;
+            }
+
             const tabBtn = document.createElement('button');
             tabBtn.type = 'button';
-            tabBtn.className = `board-tab ${tabIdx === 0 ? 'active' : ''} ${(shouldHighlightTop10Tabs && top10TabIndices.includes(tabIdx)) ? 'top10-highlight' : ''}`;
+            tabBtn.dataset.boardTitle = b.title;
+            tabBtn.className = `board-tab ${tabIdx === 0 ? 'active' : ''} ${scoredBoards.has(b.title) ? 'top10-highlight' : ''}`;
 
-            //show tabindex or not?
-            // tabBtn.textContent = tabIdx < 9 ? `${b.title} [${tabIdx + 1}]` : b.title;
-            tabBtn.textContent = b.title;
+            const starSpan = document.createElement('span');
+            const isStarred = followedSet.has(b.title);
+            starSpan.className = `board-tab-star ${isStarred ? 'starred' : ''}`;
+            starSpan.textContent = isStarred ? '★' : '☆';
+            starSpan.title = 'Follow / Pin Leaderboard';
+            starSpan.onclick = (ev) => {
+                ev.stopPropagation();
+                this.toggleFollowBoard(b.title);
+                this.renderLeaderboard(this.lastBoards, this.lastIsHud, this.lastCategory, null, this.lastLevelName);
+            };
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = b.title;
+            tabBtn.append(starSpan, labelSpan);
             tabBtn.onclick = () => this.switchBoardTab(tabIdx);
             tabsRoot.appendChild(tabBtn);
 
@@ -321,7 +411,7 @@ export class DialogManager {
             footerRoot.append(btnSpec, btnAct);
         }
 
-        if (boardIndex > 0) this.switchBoardTab(flatteringIndex);
+        if (boardIndex > 0) this.switchBoardTab(targetTabIndex);
         if (!isHud && gotRankOne && onRankOne) onRankOne();
         modal.style.display = 'flex';
     }
@@ -331,6 +421,10 @@ export class DialogManager {
         const panes = document.querySelectorAll('#leaderboard-content .board-pane');
         tabs.forEach((t, i) => t.classList.toggle('active', i === index));
         panes.forEach((p, i) => p.classList.toggle('active', i === index));
+        const activeTab = tabs[index];
+        if (activeTab && activeTab.dataset.boardTitle) {
+            localStorage.setItem(`gf_last_board_tab_${this.lastCategory}`, activeTab.dataset.boardTitle);
+        }
     }
 
     renderRoomList(list, currentJoinCode) {

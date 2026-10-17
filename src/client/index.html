@@ -71,13 +71,27 @@
             </div>
         </div>
 
+        <!-- Fullscreen Prompt Modal (24h Cookie/Storage) -->
+        <div id="fullscreen-modal" class="gmodal" style="width:440px; text-align:center;">
+            <div class="gmodal-header">
+                <span class="gmodal-title">FULLSCREEN FLIGHT DECK</span>
+                <button class="gmodal-close" id="btn-fs-close" type="button">✕</button>
+            </div>
+            <div class="hud-val" style="margin:10px 0 18px; white-space:normal;">ENGAGE FULLSCREEN DISPLAY FOR MAXIMUM SUBTERRANEAN VISIBILITY?</div>
+            <div style="display:flex; gap:10px;">
+                <button class="gbtn gbtn-lg" id="btn-fs-decline" style="flex:1;" type="button">WINDOWED</button>
+                <button class="gbtn gbtn-emerald gbtn-lg" id="btn-fs-accept" style="flex:1;" type="button">FULLSCREEN</button>
+            </div>
+        </div>
+
         <!-- Leaderboard Modal -->
         <div id="leaderboard-modal" class="gmodal" style="width:860px;">
             <div class="gmodal-header">
-                <span class="gmodal-title">ZARKOS FLIGHT RECORDS</span>
+                <span class="gmodal-title" id="leaderboard-modal-title">ZARKOS LEADERBOARDS</span>
                 <button class="gmodal-close" data-close-modal="leaderboard-modal" type="button">✕</button>
             </div>
             <div id="run-summary-container" style="margin-bottom:12px;"></div>
+            <div id="board-cats-container" class="board-cats"></div>
             <div id="board-tabs-container" class="board-tabs"></div>
             <div id="leaderboard-content" style="margin-bottom:14px;"></div>
             <div id="modal-footer" style="display:flex; gap:10px;"></div>

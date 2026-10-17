@@ -202,6 +202,9 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
 
     const currentRoomId = playerRooms.get(id);
     const currentRoom = currentRoomId !== undefined ? rooms.get(currentRoomId) : undefined;
+    const prevPlayerEnt = (currentRoom && !currentRoom.isReplayMode) ? currentRoom.ecs.getPlayerEntity(id) : undefined;
+    const wasAdvancing = prevPlayerEnt !== undefined ? Boolean(currentRoom?.ecs.players.get(prevPlayerEnt)?.advancing) : false;
+
     if (!forceReset && !overrideMode && !overrideCode && currentRoom && currentRoom.levelIndex === targetLevel) {
         return;
     }
@@ -215,9 +218,10 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     const actualLevel = newRoom.levelIndex;
 
     // Enforce 5-Lives Sequential Streak rules on Mission Levels (0-49):
-    // Advancing sequentially (lastLevel -> lastLevel + 1) preserves accumulated score & remaining lives.
-    // Jumping out of sequence, retrying, or switching categories starts a fresh 5-lives streak.
+    // Advancing sequentially via legitimate cavern completion (wasAdvancing && lastLevel -> lastLevel + 1)
+    // preserves accumulated score & remaining lives. Jumping, reloading, or retrying resets the streak!
     const isSequentialMissionAdvance = !forceReset
+        && wasAdvancing
         && actualLevel >= 0 && actualLevel <= 49
         && stats.streakLastLevel !== undefined
         && actualLevel === stats.streakLastLevel + 1
@@ -393,7 +397,21 @@ io.on('connection', (socket) => {
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
             if (!isNaN(tgt) && isValidLevelIndex(tgt)) {
-                handleTransitionToLevel(socket.id, tgt, false);
+                handleTransitionToLevel(socket.id, tgt, true);
+            }
+        } else if (action === 'add_life') {
+            const roomIndex = playerRooms.get(socket.id);
+            if (roomIndex !== undefined) {
+                const room = rooms.get(roomIndex);
+                const e = room?.ecs.getPlayerEntity(socket.id);
+                if (room && e !== undefined) {
+                    const p = room.ecs.players.get(e)!;
+                    p.lives = Math.min(99, (p.lives || 0) + 1);
+                    const t = room.ecs.transforms.get(e);
+                    if (t) {
+                        room.ecs.events.push({ type: 'floating_text', text: 'DEBUG: +1 LIFE', color: '#2ecc71', x: t.x, y: t.y - 30 });
+                    }
+                }
             }
         } else if (action.startsWith("powerup-")) {
             const roomIndex = playerRooms.get(socket.id);

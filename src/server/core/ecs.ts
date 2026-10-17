@@ -23,6 +23,7 @@ export interface GameEvent {
     color?: string;
     vx?: number;
     vy?: number;
+    typeId?: number;
 }
 
 export interface PlayerRaceState {

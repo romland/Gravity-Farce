@@ -22,7 +22,8 @@ const DEFAULT_INPUT_CONFIG = {
         powerupRear: ['KeyO'],
         spawnBot: ['KeyB'],
         dumpBots: ['KeyN'],
-        jumpLevel: ['KeyL', 'KeyJ']
+        jumpLevel: ['KeyL', 'KeyJ'],
+        addLife: ['KeyM']
     },
     gamepad: {
         up: [1, 2, 3],    // Face buttons B/X/Y

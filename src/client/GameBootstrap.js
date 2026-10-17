@@ -145,9 +145,24 @@ document.getElementById('btn-room-mode').onclick = () => {
     });
 };
 document.getElementById('btn-spawn-bot').onclick = () => socket.emit('debug_action', 'spawn_bot');
+document.getElementById('btn-debug-life').onclick = () => socket.emit('debug_action', 'add_life');
 document.getElementById('btn-hud-help').onclick = () => dialogManager.openControlsModal();
 document.getElementById('btn-gameover-spectate').onclick = () => {
     document.getElementById('gameover-modal').style.display = 'none';
+};
+
+const suppressFullscreenPromptFor24h = () => {
+    localStorage.setItem('gf_fs_prompt_until', String(Date.now() + 24 * 60 * 60 * 1000));
+    const fsModal = document.getElementById('fullscreen-modal');
+    if (fsModal) fsModal.style.display = 'none';
+};
+document.getElementById('btn-fs-close').onclick = suppressFullscreenPromptFor24h;
+document.getElementById('btn-fs-decline').onclick = suppressFullscreenPromptFor24h;
+document.getElementById('btn-fs-accept').onclick = () => {
+    suppressFullscreenPromptFor24h();
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
 };
 document.getElementById('btn-gameover-retry').onclick = () => socket.emit('retry_level');
 document.getElementById('btn-room-sp').onclick = () => switchSessionMode('SP', '');
@@ -188,9 +203,14 @@ const inputManager = new InputManager(null, (inputs) => {
         else if (action === 'powerupRear') socket.emit('debug_action', 'powerup-0xD8');
         else if (action === 'spawnBot') socket.emit('debug_action', 'spawn_bot');
         else if (action === 'dumpBots') socket.emit('debug_action', 'dump_bots');
+        else if (action === 'addLife') socket.emit('debug_action', 'add_life');
         else if (action === 'jumpLevel') {
             const lvl = prompt("Jump to level (0-99):");
-            if (lvl !== null && !isNaN(parseInt(lvl))) socket.emit('debug_action', 'jump', { levelIndex: parseInt(lvl) });
+            const parsedLvl = lvl !== null ? parseInt(lvl, 10) : NaN;
+            if (!isNaN(parsedLvl)) {
+                localStorage.setItem('gf_dev_level', parsedLvl.toString());
+                socket.emit('debug_action', 'jump', { levelIndex: parsedLvl });
+            }
         }
     }
 });
@@ -227,6 +247,7 @@ socket.on('ping', (serverTime) => socket.emit('pong', serverTime));
 socket.on('serverConfig', (config) => {
     debugMode = Boolean(config.debugMode);
     document.getElementById('btn-spawn-bot').style.display = debugMode ? 'inline-block' : 'none';
+    document.getElementById('btn-debug-life').style.display = debugMode ? 'inline-block' : 'none';
     if (typeof config.shipScale === 'number' && config.shipScale > 0) {
         shipScale = config.shipScale;
     }
@@ -302,7 +323,7 @@ socket.on('hide_game_over', () => {
 });
 
 socket.on('show_leaderboard', (boards, isHud = false) => {
-    dialogManager.renderLeaderboard(boards, isHud, currentRoomInfo.category, triggerRankOneFireworks);
+    dialogManager.renderLeaderboard(boards, isHud, currentRoomInfo.category, triggerRankOneFireworks, level?.name || 'CAVERN 00');
 });
 
 socket.on('initLevel', (data) => {
@@ -413,6 +434,8 @@ socket.on('state', (state) => {
                     y: ev.y,
                     seed: Math.random() * 100
                 });
+            } else if (ev.type === 'cargo_unloaded') {
+                window.gfRenderer?.details?.onCargoUnloaded(ev.x, ev.y, ev.typeId);
             } else if (ev.type === 'sound') {
                 playTurretSound(ev.soundId);
                 if (ev.soundId === 10) {
@@ -879,12 +902,13 @@ function gameLoop(timestamp = performance.now()) {
             perfOverlay.update(timestamp, myServerPlayer, debugMode, metrics);
 
             // If cavern playfield is narrower/shorter than viewport, center it instead of pinning left/top!
+            const bottomPad = hudManager.bottomPadWorldPx || 0;
             const targetX = level.width <= VIEW_W
                 ? (level.width - VIEW_W) * 0.5
                 : Math.max(0, Math.min(myPlayer.x - VIEW_W / 2, level.width - VIEW_W));
-            const targetY = level.height <= VIEW_H
-                ? (level.height - VIEW_H) * 0.5
-                : Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, level.height - VIEW_H));
+            const targetY = (level.height + bottomPad) <= VIEW_H
+                ? ((level.height + bottomPad) - VIEW_H) * 0.5
+                : Math.max(0, Math.min(myPlayer.y - VIEW_H / 2, (level.height + bottomPad) - VIEW_H));
 
             const camAlpha = 1.0 - Math.pow(1.0 - 0.12, dt60);
             camera.x += (targetX - camera.x) * camAlpha;
@@ -1115,6 +1139,7 @@ async function attemptLogin(alias, useSavedMode = false) {
             syncSessionModeRadios(selectedMode);
             loginModal.style.display = 'none';
             document.getElementById('loading-screen').style.display = 'none';
+            dialogManager.promptFullscreenOnce();
 
             const savedLvl = localStorage.getItem('gf_dev_level');
             const startLvl = savedLvl !== null ? parseInt(savedLvl, 10) : 0;

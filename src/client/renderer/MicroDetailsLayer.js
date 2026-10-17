@@ -292,9 +292,59 @@ export class MicroDetailsLayer {
                 padY: pad.y,
                 padW: pad.w,
                 doorX,
-                workers
+                workers,
+                cargoStack: [],
+                hauler: {
+                    state: 'idle', // 'idle' | 'fetching' | 'attaching' | 'dragging'
+                    x: doorX,
+                    timer: 0,
+                    draggedCrate: null,
+                    phase: rng() * Math.PI * 2
+                }
             });
         }
+    }
+
+    onCargoUnloaded(x, y, typeId) {
+        if (!this.baseCrews || this.baseCrews.length === 0) return;
+        let bestBase = this.baseCrews[0];
+        let bestDist = Infinity;
+        for (const b of this.baseCrews) {
+            const cx = b.padX + b.padW * 0.5;
+            const d = Math.hypot(x - cx, y - b.padY);
+            if (d < bestDist) {
+                bestDist = d;
+                bestBase = b;
+            }
+        }
+        if (!bestBase) return;
+
+        const isLarge = typeId === 0xD2;
+        const size = isLarge ? 14 : 11;
+        const dirFromDoor = bestBase.doorX < (bestBase.padX + bestBase.padW * 0.5) ? 1 : -1;
+        const stackAnchorX = Math.max(
+            bestBase.padX + 16,
+            Math.min(bestBase.padX + bestBase.padW - 16, x + dirFromDoor * 12)
+        );
+
+        // Stack directly on top of existing crates on this pad!
+        let topY = bestBase.padY;
+        let baseStackX = stackAnchorX;
+        for (const c of bestBase.cargoStack) {
+            baseStackX = c.x;
+            topY = Math.min(topY, c.y - c.size * 0.5);
+        }
+
+        bestBase.cargoStack.push({
+            x: baseStackX + (Math.random() - 0.5) * 1.5,
+            y: topY - size * 0.5,
+            vx: 0,
+            vy: 0,
+            angle: 0,
+            vAngle: 0,
+            size,
+            isLarge
+        });
     }
 
     spawnShipDebris(x, y, vx = 0, vy = 0) {
@@ -1513,6 +1563,8 @@ export class MicroDetailsLayer {
                         ctx.fill();
                     }
                 }
+
+                this.updateAndDrawBaseCargoHauler(ctx, base, dangerShip, timeSec, dt60);
             }
         }
 
@@ -2125,6 +2177,194 @@ export class MicroDetailsLayer {
             ctx.globalAlpha = 1.0;
         }
 
+        ctx.restore();
+    }
+
+    updateAndDrawBaseCargoHauler(ctx, base, dangerShip, timeSec, dt60) {
+        const stack = base.cargoStack;
+        const h = base.hauler;
+        if (!h) return;
+
+        // 1. Update & Draw Stacked Crates on Pad (with Tumble & Settle Physics when bottom crate is yanked!)
+        let currentFloorY = base.padY;
+        for (let i = 0; i < stack.length; i++) {
+            const c = stack[i];
+            const targetY = currentFloorY - c.size * 0.5;
+            if (c.y < targetY - 0.2 || Math.abs(c.vy) > 0.05) {
+                c.vy += 0.14 * dt60;
+                c.x += c.vx * dt60;
+                c.y += c.vy * dt60;
+                c.angle += c.vAngle * dt60;
+                c.x = Math.max(base.padX + 8, Math.min(base.padX + base.padW - 8, c.x));
+                if (c.y >= targetY) {
+                    c.y = targetY;
+                    if (c.vy > 0.9 && this.sparks.length < 90) {
+                        this.sparks.push({
+                            x: c.x, y: base.padY,
+                            vx: (Math.random() - 0.5) * 1.2, vy: -0.6 - Math.random() * 0.6,
+                            gravity: 0.08, life: 12, maxLife: 12, size: 1.3, color: '#ffd260'
+                        });
+                    }
+                    c.vy = -c.vy * 0.28;
+                    c.vx *= 0.6;
+                    c.vAngle *= 0.5;
+                    if (Math.abs(c.vy) < 0.18) {
+                        c.vy = 0;
+                        c.vx = 0;
+                        c.vAngle = 0;
+                    }
+                }
+            } else {
+                c.y = targetY;
+                c.angle *= Math.pow(0.82, dt60);
+            }
+            currentFloorY = c.y - c.size * 0.5;
+            this.drawPadCargoCrate(ctx, c);
+        }
+
+        // 2. Update Struggling Rope-Hauler State Machine
+        if (h.state === 'idle') {
+            if (!dangerShip && stack.length > 0) {
+                h.state = 'fetching';
+            } else {
+                return;
+            }
+        }
+
+        if (h.state === 'fetching') {
+            if (stack.length === 0) {
+                h.state = 'idle';
+                return;
+            }
+            const bottomCrate = stack[0];
+            const stopSide = Math.sign(base.doorX - bottomCrate.x) || -1;
+            const hookX = bottomCrate.x + stopSide * (bottomCrate.size * 0.5 + 4);
+            const dx = hookX - h.x;
+            if (Math.abs(dx) > 1.5) {
+                h.x += Math.sign(dx) * Math.min(Math.abs(dx), 0.78 * dt60);
+            } else {
+                h.state = 'attaching';
+                h.timer = 22;
+            }
+        } else if (h.state === 'attaching') {
+            h.timer -= dt60;
+            if (h.timer <= 0) {
+                if (stack.length === 0) {
+                    h.state = 'idle';
+                    return;
+                }
+                // Yank the BOTTOM crate out from underneath the stack!
+                const yanked = stack.shift();
+                const pullDir = Math.sign(base.doorX - yanked.x) || -1;
+                h.draggedCrate = yanked;
+                h.state = 'dragging';
+
+                // Tablecloth-pull effect: all crates stacked above it topple, spin, and drop!
+                for (let i = 0; i < stack.length; i++) {
+                    const upper = stack[i];
+                    upper.vy = -0.35 - i * 0.15;
+                    upper.vx = -pullDir * (0.45 + Math.random() * 0.55) + (Math.random() - 0.5) * 0.35;
+                    upper.vAngle = -pullDir * (0.06 + Math.random() * 0.08);
+                }
+            }
+        } else if (h.state === 'dragging') {
+            const dc = h.draggedCrate;
+            if (!dc) {
+                h.state = 'idle';
+                return;
+            }
+            const pullDir = Math.sign(base.doorX - dc.x) || -1;
+            // Struggling rhythmic heave-ho pull speed (leans hard & surges every step)
+            const heavePulse = 0.35 + 0.65 * Math.pow(Math.max(0, Math.sin(timeSec * 5.5 + h.phase)), 2);
+            const weightFactor = dc.isLarge ? 0.19 : 0.27;
+            const step = weightFactor * heavePulse * dt60;
+
+            const ropeLen = 13;
+            h.x += pullDir * step;
+            const desiredCrateX = h.x - pullDir * ropeLen;
+            if ((pullDir > 0 && dc.x < desiredCrateX) || (pullDir < 0 && dc.x > desiredCrateX)) {
+                dc.x = desiredCrateX;
+            }
+            dc.y = base.padY - dc.size * 0.5;
+            dc.angle = Math.sin(timeSec * 11 + h.phase) * 0.04;
+
+            // Friction sparks under the heavy dragged crate
+            if (heavePulse > 0.75 && rollChance(0.18, dt60) && this.sparks.length < 90) {
+                this.sparks.push({
+                    x: dc.x - pullDir * (dc.size * 0.4),
+                    y: base.padY,
+                    vx: -pullDir * (0.4 + Math.random() * 0.5),
+                    vy: -0.3 - Math.random() * 0.4,
+                    gravity: 0.06, life: 10, maxLife: 10, size: 1.1, color: '#f59e0b'
+                });
+            }
+
+            this.drawPadCargoCrate(ctx, dc);
+
+            // Draw taut high-tension tow rope from worker hands to crate hook
+            ctx.strokeStyle = '#d6bc8b';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(h.x - pullDir * 1.5, base.padY - 3.8);
+            ctx.lineTo(dc.x + pullDir * (dc.size * 0.5), dc.y);
+            ctx.stroke();
+
+            if (Math.abs(dc.x - base.doorX) < 5.0) {
+                h.draggedCrate = null;
+                h.state = stack.length > 0 ? 'fetching' : 'idle';
+                return;
+            }
+        }
+
+        // 3. Draw the Cargo Hauler Crewman (leaning heavily forward when dragging!)
+        const wy = base.padY;
+        const isDragging = h.state === 'dragging';
+        const moveDir = isDragging
+            ? (Math.sign(base.doorX - h.x) || -1)
+            : (stack[0] ? (Math.sign(stack[0].x - h.x) || 1) : 1);
+        const leanX = isDragging ? (moveDir * 2.8) : 0;
+        const cycle = timeSec * (isDragging ? 11 : 18) + h.phase;
+        const stride = (h.state === 'attaching') ? 0 : Math.sin(cycle) * (isDragging ? 2.2 : 1.7);
+        const bob = (h.state === 'attaching') ? 1.2 : Math.abs(Math.cos(cycle)) * 0.8;
+
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(h.x + leanX * 0.5, wy - 2.6 - bob);
+        ctx.lineTo(h.x - 1.4 - stride, wy);
+        ctx.moveTo(h.x + leanX * 0.5, wy - 2.6 - bob);
+        ctx.lineTo(h.x + 1.4 + stride, wy);
+        ctx.stroke();
+
+        // Straining tilted torso
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 3.0;
+        ctx.beginPath();
+        ctx.moveTo(h.x + leanX * 0.3, wy - 2.5 - bob);
+        ctx.lineTo(h.x + leanX, wy - 5.8 - bob);
+        ctx.stroke();
+
+        // Helmet & visor
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.arc(h.x + leanX * 1.15, wy - 7.0 - bob, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#00f2fe';
+        ctx.fillRect(h.x + leanX * 1.15 + (moveDir >= 0 ? 0.4 : -1.3), wy - 7.5 - bob, 1.1, 0.9);
+    }
+
+    drawPadCargoCrate(ctx, c) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle || 0);
+        const hs = c.size * 0.5;
+        ctx.fillStyle = c.isLarge ? '#2c1e14' : '#1e2417';
+        ctx.strokeStyle = c.isLarge ? '#e67e22' : '#f1c40f';
+        ctx.lineWidth = 1.3;
+        ctx.fillRect(-hs, -hs, c.size, c.size);
+        ctx.strokeRect(-hs, -hs, c.size, c.size);
+        ctx.fillStyle = c.isLarge ? '#f39c12' : '#f1c40f';
+        ctx.fillRect(-hs + 2, -1, c.size - 4, 2);
         ctx.restore();
     }
 }

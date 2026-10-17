@@ -66,6 +66,7 @@ export function sysCargo(ecs: Registry, room: Room) {
                     p.score += points;
                     inv.unloadTimer = 30; // Frame cooldown between unloading crates
                     ecs.events.push({ type: 'sound', soundId: 10, x: pt.x, y: pt.y });
+                    ecs.events.push({ type: 'cargo_unloaded', x: pt.x, y: tileY * 32, typeId: crateId });
                     ecs.events.push({ type: 'floating_text', text: `CARGO SECURED (+${points})`, color: '#2ecc71', x: pt.x, y: pt.y - 30 });
                     room.tracker.logEvent(p.id, { type: 'cargo_delivered', typeId: crateId });
 

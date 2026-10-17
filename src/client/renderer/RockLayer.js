@@ -406,9 +406,11 @@ export class RockLayer {
         this.ghostShip = null;
 
         const w = level.width;
-        const h = level.height;
 
         // 1. Build Main Playfield Rock Mesh Canvas (Single Source of Truth from Smoothed Polygons)
+        // Extend bedrock canvas 220px below the level so scrolling up for the bottom HUD always shows solid ground!
+        const underfillH = 220;
+        const h = level.height + underfillH;
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
