@@ -73,6 +73,7 @@ export interface PlayerStats {
     team?: 'E2' | 'E3';
     sessionMode?: 'SP' | 'MP';
     roomCode?: string;
+    allowSpectators?: boolean;
 }
 
 export interface BotState {

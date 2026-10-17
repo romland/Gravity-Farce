@@ -38,6 +38,6 @@ export function spawnExplosionFragments(ecs: Registry, x: number, y: number, typ
     const amigaTopLeftY = y - amigaHeight;
 
     for (const f of fragments) {
-        spawnBullet(ecs, amigaTopLeftX + (f.dx * 2), amigaTopLeftY + (f.dy * 2), f.vx * 2, f.vy * 2, false, 'npc', 100);
+        spawnBullet(ecs, amigaTopLeftX + (f.dx * 2), amigaTopLeftY + (f.dy * 2), f.vx * 2, f.vy * 2, false, 'npc', 90);
     }
 }

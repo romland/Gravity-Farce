@@ -502,6 +502,36 @@ html, body {
     max-height: 88vh;
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.25) rgba(5, 7, 10, 0.85);
+}
+
+.gmodal, #leaderboard-content, #active-rooms-list, .hud-dir-vertical .hud-slot-bottom-bar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.25) rgba(5, 7, 10, 0.85);
+}
+
+.gmodal::-webkit-scrollbar,
+#leaderboard-content::-webkit-scrollbar,
+#active-rooms-list::-webkit-scrollbar,
+.hud-dir-vertical .hud-slot-bottom-bar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.gmodal::-webkit-scrollbar-track,
+#leaderboard-content::-webkit-scrollbar-track,
+#active-rooms-list::-webkit-scrollbar-track,
+.hud-dir-vertical .hud-slot-bottom-bar::-webkit-scrollbar-track {
+    background: rgba(5, 7, 10, 0.85);
+}
+
+.gmodal::-webkit-scrollbar-thumb,
+#leaderboard-content::-webkit-scrollbar-thumb,
+#active-rooms-list::-webkit-scrollbar-thumb,
+.hud-dir-vertical .hud-slot-bottom-bar::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.25);
+    border-radius: 2px;
 }
 
 #leaderboard-modal {

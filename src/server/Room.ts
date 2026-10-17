@@ -45,6 +45,7 @@ export class Room {
     public assignedHomes = new Map<string, { x: number; y: number }>();
     private gameOverResetTimer: any = null;
     public dogfightCompleted: boolean = false;
+    public allowSpectators: boolean = true;
     public pendingReplayActors: { actorId: string; type: 'classic' | 'modern'; stats: any; joinedAtTick: number }[] = [];
 
     constructor(
@@ -103,7 +104,7 @@ export class Room {
     }
 
     public getRoomMode(): 'SP' | 'MP' {
-        return this.sessionMode === 'MP' || this.activeClientIds.size > 1 ? 'MP' : 'SP';
+        return this.sessionMode === 'MP' ? 'MP' : 'SP';
     }
 
     public getBotCount(): number {

@@ -6,7 +6,7 @@ export class DialogManager {
         this.onRetryLevel = onRetryLevel;
         this.onSwitchSession = onSwitchSession;
 
-        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal', 'fullscreen-modal'];
+        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal', 'fullscreen-modal', 'quick-restart-modal'];
         this.hintTimer = null;
         this.lastBoards = null;
         this.lastIsHud = false;
@@ -459,9 +459,9 @@ export class DialogManager {
             } else {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'gbtn';
-                btn.textContent = 'JOIN';
-                btn.onclick = () => this.onSwitchSession('MP', r.joinCode);
+                btn.className = r.spectateOnly ? 'gbtn gbtn-amber' : 'gbtn';
+                btn.textContent = r.spectateOnly ? 'SPECTATE' : 'JOIN';
+                btn.onclick = () => this.onSwitchSession(r.spectateOnly ? 'SP' : 'MP', r.joinCode);
                 row.appendChild(btn);
             }
             container.appendChild(row);

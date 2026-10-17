@@ -11,7 +11,7 @@ import { checkShipBoxCollision, isNearSolidTile } from './player-shared';
 import { SERVER_CONFIG } from '../core/config';
 import { scaleAmigaFrameTimer } from '../core/math';
 
-export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
+export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 0) {
     const e = ecs.create();
     ecs.transforms.set(e, { x, y, angle: 0 });
     ecs.velocities.set(e, { vx, vy, angularVelocity: 0 });
@@ -182,6 +182,14 @@ export function sysBullets(ecs: Registry, room: Room) {
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
         
+        if (b.life > 0) {
+            b.life--;
+            if (b.life <= 0) {
+                ecs.destroy(e);
+                continue;
+            }
+        }
+
         const ox = t.x;
         const oy = t.y;
         

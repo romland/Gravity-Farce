@@ -47,8 +47,8 @@ export function sysWeapons(ecs: Registry) {
                 const bvy = v.vy + Math.sin(t.angle) * bSpeed;
                 
                 // Fire two bullets in sequence along the same line, slightly offset in life/position
-                spawnBullet(ecs, bx, by, bvx, bvy, true, p.id, 400);
-                spawnBullet(ecs, bx - Math.cos(t.angle) * 10, by - Math.sin(t.angle) * 10, bvx, bvy, true, p.id, 400);
+                spawnBullet(ecs, bx, by, bvx, bvy, true, p.id);
+                spawnBullet(ecs, bx - Math.cos(t.angle) * 10, by - Math.sin(t.angle) * 10, bvx, bvy, true, p.id);
                 
                 mount.shotsFired += 2;
                 mount.charges--;

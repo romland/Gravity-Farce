@@ -61,6 +61,7 @@ if (!myUuid) {
 let myAlias = localStorage.getItem('gf_alias');
 let myIsBot = localStorage.getItem('gf_is_bot') === 'true';
 let mySessionMode = localStorage.getItem('gf_session_mode') === 'MP' ? 'MP' : 'SP';
+let myAllowSpectators = localStorage.getItem('gf_sp_allow_spectators') !== '0';
 let currentRoomInfo = { roomId: 0, joinCode: '', mode: mySessionMode, levelIndex: 0, category: 'mission', playerCount: 1 };
 let currentRoomRules = { discipline: 'mission', flavor: 'STANDARD', objectiveText: '' };
 
@@ -71,6 +72,8 @@ let renderState = { players: {}, flying: {}, tanks: {} };
 let level = null;
 let camera = { x: 0, y: 0 };
 let particles = [];
+let levelLoadPerfNow = performance.now();
+let lastDeathPerfNow = 0;
 let tankDebrisPiles = [];
 let fireworks = [];
 let floatingTexts = [];
@@ -97,7 +100,58 @@ function requestNextLevel() {
 function requestReplayLevel() {
     document.getElementById('leaderboard-modal').style.display = 'none';
     document.getElementById('gameover-modal').style.display = 'none';
+    document.getElementById('quick-restart-modal').style.display = 'none';
     socket.emit('retry_level');
+}
+
+function dismissQuickRestart() {
+    const modal = document.getElementById('quick-restart-modal');
+    if (modal) modal.style.display = 'none';
+    // Reset grind cycle tracker when user chooses to keep points/streak and escape the prompt
+    localStorage.removeItem('gf_grind_tracker');
+}
+
+// Tracks intentional SP restarts & quick page reloads after death to detect speedrunner record-grinding cycles
+function getGrindState() {
+    try {
+        return JSON.parse(localStorage.getItem('gf_grind_tracker') || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function recordIntentionalReset(lvlIdx, reason) {
+    const now = Date.now();
+    const st = getGrindState();
+    const validHistory = (st.levelIndex === lvlIdx && Array.isArray(st.resets))
+        ? st.resets.filter(ts => now - ts < 180000) // 3-minute rolling window
+        : [];
+    validHistory.push(now);
+    localStorage.setItem('gf_grind_tracker', JSON.stringify({
+        levelIndex: lvlIdx,
+        resets: validHistory,
+        lastDeathAt: st.lastDeathAt || 0,
+        lastReason: reason
+    }));
+}
+
+function isPlayerInRestartCycle(lvlIdx) {
+    const st = getGrindState();
+    if (st.levelIndex !== lvlIdx || !Array.isArray(st.resets)) return false;
+    const now = Date.now();
+    const recent = st.resets.filter(ts => now - ts < 180000);
+    // Strictly require at least 2 rapid manual restarts / post-death reloads on this cavern so newbies NEVER see it
+    return recent.length >= 2;
+}
+
+function triggerSpRestart() {
+    if (mySessionMode !== 'SP') return;
+    const timeInLevelMs = performance.now() - levelLoadPerfNow;
+    const timeSinceDeathMs = lastDeathPerfNow > 0 ? (performance.now() - lastDeathPerfNow) : 999999;
+    if (timeSinceDeathMs < 4000 || timeInLevelMs < 25000) {
+        recordIntentionalReset(currentRoomInfo.levelIndex || 0, 'manual_restart');
+    }
+    requestReplayLevel();
 }
 
 function syncSessionModeRadios(mode) {
@@ -117,7 +171,7 @@ function switchSessionMode(mode, roomCode) {
     localStorage.setItem('gf_session_mode', mode);
     mySessionMode = mode;
     syncSessionModeRadios(mode);
-    socket.emit('switch_session_mode', { mode, roomCode });
+    socket.emit('switch_session_mode', { mode, roomCode, allowSpectators: myAllowSpectators });
     document.getElementById('room-modal').style.display = 'none';
 }
 
@@ -144,6 +198,20 @@ document.getElementById('btn-room-mode').onclick = () => {
         socket.emit('request_room_list');
     });
 };
+document.getElementById('btn-hud-restart').onclick = () => triggerSpRestart();
+document.getElementById('btn-quick-restart-confirm').onclick = () => triggerSpRestart();
+document.getElementById('btn-quick-restart-continue').onclick = () => {
+    dismissQuickRestart();
+};
+const chkSpSpectators = document.getElementById('chk-sp-allow-spectators');
+if (chkSpSpectators) {
+    chkSpSpectators.checked = myAllowSpectators;
+    chkSpSpectators.onchange = () => {
+        myAllowSpectators = chkSpSpectators.checked;
+        localStorage.setItem('gf_sp_allow_spectators', myAllowSpectators ? '1' : '0');
+        socket.emit('set_allow_spectators', myAllowSpectators);
+    };
+}
 document.getElementById('btn-spawn-bot').onclick = () => socket.emit('debug_action', 'spawn_bot');
 document.getElementById('btn-debug-life').onclick = () => socket.emit('debug_action', 'add_life');
 document.getElementById('btn-hud-help').onclick = () => dialogManager.openControlsModal();
@@ -185,10 +253,23 @@ for (const closeBtn of document.querySelectorAll('[data-close-modal]')) {
 
 const aliasInput = document.getElementById('alias-input');
 const inputManager = new InputManager(null, (inputs) => {
+    const qrModal = document.getElementById('quick-restart-modal');
+    if (qrModal && qrModal.style.display && qrModal.style.display !== 'none') {
+        // Allow FIRE button (keyboard or controller!) to immediately trigger the focused Quick Restart dialog
+        if (inputs.shoot && (performance.now() - lastDeathPerfNow) > 350) {
+            triggerSpRestart();
+        }
+        return;
+    }
     if (!freecam) socket.emit('input', inputs);
 }, (action, payload) => {
     if (action === 'escape') {
-        if (!dialogManager.closeAnyOpen()) socket.emit('leave_replay');
+        const qrModal = document.getElementById('quick-restart-modal');
+        if (qrModal && qrModal.style.display && qrModal.style.display !== 'none') {
+            dismissQuickRestart();
+        } else if (!dialogManager.closeAnyOpen()) {
+            socket.emit('leave_replay');
+        }
     } else if (action === 'inputEnter') {
         if (payload === 'alias-input') attemptLogin(aliasInput.value);
         else if (payload === 'room-code-input') document.getElementById('btn-room-join-code').click();
@@ -248,6 +329,8 @@ socket.on('serverConfig', (config) => {
     debugMode = Boolean(config.debugMode);
     document.getElementById('btn-spawn-bot').style.display = debugMode ? 'inline-block' : 'none';
     document.getElementById('btn-debug-life').style.display = debugMode ? 'inline-block' : 'none';
+    const specWrap = document.getElementById('room-sp-spectate-wrap');
+    if (specWrap) specWrap.style.display = config.allowSpSpectating !== false ? 'flex' : 'none';
     if (typeof config.shipScale === 'number' && config.shipScale > 0) {
         shipScale = config.shipScale;
     }
@@ -271,6 +354,8 @@ socket.on('room_info', (info) => {
     mySessionMode = info.mode || 'SP';
     localStorage.setItem('gf_session_mode', mySessionMode);
     syncSessionModeRadios(mySessionMode);
+    const restartBtn = document.getElementById('btn-hud-restart');
+    if (restartBtn) restartBtn.style.display = mySessionMode === 'SP' ? 'inline-block' : 'none';
     const btn = document.getElementById('btn-room-mode');
     if (btn) {
         btn.textContent = mySessionMode === 'MP'
@@ -312,6 +397,7 @@ socket.on('playfield_announce', (data) => {
 });
 
 socket.on('game_over', (data) => {
+    document.getElementById('quick-restart-modal').style.display = 'none';
     const modal = document.getElementById('gameover-modal');
     const sub = document.getElementById('gameover-sub');
     if (sub) sub.textContent = `FINAL SCORE: ${String(data?.score || 0).padStart(6, '0')} - FLEET DEPLETED`;
@@ -320,6 +406,7 @@ socket.on('game_over', (data) => {
 
 socket.on('hide_game_over', () => {
     document.getElementById('gameover-modal').style.display = 'none';
+    document.getElementById('quick-restart-modal').style.display = 'none';
 });
 
 socket.on('show_leaderboard', (boards, isHud = false) => {
@@ -328,11 +415,18 @@ socket.on('show_leaderboard', (boards, isHud = false) => {
 
 socket.on('initLevel', (data) => {
     level = data;
+    levelLoadPerfNow = performance.now();
+    // Detect if the user reloaded the browser page right after dying in this cavern (< 3.5s ago)
+    const st = getGrindState();
+    if (mySessionMode === 'SP' && st.lastDeathAt && (Date.now() - st.lastDeathAt) < 3500 && st.levelIndex === currentRoomInfo.levelIndex) {
+        recordIntentionalReset(currentRoomInfo.levelIndex, 'reload_after_death');
+    }
     renderState.players = {};
     renderState.flying = {};
     renderState.tanks = {};
     tankDebrisPiles = [];
     document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('quick-restart-modal').style.display = 'none';
     if (window.gfRenderer) {
         window.gfRenderer.rock.buildLevelCache(level);
         window.gfRenderer.flora.initLevel(level);
@@ -463,8 +557,33 @@ socket.on('state', (state) => {
                 window.gfRenderer?.flora?.triggerShock(s.x, s.y, 200, 1.0);
                 window.gfRenderer?.details?.onExplosion(s.x, s.y, r.vx || s.vx || 0, r.vy || s.vy || 0, level, window.gfRenderer.rock, window.gfRenderer.flora, 1.0);
                 if (id === myId) {
+                    lastDeathPerfNow = performance.now();
+                    const st = getGrindState();
+                    localStorage.setItem('gf_grind_tracker', JSON.stringify({
+                        ...st,
+                        levelIndex: currentRoomInfo.levelIndex || 0,
+                        lastDeathAt: Date.now()
+                    }));
                     inputManager.vibrate(600, 1.0, 1.0);
                     inputManager.forceReset();
+                    // Instant First-Frame Quick-Restart Dialog for verified SP record grinders when lives remain
+                    if (mySessionMode === 'SP' && (s.lives === undefined || s.lives > 0) && isPlayerInRestartCycle(currentRoomInfo.levelIndex || 0)) {
+                        const qrModal = document.getElementById('quick-restart-modal');
+                        const qrBtn = document.getElementById('btn-quick-restart-confirm');
+                        const contBtn = document.getElementById('btn-quick-restart-continue');
+                        if (qrModal && qrBtn && contBtn) {
+                            const hasPoints = (s.score || 0) > 0;
+                            if (hasPoints) {
+                                contBtn.textContent = 'KEEP POINTS (ESC)';
+                                contBtn.style.display = 'inline-block';
+                            } else {
+                                contBtn.style.display = 'none';
+                            }
+                            dialogManager.closeAnyOpen();
+                            qrModal.style.display = 'flex';
+                            qrBtn.focus();
+                        }
+                    }
                 }
             }
             const dist = Math.hypot(r.x - s.x, r.y - s.y);
@@ -1149,7 +1268,8 @@ async function attemptLogin(alias, useSavedMode = false) {
                 isBot: myIsBot,
                 mode: mySessionMode,
                 roomCode: selectedCode,
-                levelIndex: isNaN(startLvl) ? 0 : startLvl
+                levelIndex: isNaN(startLvl) ? 0 : startLvl,
+                allowSpectators: myAllowSpectators
             };
             socket.connect();
             if (!loopStarted) {

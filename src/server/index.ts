@@ -116,9 +116,14 @@ function resolveOrCreateTargetRoom(levelIndex: number, mode: 'SP' | 'MP', reques
         const existingRId = roomsByCode.get(cleanCode)!;
         const existingRoom = rooms.get(existingRId);
         if (existingRoom && !existingRoom.isReplayMode) {
-            // Joining a room by code automatically promotes it to MP if >1 player
-            existingRoom.sessionMode = 'MP';
-            return existingRoom;
+            // If joining an SP room, only allow joining as a spectator (if both server & player allow it)
+            if (existingRoom.sessionMode === 'SP') {
+                if (SERVER_CONFIG.allowSpSpectating && existingRoom.allowSpectators) {
+                    return { room: existingRoom, asSpectator: true };
+                }
+                return { room: createRoomInstance(levelIndex, 'SP'), asSpectator: false };
+            }
+            return { room: existingRoom, asSpectator: false };
         }
     }
 
@@ -127,15 +132,15 @@ function resolveOrCreateTargetRoom(levelIndex: number, mode: 'SP' | 'MP', reques
         if (!cleanCode) {
             for (const room of rooms.values()) {
                 if (!room.isReplayMode && room.sessionMode === 'MP' && room.levelIndex === levelIndex) {
-                    return room;
+                    return { room, asSpectator: false };
                 }
             }
         }
-        return createRoomInstance(levelIndex, 'MP', cleanCode.length === 4 ? cleanCode : undefined);
+        return { room: createRoomInstance(levelIndex, 'MP', cleanCode.length === 4 ? cleanCode : undefined), asSpectator: false };
     }
 
     // Default SP: 100% isolated private room instance for this pilot!
-    return createRoomInstance(levelIndex, 'SP');
+    return { room: createRoomInstance(levelIndex, 'SP'), asSpectator: false };
 }
 
 function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classic' | 'modern'; stats: PlayerStats } {
@@ -192,7 +197,8 @@ function emitRoomInfo(socket: any, room: Room) {
         mode: room.sessionMode,
         levelIndex: room.levelIndex,
         category: room.category,
-        playerCount: room.activeClientIds.size
+        playerCount: room.activeClientIds.size,
+        allowSpectators: room.allowSpectators
     });
 }
 
@@ -214,8 +220,23 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     stats.sessionMode = targetMode;
     if (overrideCode !== undefined) stats.roomCode = overrideCode;
 
-    const newRoom = resolveOrCreateTargetRoom(targetLevel, targetMode, overrideCode);
+    const { room: newRoom, asSpectator } = resolveOrCreateTargetRoom(targetLevel, targetMode, overrideCode);
+    if (!asSpectator && newRoom.sessionMode === 'SP') {
+        newRoom.allowSpectators = stats.allowSpectators !== false;
+    }
     const actualLevel = newRoom.levelIndex;
+
+    if (asSpectator) {
+        playerSessionStats.set(id, stats);
+        socket.join(newRoom.channel);
+        playerRooms.set(id, newRoom.roomId);
+        socket.emit('initLevel', newRoom.level);
+        socket.emit('flora_burn_reset');
+        socket.emit('levelIndex', newRoom.levelIndex);
+        newRoom.addSpectator(id);
+        emitRoomInfo(socket, newRoom);
+        return;
+    }
 
     // Enforce 5-Lives Sequential Streak rules on Mission Levels (0-49):
     // Advancing sequentially via legitimate cavern completion (wasAdvancing && lastLevel -> lastLevel + 1)
@@ -357,9 +378,13 @@ io.on('connection', (socket) => {
     const initialLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : 0;
     const initialMode: 'SP' | 'MP' = auth.mode === 'MP' ? 'MP' : 'SP';
     const initialRoomCode = sanitizeRoomCode(auth.roomCode);
+    const allowSpectatorsPref = auth.allowSpectators !== false;
 
     const useClassicPhysics = SERVER_CONFIG.useClassicPhysics;
-    const room = resolveOrCreateTargetRoom(initialLevel, initialMode, initialRoomCode);
+    const { room, asSpectator } = resolveOrCreateTargetRoom(initialLevel, initialMode, initialRoomCode);
+    if (!asSpectator && room.sessionMode === 'SP') {
+        room.allowSpectators = allowSpectatorsPref;
+    }
     const stats: PlayerStats = {
         score: 0,
         uuid: uuid,
@@ -371,7 +396,8 @@ io.on('connection', (socket) => {
         streakStartLevel: room.levelIndex,
         streakLastLevel: room.levelIndex,
         sessionMode: room.sessionMode,
-        roomCode: room.joinCode
+        roomCode: room.joinCode,
+        allowSpectators: allowSpectatorsPref
     };
     playerSessionStats.set(socket.id, stats);
 
@@ -381,7 +407,11 @@ io.on('connection', (socket) => {
     socket.emit('initTiles', TILE_DICTIONARY);
     socket.emit('initLevel', room.level);
     socket.emit('levelIndex', room.levelIndex);
-    room.addPlayer(socket.id, stats.shipType || 'classic', stats);
+    if (asSpectator) {
+        room.addSpectator(socket.id);
+    } else {
+        room.addPlayer(socket.id, stats.shipType || 'classic', stats);
+    }
     for (const cid of room.activeClientIds) {
         const s = io.sockets.sockets.get(cid);
         if (s) emitRoomInfo(s, room);
@@ -625,10 +655,12 @@ io.on('connection', (socket) => {
         const list = [];
         for (const r of rooms.values()) {
             if (r.isReplayMode || r.activeClientIds.size === 0) continue;
+            if (r.sessionMode === 'SP' && (!SERVER_CONFIG.allowSpSpectating || !r.allowSpectators)) continue;
             const pilots = Array.from(r.ecs.players.values()).filter(p => !r.ecs.bots.has(r.ecs.getPlayerEntity(p.id)!)).map(p => p.alias);
             list.push({
                 joinCode: r.joinCode,
                 mode: r.sessionMode,
+                spectateOnly: r.sessionMode === 'SP',
                 levelIndex: r.levelIndex,
                 levelName: r.level.name,
                 category: r.category,
@@ -640,7 +672,18 @@ io.on('connection', (socket) => {
         socket.emit('room_list', list);
     });
 
-    socket.on('switch_session_mode', (payload: { mode?: 'SP' | 'MP'; roomCode?: string; levelIndex?: number }) => {
+    socket.on('set_allow_spectators', (allow: boolean) => {
+        const stats = playerSessionStats.get(socket.id);
+        if (stats) stats.allowSpectators = Boolean(allow);
+        const rId = playerRooms.get(socket.id);
+        const room = rId !== undefined ? rooms.get(rId) : undefined;
+        if (room && room.sessionMode === 'SP' && room.ecs.getPlayerEntity(socket.id) !== undefined) {
+            room.allowSpectators = Boolean(allow);
+            emitRoomInfo(socket, room);
+        }
+    });
+
+    socket.on('switch_session_mode', (payload: { mode?: 'SP' | 'MP'; roomCode?: string; levelIndex?: number; allowSpectators?: boolean }) => {
         const curRId = playerRooms.get(socket.id);
         const curRoom = curRId !== undefined ? rooms.get(curRId) : undefined;
         const baseLevel = (typeof payload?.levelIndex === 'number' && isValidLevelIndex(payload.levelIndex))
@@ -648,6 +691,10 @@ io.on('connection', (socket) => {
             : (curRoom?.levelIndex ?? 0);
         const mode: 'SP' | 'MP' = payload?.mode === 'MP' ? 'MP' : 'SP';
         const code = sanitizeRoomCode(payload?.roomCode);
+        const stats = playerSessionStats.get(socket.id);
+        if (stats && typeof payload?.allowSpectators === 'boolean') {
+            stats.allowSpectators = payload.allowSpectators;
+        }
         socket.emit('hide_leaderboard');
         socket.emit('hide_game_over');
         handleTransitionToLevel(socket.id, baseLevel, true, mode, code);

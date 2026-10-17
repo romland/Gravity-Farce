@@ -188,6 +188,9 @@ export function sysClassicPlayers(ecs: Registry, room: Room) {
              const drain = Math.min(FUEL_DRAIN * thrustScale, f.current);
              f.current -= drain;
              f.consumed += drain;
+             if (f.current <= 0 && !ecs.bots.has(e) && !room.isReplayMode) {
+                 room.emitToPlayer(p.id, 'playfield_announce', { text: 'OUT OF FUEL!', color: '#ef4444' });
+             }
              const accelX = Math.cos(t.angle) * weightThrust * thrustScale;
              // Apply CLASSIC_RETRO_BRAKE_MULT when thrusting opposite to current horizontal motion
              const isRetroX = (v.vx > RETRO_THRESHOLD_VX && accelX < 0) || (v.vx < -RETRO_THRESHOLD_VX && accelX > 0);

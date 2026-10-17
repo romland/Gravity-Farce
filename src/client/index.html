@@ -71,6 +71,20 @@
             </div>
         </div>
 
+        <!-- Speedrunner Instant Death-Restart Modal (Only shown when in a verified restart cycle) -->
+        <div id="quick-restart-modal" class="gmodal" style="width:560px; text-align:center;">
+            <div class="gmodal-header">
+                <span class="gmodal-title" style="color:var(--col-amber);">RESTART CAVERN</span>
+                <button class="gmodal-close" data-close-modal="quick-restart-modal" type="button">✕</button>
+            </div>
+            <div class="hud-val" style="margin:10px 0 16px;">PRESS <span style="color:var(--col-cyan);">FIRE / ENTER</span> TO RESTART CAVERN IMMEDIATELY</div>
+            <div class="hud-label" style="color:var(--col-text-dim); margin-bottom:14px;">PRESS ESCAPE TO HIDE THIS DIALOG AND DON'T ASK FOR A LITTLE WHILE</div>
+            <div style="display:flex; gap:10px;">
+                <button class="gbtn gbtn-lg" id="btn-quick-restart-continue" style="flex:1;" type="button">KEEP STREAK (ESC)</button>
+                <button class="gbtn gbtn-emerald gbtn-lg" id="btn-quick-restart-confirm" style="flex:1;" type="button">RESTART CAVERN</button>
+            </div>
+        </div>
+
         <!-- Fullscreen Prompt Modal (24h Cookie/Storage) -->
         <div id="fullscreen-modal" class="gmodal" style="width:440px; text-align:center;">
             <div class="gmodal-header">
@@ -78,6 +92,7 @@
                 <button class="gmodal-close" id="btn-fs-close" type="button">✕</button>
             </div>
             <div class="hud-val" style="margin:10px 0 18px; white-space:normal;">ENGAGE FULLSCREEN DISPLAY FOR MAXIMUM SUBTERRANEAN VISIBILITY?</div>
+            <div class="hud-label" style="color:var(--col-text-dim); margin-bottom:14px;">YOU CAN ALWAYS PRESS F11 TO GET FULLSCREEN AT ANY TIME</div>
             <div style="display:flex; gap:10px;">
                 <button class="gbtn gbtn-lg" id="btn-fs-decline" style="flex:1;" type="button">WINDOWED</button>
                 <button class="gbtn gbtn-emerald gbtn-lg" id="btn-fs-accept" style="flex:1;" type="button">FULLSCREEN</button>
@@ -108,6 +123,10 @@
                 <button class="gbtn gbtn-emerald gbtn-lg" id="btn-room-sp" style="flex:1;" type="button">NEW SOLO (SP)</button>
                 <button class="gbtn gbtn-amber gbtn-lg" id="btn-room-mp" style="flex:1;" type="button">PUBLIC MP</button>
             </div>
+            <label id="room-sp-spectate-wrap" class="hud-label" style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.45); padding:8px 10px; border:1px solid rgba(0,242,254,0.18); margin-bottom:14px; cursor:pointer;">
+                <span>ALLOW SPECTATORS IN SOLO (SP)</span>
+                <input type="checkbox" id="chk-sp-allow-spectators" checked style="accent-color:var(--col-cyan); cursor:pointer;">
+            </label>
             <div class="hud-label" style="margin-bottom:6px;">JOIN / CREATE MP CAVERN BY 4-CHAR CODE</div>
             <div style="display:flex; gap:8px; margin-bottom:14px;">
                 <input type="text" id="room-code-input" class="ginput" maxlength="4" placeholder="CODE" style="font-size:var(--fs-lg);">

@@ -115,6 +115,9 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
              const drain = Math.min(MODERN_FUEL_DRAIN * thrustScale, f.current);
              f.current -= drain;
              f.consumed += drain;
+             if (f.current <= 0 && !ecs.bots.has(e) && !room.isReplayMode) {
+                 room.emitToPlayer(p.id, 'playfield_announce', { text: 'OUT OF FUEL!', color: '#ef4444' });
+             }
              v.vx += Math.cos(t.angle) * weightThrust * thrustScale;
              v.vy += Math.sin(t.angle) * weightThrust * thrustScale;
         }
