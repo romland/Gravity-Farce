@@ -292,8 +292,14 @@ export class PrefabLayer {
         // Blinking square landing-strip guidance beacon
         const blink = 0.5 + 0.5 * Math.sin(timeSec * 7 + p.x);
         if (blink > 0.25) {
-            ctx.fillStyle = `rgba(255, 65, 50, ${0.22 * blink})`;
-            ctx.fillRect(cx - halfW - 4, lampTopY - 4, pinW + 8, pinW + 8);
+            const g = ctx.createRadialGradient(cx, lampTopY + pinW * 0.5, 1, cx, lampTopY + pinW * 0.5, 18 * blink);
+            g.addColorStop(0, `rgba(255, 75, 60, ${0.45 * blink})`);
+            g.addColorStop(0.4, `rgba(255, 45, 30, ${0.18 * blink})`);
+            g.addColorStop(1, 'rgba(255, 45, 30, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx, lampTopY + pinW * 0.5, 18 * blink, 0, Math.PI * 2);
+            ctx.fill();
 
             ctx.fillStyle = '#ff4b3a';
             ctx.fillRect(cx - halfW, lampTopY, pinW, pinW);
