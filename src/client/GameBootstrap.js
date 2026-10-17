@@ -819,10 +819,11 @@ function gameLoop(timestamp = performance.now()) {
                     r.y = predY;
                     r.angle = s.angle;
                 } else {
-                    const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
+                    const posBlend = id === myId ? 1.0 : blendFactor;
+                    const rotBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.45, dt60)) : blendFactor;
                     r.x = lerp(r.x, predX, posBlend);
                     r.y = lerp(r.y, predY, posBlend);
-                    r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
+                    r.angle = lerpAngle(r.angle, s.angle, rotBlend);
                 }
                 r.isDead = s.isDead;
                 r.isLanded = s.isLanded;

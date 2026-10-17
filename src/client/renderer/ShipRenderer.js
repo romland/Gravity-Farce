@@ -1,119 +1,22 @@
 export class ShipRenderer {
     constructor() {
-        this.svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <defs>
-    <linearGradient id="hull-light" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#d0d5db" />
-      <stop offset="60%" stop-color="#8e96a1" />
-      <stop offset="100%" stop-color="#5a626b" />
-    </linearGradient>
-    <linearGradient id="hull-dark" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#3d434a" />
-      <stop offset="100%" stop-color="#1f2226" />
-    </linearGradient>
-    <linearGradient id="mech-dark" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#222529" />
-      <stop offset="100%" stop-color="#0a0c0e" />
-    </linearGradient>
-    <linearGradient id="heat-shield" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#735f46" />
-      <stop offset="100%" stop-color="#362a1c" />
-    </linearGradient>
-    <linearGradient id="glass" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#2a333d" />
-      <stop offset="50%" stop-color="#151a21" />
-      <stop offset="100%" stop-color="#05080a" />
-    </linearGradient>
-  </defs>
-  <g id="spaceship" transform="translate(4.8, 0) scale(0.85, 1)">
-    <path d="M 32 6 L 10 44 L 10 54 L 14 54 L 14 46 L 22 42 L 22 50 L 26 52 L 38 52 L 42 50 L 42 42 L 50 46 L 50 54 L 54 54 L 54 44 Z" fill="url(#hull-light)" stroke="#1a1c20" stroke-width="0.5" />
-    <path d="M 32 14 L 15 43 L 22 41 Z" fill="url(#hull-dark)" />
-    <path d="M 32 14 L 49 43 L 42 41 Z" fill="url(#hull-dark)" />
-    <path d="M 30 10 L 34 10 L 36 40 L 32 44 L 28 40 Z" fill="#444b52" stroke="#2a2e33" stroke-width="0.5" />
-    <line x1="26" y1="28" x2="16" y2="35" stroke="#1c1f24" stroke-width="0.5" />
-    <line x1="14" y1="46" x2="22" y2="42" stroke="#1c1f24" stroke-width="1.5" />
-    <line x1="38" y1="28" x2="48" y2="35" stroke="#1c1f24" stroke-width="0.5" />
-    <line x1="50" y1="46" x2="42" y2="42" stroke="#1c1f24" stroke-width="1.5" />
-    <path d="M 22 42 L 42 42 L 42 50 L 38 52 L 26 52 L 22 50 Z" fill="url(#mech-dark)" />
-    <rect x="24" y="44" width="6" height="4" fill="url(#heat-shield)" rx="0.5" />
-    <rect x="34" y="44" width="6" height="4" fill="url(#heat-shield)" rx="0.5" />
-    <line x1="24" y1="46" x2="30" y2="46" stroke="#111" stroke-width="0.5" />
-    <line x1="34" y1="46" x2="40" y2="46" stroke="#111" stroke-width="0.5" />
-    <polygon points="30,42 34,42 33,53 31,53" fill="#3d434a" stroke="#111" stroke-width="0.5" />
-    <polygon points="25,52 30,52 29,55 26,55" fill="#080a0c" stroke="#333" stroke-width="0.5" />
-    <polygon points="34,52 39,52 38,55 35,55" fill="#080a0c" stroke="#333" stroke-width="0.5" />
-    <line x1="24" y1="51" x2="25" y2="56" stroke="#5a626b" stroke-width="1" stroke-linecap="round" />
-    <line x1="40" y1="51" x2="39" y2="56" stroke="#5a626b" stroke-width="1" stroke-linecap="round" />
-    <rect x="11" y="46" width="2" height="6" fill="#2a2e33" rx="0.5" stroke="#111" stroke-width="0.5" />
-    <line x1="11" y1="48" x2="13" y2="48" stroke="#ffaa00" stroke-width="0.5" />
-    <line x1="11" y1="50" x2="13" y2="50" stroke="#ffaa00" stroke-width="0.5" />
-    <rect x="51" y="46" width="2" height="6" fill="#2a2e33" rx="0.5" stroke="#111" stroke-width="0.5" />
-    <line x1="51" y1="48" x2="53" y2="48" stroke="#ffaa00" stroke-width="0.5" />
-    <line x1="51" y1="50" x2="53" y2="50" stroke="#ffaa00" stroke-width="0.5" />
-    <polygon points="32,20 28,30 30,36 34,36 36,30" fill="url(#glass)" stroke="#111" stroke-width="0.5" />
-    <polygon points="32,21 29,30 32,32" fill="#ffffff" opacity="0.15" />
-    <line x1="28" y1="30" x2="36" y2="30" stroke="#1a1c20" stroke-width="0.75" />
-    <path d="M 32 6 L 10 44 L 10 54" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.5" />
-    <path d="M 14 46 L 22 42 L 42 42 L 50 46" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.2" />
-    <polygon points="21,25 22.5,26 20.5,29.5 19,28.5" fill="url(#mech-dark)" stroke="#1a1c20" stroke-width="0.5" />
-    <line x1="22.5" y1="26" x2="20.5" y2="29.5" stroke="#ffffff" stroke-width="0.5" opacity="0.5" />
-    <circle cx="21.3" cy="26.6" r="0.5" fill="#080a0c" stroke="#444b52" stroke-width="0.2" />
-    <circle cx="20.2" cy="28.5" r="0.5" fill="#080a0c" stroke="#444b52" stroke-width="0.2" />
-    <line x1="21" y1="25" x2="22.5" y2="26" stroke="#ffaa00" stroke-width="0.4" />
-    <polygon points="43,25 41.5,26 43.5,29.5 45,28.5" fill="url(#mech-dark)" stroke="#1a1c20" stroke-width="0.5" />
-    <line x1="41.5" y1="26" x2="43.5" y2="29.5" stroke="#ffffff" stroke-width="0.5" opacity="0.3" />
-    <circle cx="42.7" cy="26.6" r="0.5" fill="#080a0c" stroke="#444b52" stroke-width="0.2" />
-    <circle cx="43.8" cy="28.5" r="0.5" fill="#080a0c" stroke="#444b52" stroke-width="0.2" />
-    <line x1="43" y1="25" x2="41.5" y2="26" stroke="#ffaa00" stroke-width="0.4" />
-    <path d="M 10 47 L 8 48 L 8 51 L 10 52 Z" fill="url(#hull-light)" stroke="#1a1c20" stroke-width="0.5" />
-    <path d="M 10 47 L 8 48 L 8 51 L 10 52" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.5" />
-    <line x1="8.2" y1="48.8" x2="9.5" y2="48.8" stroke="#080a0c" stroke-width="0.8" stroke-linecap="round" />
-    <line x1="8.2" y1="50.2" x2="9.5" y2="50.2" stroke="#080a0c" stroke-width="0.8" stroke-linecap="round" />
-    <line x1="8" y1="48" x2="10" y2="47" stroke="#ffaa00" stroke-width="0.4" />
-    <path d="M 54 47 L 56 48 L 56 51 L 54 52 Z" fill="url(#hull-light)" stroke="#1a1c20" stroke-width="0.5" />
-    <path d="M 54 47 L 56 48 L 56 51 L 54 52" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.1" />
-    <line x1="55.8" y1="48.8" x2="54.5" y2="48.8" stroke="#080a0c" stroke-width="0.8" stroke-linecap="round" />
-    <line x1="55.8" y1="50.2" x2="54.5" y2="50.2" stroke="#080a0c" stroke-width="0.8" stroke-linecap="round" />
-    <line x1="56" y1="48" x2="54" y2="47" stroke="#ffaa00" stroke-width="0.4" />
-  </g>
-</svg>`;
-        this.cache = new Map();
-    }
-
-    getShipImage(team, isMe, isBot) {
-        const key = `${team}_${isMe}_${isBot}`;
-        if (this.cache.has(key)) return this.cache.get(key);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-
-        let hueRotate = 0;
-        let saturate = 100;
-        if (isMe) { hueRotate = 200; saturate = 150; }
-        else if (team === 'E2') { hueRotate = 220; }
-        else if (team === 'E3') { hueRotate = 0; saturate = 200; }
-        else if (isBot) { hueRotate = 40; }
-
-        const img = new Image();
-        const blob = new Blob([this.svgString], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
-        img.onload = () => {
-            ctx.filter = `hue-rotate(${hueRotate}deg) saturate(${saturate}%)`;
-            ctx.translate(32, 32);
-            ctx.rotate(Math.PI / 2);
-            ctx.drawImage(img, -32, -32, 64, 64);
-            URL.revokeObjectURL(url);
+        this.paths = {
+            main: new Path2D("M 32 6 L 10 44 L 10 54 L 14 54 L 14 46 L 22 42 L 22 50 L 26 52 L 38 52 L 42 50 L 42 42 L 50 46 L 50 54 L 54 54 L 54 44 Z"),
+            wingL: new Path2D("M 32 14 L 15 43 L 22 41 Z"),
+            wingR: new Path2D("M 32 14 L 49 43 L 42 41 Z"),
+            spine: new Path2D("M 30 10 L 34 10 L 36 40 L 32 44 L 28 40 Z"),
+            ass: new Path2D("M 22 42 L 42 42 L 42 50 L 38 52 L 26 52 L 22 50 Z"),
+            stinger: new Path2D("M 30 42 L 34 42 L 33 53 L 31 53 Z"),
+            nozzleL: new Path2D("M 25 52 L 30 52 L 29 55 L 26 55 Z"),
+            nozzleR: new Path2D("M 34 52 L 39 52 L 38 55 L 35 55 Z"),
+            glass: new Path2D("M 32 20 L 28 30 L 30 36 L 34 36 L 36 30 Z"),
+            glassRefl: new Path2D("M 32 21 L 29 30 L 32 32 Z")
         };
-        img.src = url;
-        this.cache.set(key, canvas);
-        return canvas;
     }
 
     drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale) {
         if (p.isDead) return;
-        const shipImg = this.getShipImage(p.team, isMe, p.isBot);
+
         const timeSec = performance.now() * 0.001;
 
         ctx.save();
@@ -121,13 +24,63 @@ export class ShipRenderer {
         ctx.rotate(p.angle);
         if (shipScale !== 1.0) ctx.scale(shipScale, shipScale);
 
-        ctx.drawImage(shipImg, -21.5, -21.5, 43, 43);
+        // --- NATIVE VECTOR SVG RENDERING (No raster aliasing on rotation) ---
+        ctx.save();
+        ctx.scale(1, 0.85);       // 15% lateral squeeze (Y-axis in this local rotated space)
+        ctx.scale(0.671875, 0.671875); // Scale up (43/64) to compensate for SVG transparent padding
+        ctx.rotate(Math.PI / 2);  // Spin from UP to RIGHT
+        ctx.translate(-32, -32);  // Anchor at (0,0)
 
-        const isThrusting = p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0);
-        if (isThrusting) {
-            const tScale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
+        const teamColor = isMe ? '#d0d5db' : (p.team === 'E2' ? '#a0c5e8' : '#e8a0a0');
+        const darkColor = isMe ? '#3d434a' : (p.team === 'E2' ? '#2d3b4a' : '#4a2d2d');
+
+        ctx.fillStyle = teamColor;
+        ctx.strokeStyle = '#1a1c20';
+        ctx.lineWidth = 1;
+        ctx.fill(this.paths.main);
+        ctx.stroke(this.paths.main);
+
+        ctx.fillStyle = darkColor;
+        ctx.fill(this.paths.wingL);
+        ctx.fill(this.paths.wingR);
+
+        ctx.fillStyle = '#444b52';
+        ctx.fill(this.paths.spine);
+        ctx.stroke(this.paths.spine);
+
+        ctx.fillStyle = '#222529';
+        ctx.fill(this.paths.ass);
+
+        ctx.fillStyle = '#735f46';
+        ctx.fillRect(24, 44, 6, 4);
+        ctx.fillRect(34, 44, 6, 4);
+
+        ctx.fillStyle = '#3d434a';
+        ctx.fill(this.paths.stinger);
+        ctx.stroke(this.paths.stinger);
+
+        ctx.fillStyle = '#080a0c';
+        ctx.fill(this.paths.nozzleL);
+        ctx.fill(this.paths.nozzleR);
+
+        ctx.fillStyle = '#2a2e33';
+        ctx.fillRect(11, 46, 2, 6);
+        ctx.fillRect(51, 46, 2, 6);
+
+        ctx.fillStyle = '#151a21';
+        ctx.fill(this.paths.glass);
+        ctx.stroke(this.paths.glass);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fill(this.paths.glassRefl);
+
+        ctx.restore();
+
+        // --- CUSTOMIZED DUAL-ENGINE FLAME & RCS ANIMATIONS ---
+        if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0)) {
+            const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
             ctx.fillStyle = '#4facfe';
-            const flameLen = 14 * tScale + Math.random() * 6 * tScale;
+            const flameLen = 14 * scale + Math.random() * 6 * scale;
             
             ctx.beginPath(); ctx.moveTo(-14.5, -3.5); ctx.lineTo(-14.5 - flameLen, -2.25); ctx.lineTo(-14.5, -1.0); ctx.fill();
             ctx.beginPath(); ctx.moveTo(-14.5, 1.0); ctx.lineTo(-14.5 - flameLen, 2.25); ctx.lineTo(-14.5, 3.5); ctx.fill();
@@ -147,21 +100,22 @@ export class ShipRenderer {
             ctx.fillStyle = '#ff1133'; ctx.beginPath(); ctx.arc(-11, -11, 1.5, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#11ff55'; ctx.beginPath(); ctx.arc(-11, 11, 1.5, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.restore();
 
+        // --- DIAGNOSTICS & DEBUG ---
         if (debugMode && showDebugLines) {
-            const len = 16 * shipScale;
-            const halfW = 16 * shipScale * 0.85;
-            const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
+            const len = 16;
+            const halfW = 16 * 0.85;
             ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(p.x + cos * len, p.y + sin * len);
-            ctx.lineTo(p.x - cos * (len * 0.8) - sin * halfW, p.y - sin * (len * 0.8) + cos * halfW);
-            ctx.lineTo(p.x - cos * (len * 0.8) + sin * halfW, p.y - sin * (len * 0.8) - cos * halfW);
+            ctx.moveTo(len, 0);
+            ctx.lineTo(-len * 0.8, -halfW);
+            ctx.lineTo(-len * 0.8, halfW);
             ctx.closePath();
             ctx.stroke();
         }
+
+        ctx.restore();
 
         if (!isMe && p.alias) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
