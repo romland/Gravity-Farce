@@ -25,7 +25,7 @@ export class ShipRenderer {
       <stop offset="100%" stop-color="#05080a" />
     </linearGradient>
   </defs>
-  <g id="spaceship">
+  <g id="spaceship" transform="translate(4.8, 0) scale(0.85, 1)">
     <path d="M 32 6 L 10 44 L 10 54 L 14 54 L 14 46 L 22 42 L 22 50 L 26 52 L 38 52 L 42 50 L 42 42 L 50 46 L 50 54 L 54 54 L 54 44 Z" fill="url(#hull-light)" stroke="#1a1c20" stroke-width="0.5" />
     <path d="M 32 14 L 15 43 L 22 41 Z" fill="url(#hull-dark)" />
     <path d="M 32 14 L 49 43 L 42 41 Z" fill="url(#hull-dark)" />
@@ -137,9 +137,9 @@ export class ShipRenderer {
             const rcsLen = 4 + Math.random() * 4;
             ctx.fillStyle = 'rgba(130, 225, 255, 0.85)';
             if (p.inputs.left) {
-                ctx.beginPath(); ctx.moveTo(-7.5, 14.5); ctx.lineTo(-9.5, 14.5); ctx.lineTo(-8.5, 14.5 + rcsLen); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(-7.5, 12.3); ctx.lineTo(-9.5, 12.3); ctx.lineTo(-8.5, 12.3 + rcsLen); ctx.fill();
             } else if (p.inputs.right) {
-                ctx.beginPath(); ctx.moveTo(-7.5, -14.5); ctx.lineTo(-9.5, -14.5); ctx.lineTo(-8.5, -14.5 - rcsLen); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(-7.5, -12.3); ctx.lineTo(-9.5, -12.3); ctx.lineTo(-8.5, -12.3 - rcsLen); ctx.fill();
             }
         }
 
@@ -150,14 +150,15 @@ export class ShipRenderer {
         ctx.restore();
 
         if (debugMode && showDebugLines) {
-            const w = 16 * shipScale;
+            const len = 16 * shipScale;
+            const halfW = 16 * shipScale * 0.85;
             const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
             ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(p.x + cos * w, p.y + sin * w);
-            ctx.lineTo(p.x - cos * (w * 0.8) + sin * w, p.y - sin * (w * 0.8) - cos * w);
-            ctx.lineTo(p.x - cos * (w * 0.8) - sin * w, p.y - sin * (w * 0.8) + cos * w);
+            ctx.moveTo(p.x + cos * len, p.y + sin * len);
+            ctx.lineTo(p.x - cos * (len * 0.8) - sin * halfW, p.y - sin * (len * 0.8) + cos * halfW);
+            ctx.lineTo(p.x - cos * (len * 0.8) + sin * halfW, p.y - sin * (len * 0.8) - cos * halfW);
             ctx.closePath();
             ctx.stroke();
         }

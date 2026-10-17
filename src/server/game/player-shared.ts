@@ -6,13 +6,13 @@ import { SERVER_CONFIG } from '../core/config';
 // Nose at (+16, 0), Wingtips at (-16, ±11.2), Engine notch at (-8, 0).
 export function getShipPolygon(x: number, y: number, angle: number, baseSize: number = 16): Point[][] {
     const scale = SERVER_CONFIG.shipScale || 1.0;
-    const w = baseSize * scale;
-    const h = baseSize * scale;
+    const len = baseSize * scale;
+    const halfW = baseSize * scale * 0.85; // 15% lateral squeeze
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const nose = { x: x + cos * w, y: y + sin * h };
-    const lw = { x: x - cos * (w * 0.8) - sin * h, y: y - sin * (h * 0.8) + cos * h };
-    const rw = { x: x - cos * (w * 0.8) + sin * h, y: y - sin * (h * 0.8) - cos * h };
+    const nose = { x: x + cos * len, y: y + sin * len };
+    const lw = { x: x - cos * (len * 0.8) - sin * halfW, y: y - sin * (len * 0.8) + cos * halfW };
+    const rw = { x: x - cos * (len * 0.8) + sin * halfW, y: y - sin * (len * 0.8) - cos * halfW };
     return [[nose, rw], [rw, lw], [lw, nose]];
 }
 
