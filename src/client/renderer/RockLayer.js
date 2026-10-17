@@ -138,6 +138,71 @@ class RockTextureGenerator {
         }
     }
 
+    static drawInteriorGroundRockFeatures(ctx, level, cfg) {
+        if (!level.rawMap) return;
+        const map = level.rawMap;
+        const h = map.length;
+        const w = h > 0 ? map[0].length : 0;
+        const groundSet = new Set([0x16, 0x21, 0x22, 0x0D, 0x0F, 0x11, 0x14, 0x17, 0x84, 0x85]);
+
+        let seed = 60419;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+                if (!groundSet.has(map[y][x])) continue;
+                if (!groundSet.has(map[y - 1][x]) || !groundSet.has(map[y + 1][x]) ||
+                    !groundSet.has(map[y][x - 1]) || !groundSet.has(map[y][x + 1])) {
+                    continue;
+                }
+                if (rng() > 0.26) continue;
+
+                const cx = x * 32 + 8 + rng() * 16;
+                const cy = y * 32 + 8 + rng() * 16;
+                const rx = 7 + rng() * 11;
+                const ry = 5 + rng() * 8;
+                const sides = 6;
+                const pts = [];
+                for (let s = 0; s < sides; s++) {
+                    const ang = (s / sides) * Math.PI * 2 + (rng() - 0.5) * 0.4;
+                    const radScale = 0.75 + rng() * 0.45;
+                    pts.push({
+                        x: cx + Math.cos(ang) * rx * radScale,
+                        y: cy + Math.sin(ang) * ry * radScale
+                    });
+                }
+
+                // Recessed rock socket shadow
+                ctx.fillStyle = 'rgba(10, 5, 3, 0.52)';
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x + 2, pts[0].y + 2.5);
+                for (let s = 1; s < sides; s++) ctx.lineTo(pts[s].x + 2, pts[s].y + 2.5);
+                ctx.closePath();
+                ctx.fill();
+
+                // Faceted boulder body
+                ctx.fillStyle = rng() > 0.5 ? 'rgba(68, 43, 27, 0.55)' : 'rgba(46, 29, 18, 0.62)';
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, pts[0].y);
+                for (let s = 1; s < sides; s++) ctx.lineTo(pts[s].x, pts[s].y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Top-left mineral ridge highlight
+                ctx.strokeStyle = 'rgba(175, 120, 75, 0.28)';
+                ctx.lineWidth = 1.3;
+                ctx.beginPath();
+                ctx.moveTo(pts[3].x, pts[3].y);
+                ctx.lineTo(pts[4].x, pts[4].y);
+                ctx.lineTo(pts[5].x, pts[5].y);
+                ctx.stroke();
+            }
+        }
+    }
+
     static drawProceduralStalactites(ctx, level, cfg) {
         if (cfg.stalactitesEnabled === false || !level.walls) return;
         const maxSpan = cfg.stalactiteMaxSpanPx || 140;
@@ -387,6 +452,9 @@ export class RockLayer {
 
         // Multi-scale Organic Warped Strata, Basalt Micro-Grain & Mineral Veins
         RockTextureGenerator.drawWarpedStrataAndVeins(ctx, w, h, cfg);
+
+        // Baked Faceted Boulders & Craggy Outcrops on Interior Ground Tiles
+        RockTextureGenerator.drawInteriorGroundRockFeatures(ctx, level, cfg);
 
         // Inner Bevel Layer 1 (Mid-Rock Warmth via thick inner stroke clipped to rock)
         traceAllLoops(ctx);

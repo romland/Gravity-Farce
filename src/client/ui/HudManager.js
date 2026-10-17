@@ -39,6 +39,8 @@ export class HudManager {
 
         this.viewW = 1600;
         this.viewH = 900;
+        this.playW = 1600;
+        this.playH = 900;
         this.lastfuelVal = 76464;
         this.lastFuelMax = 99999;
 
@@ -179,6 +181,15 @@ export class HudManager {
         this.recalculateLayout();
     }
 
+    setPlayAreaSize(w, h) {
+        const nextW = w || this.viewW;
+        const nextH = h || this.viewH;
+        if (this.playW === nextW && this.playH === nextH) return;
+        this.playW = nextW;
+        this.playH = nextH;
+        this.recalculateLayout();
+    }
+
     recalculateLayout() {
         const winW = window.innerWidth;
         const winH = window.innerHeight;
@@ -192,6 +203,10 @@ export class HudManager {
         const cH = Math.round(this.viewH * canvasScale);
         const cX = Math.round((winW - cW) * 0.5);
         const cY = Math.round((winH - cH) * 0.5);
+
+        // Clamp horizontal HUD span so it is NEVER wider than the actual level play-area
+        const playSpanW = Math.min(cW, Math.round((this.playW || this.viewW) * canvasScale));
+        const playSpanX = cX + Math.round((cW - playSpanW) * 0.5);
 
         // Natural unoccupied margins around the rendered canvas
         const bottomSpace = winH - (cY + cH);
@@ -233,7 +248,7 @@ export class HudManager {
                 }
             }
             this.hudRootEl.classList.add('hud-mode-overlay');
-            this.applyBox(this.hudRootEl, cX, cY, cW, cH);
+            this.applyBox(this.hudRootEl, playSpanX, cY, playSpanW, cH);
         } else {
             // Gather all HUD clusters into the docked bar adjacent to the canvas edge
             if (this.allClusters) {
@@ -245,10 +260,10 @@ export class HudManager {
             this.hudRootEl.classList.add('hud-mode-outside');
             if (effectiveMode === 'OUTSIDE_BOTTOM') {
                 this.hudRootEl.classList.add('hud-dock-bottom');
-                this.applyBox(this.hudRootEl, cX, cY + cH, cW, barH);
+                this.applyBox(this.hudRootEl, playSpanX, cY + cH, playSpanW, barH);
             } else if (effectiveMode === 'OUTSIDE_TOP') {
                 this.hudRootEl.classList.add('hud-dock-top');
-                this.applyBox(this.hudRootEl, cX, cY - barH, cW, barH);
+                this.applyBox(this.hudRootEl, playSpanX, cY - barH, playSpanW, barH);
             } else if (effectiveMode === 'OUTSIDE_LEFT') {
                 this.hudRootEl.classList.add('hud-dock-left', 'hud-dir-vertical');
                 this.applyBox(this.hudRootEl, cX - sideW, cY, sideW, cH);
@@ -268,6 +283,7 @@ export class HudManager {
 
     update(myServerPlayer, serverState, level, roomRules, debugMode, metrics) {
         if (!myServerPlayer || !level) return;
+        this.setPlayAreaSize(level.width, level.height);
 
         // 1. Mode, Flavor, Cavern & Score
         const disc = (roomRules?.discipline || 'mission').toUpperCase();

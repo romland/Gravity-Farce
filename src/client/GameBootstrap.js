@@ -591,7 +591,7 @@ function lerpAngle(a, b, amt) {
 }
 
 function drawShip(p, isMe) {
-    shipRenderer.drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale);
+    shipRenderer.drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale, spawnParticles);
 }
 
 function drawTurret(t) {

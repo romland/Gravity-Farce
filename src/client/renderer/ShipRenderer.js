@@ -1,7 +1,9 @@
 import { clientProfiler } from '../perf/ClientProfiler.js';
+import { RENDER_CONFIG, rollChance } from './RenderConfig.js';
 
 export class ShipRenderer {
     constructor() {
+        this.plumeState = new Map();
         this.paths = {
             main: new Path2D("M 32 6 L 10 44 L 10 54 L 14 54 L 14 46 L 22 42 L 22 50 L 26 52 L 38 52 L 42 50 L 42 42 L 50 46 L 50 54 L 54 54 L 54 44 Z"),
             wingL: new Path2D("M 32 14 L 15 43 L 22 41 Z"),
@@ -16,7 +18,7 @@ export class ShipRenderer {
         };
     }
 
-    drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale) {
+    drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale, spawnParticlesFn) {
         if (p.isDead) return;
 
         const timeSec = performance.now() * 0.001;
@@ -82,15 +84,82 @@ export class ShipRenderer {
         ctx.restore();
         endVectors();
 
-        // --- CUSTOMIZED DUAL-ENGINE FLAME & RCS ANIMATIONS ---
-        if (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0)) {
+        // --- PHYSICS-DRIVEN DUAL-ENGINE PLUME & RCS ANIMATIONS ---
+        const shipKey = p.id || p.alias || 'me';
+        let st = this.plumeState.get(shipKey);
+        if (!st) {
+            st = { spool: 0, lastAngle: p.angle || 0, lastTs: timeSec };
+            this.plumeState.set(shipKey, st);
+        }
+        const dt = Math.min(0.05, Math.max(0.001, timeSec - st.lastTs));
+        const dt60 = dt * 60.0;
+        st.lastTs = timeSec;
+
+        let dAngle = (p.angle || 0) - st.lastAngle;
+        while (dAngle > Math.PI) dAngle -= Math.PI * 2;
+        while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+        const angVel = dAngle / Math.max(0.1, dt60);
+        st.lastAngle = p.angle || 0;
+
+        const rawInput = (p.inputs && (p.inputs.up || p.inputs.analogUp > 0) && (p.fuel === undefined || p.fuel > 0))
+            ? Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0)
+            : 0.0;
+
+        if (rawInput > 0) {
+            st.spool = Math.min(1.0, st.spool + 0.16 * dt60) * rawInput;
+        } else {
+            st.spool = Math.max(0.0, st.spool - 0.28 * dt60);
+        }
+
+        if (st.spool > 0.04) {
             const endFlames = clientProfiler.begin('Pass.Ship.Flames');
-            const scale = Math.max(p.inputs.up ? 1.0 : 0.0, p.inputs.analogUp || 0.0);
+            const vx = p.vx || 0;
+            const vy = p.vy || 0;
+            const speed = Math.hypot(vx, vy);
+            const fwdX = Math.cos(p.angle);
+            const fwdY = Math.sin(p.angle);
+            // +speed when flying forward at high speed, -speed when retro-braking against momentum
+            const forwardAlign = (vx * fwdX + vy * fwdY) / 7.5;
+
+            // Retro-braking compresses & flares the plume; high forward speed stretches it into a needle cone
+            const stretchFactor = Math.max(0.58, Math.min(1.55, 1.0 + forwardAlign * 0.42));
+            const flareFactor = Math.max(0.72, Math.min(1.45, 1.0 - forwardAlign * 0.35 + (1.0 - st.spool) * 0.25));
+            const turnBendY = Math.max(-5.5, Math.min(5.5, -angVel * 26.0));
+
+            const flameLen = (6 + 15 * st.spool + Math.sin(timeSec * 55) * 2.8) * stretchFactor;
+            const halfSpread = 1.25 * flareFactor;
+
             ctx.fillStyle = '#4facfe';
-            const flameLen = 14 * scale + Math.random() * 6 * scale;
-            
-            ctx.beginPath(); ctx.moveTo(-14.5, -3.5); ctx.lineTo(-14.5 - flameLen, -2.25); ctx.lineTo(-14.5, -1.0); ctx.fill();
-            ctx.beginPath(); ctx.moveTo(-14.5, 1.0); ctx.lineTo(-14.5 - flameLen, 2.25); ctx.lineTo(-14.5, 3.5); ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-14.5, -2.25 - halfSpread);
+            ctx.lineTo(-14.5 - flameLen, -2.25 + turnBendY);
+            ctx.lineTo(-14.5, -2.25 + halfSpread);
+            ctx.moveTo(-14.5, 2.25 - halfSpread);
+            ctx.lineTo(-14.5 - flameLen, 2.25 + turnBendY);
+            ctx.lineTo(-14.5, 2.25 + halfSpread);
+            ctx.fill();
+
+            // White-hot inner Mach shock core
+            ctx.fillStyle = '#e0faff';
+            const coreLen = flameLen * 0.52;
+            ctx.beginPath();
+            ctx.moveTo(-14.5, -2.25 - halfSpread * 0.5);
+            ctx.lineTo(-14.5 - coreLen, -2.25 + turnBendY * 0.45);
+            ctx.lineTo(-14.5, -2.25 + halfSpread * 0.5);
+            ctx.moveTo(-14.5, 2.25 - halfSpread * 0.5);
+            ctx.lineTo(-14.5 - coreLen, 2.25 + turnBendY * 0.45);
+            ctx.lineTo(-14.5, 2.25 + halfSpread * 0.5);
+            ctx.fill();
+
+            // Cheap short-lived exhaust particles (1-2 seconds max)
+            if (spawnParticlesFn && RENDER_CONFIG.details?.thrusterParticlesEnabled !== false && !p.isLanded && rollChance(0.55 * st.spool, dt60)) {
+                const nozzleWorldX = p.x - fwdX * 16 * shipScale;
+                const nozzleWorldY = p.y - fwdY * 16 * shipScale;
+                const pVx = vx * 0.25 - fwdX * (1.8 + Math.random() * 1.2) + (Math.random() - 0.5) * 0.5;
+                const pVy = vy * 0.25 - fwdY * (1.8 + Math.random() * 1.2) + (Math.random() - 0.5) * 0.5;
+                const col = Math.random() > 0.35 ? 'rgba(79, 172, 254, 0.65)' : 'rgba(200, 245, 255, 0.75)';
+                spawnParticlesFn(nozzleWorldX, nozzleWorldY, pVx, pVy, col, 1, 32);
+            }
             endFlames();
         }
 

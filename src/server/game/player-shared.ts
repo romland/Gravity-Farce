@@ -42,6 +42,46 @@ export function checkShipBoxCollision(shipX: number, shipY: number, shipAngle: n
     return checkPolyIntersect(shipLines, boxPoly) !== null;
 }
 
+export function isNearSolidTile(rawMap: number[][] | undefined, x: number, y: number, radiusTiles: number = 1): boolean {
+    if (!rawMap) return true;
+    const cx = Math.floor(x / 32);
+    const cy = Math.floor(y / 32);
+    const h = rawMap.length;
+    const w = h > 0 ? rawMap[0].length : 0;
+    for (let dy = -radiusTiles; dy <= radiusTiles; dy++) {
+        const ry = cy + dy;
+        if (ry < 0 || ry >= h) return true;
+        const row = rawMap[ry];
+        for (let dx = -radiusTiles; dx <= radiusTiles; dx++) {
+            const rx = cx + dx;
+            if (rx < 0 || rx >= w) return true;
+            const tid = row[rx];
+            if (tid !== 0x00 && tid !== 0x20 && tid !== 0x32 && tid !== 0x33 && tid < 0x90) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+export function checkShipWallsCollisionSpatially(shipLines: Point[][], shipX: number, shipY: number, walls: Point[][]): boolean {
+    const r = 28 * (SERVER_CONFIG.shipScale || 1.0);
+    const minX = shipX - r, maxX = shipX + r;
+    const minY = shipY - r, maxY = shipY + r;
+    for (let w = 0; w < walls.length; w++) {
+        const wall = walls[w];
+        for (let i = 0; i < wall.length - 1; i++) {
+            const p1 = wall[i];
+            const p2 = wall[i + 1];
+            if ((p1.x < minX && p2.x < minX) || (p1.x > maxX && p2.x > maxX) ||
+                (p1.y < minY && p2.y < minY) || (p1.y > maxY && p2.y > maxY)) {
+                continue;
+            }
+            if (checkPolyIntersect(shipLines, [p1, p2])) return true;
+        }
+    }
+    return false;
+}
 
 export function checkEnvironmentCollisions(
     shipLines: Point[][],
@@ -91,8 +131,8 @@ export function checkEnvironmentCollisions(
     }
     if (safelyLanded || clearingPad) return false;
 
-    // 3. Check Walls & Ceiling
-    if (level.walls && level.walls.some(wall => checkPolyIntersect(shipLines, wall))) return true;
+    // 3. Check Walls & Ceiling (Broad-phase tile reject avoids testing 5,000+ smoothed vertices in open air)
+    if (level.walls && isNearSolidTile(level.rawMap, x, y, 1) && checkShipWallsCollisionSpatially(shipLines, x, y, level.walls)) return true;
     if (checkPolyIntersect(shipLines, level.ceiling)) return true;
 
     return false;

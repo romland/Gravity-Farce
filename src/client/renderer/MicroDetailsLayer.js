@@ -34,6 +34,10 @@ export class MicroDetailsLayer {
         this.shockwaves = [];
         this.rockWorms = [];
         this.rockTrickles = [];
+        this.oreDeposits = [];
+        this.shiftingPatches = [];
+        this.baseCrews = [];
+        this.shipDebris = [];
         this.shipPrev = new Map();
         this.turretPrevCooldown = new Map();
         this.lastWaterTimeSec = 0;
@@ -55,6 +59,10 @@ export class MicroDetailsLayer {
         this.shockwaves = [];
         this.rockWorms = [];
         this.rockTrickles = [];
+        this.oreDeposits = [];
+        this.shiftingPatches = [];
+        this.baseCrews = [];
+        this.shipDebris = [];
         this.shipPrev.clear();
         this.turretPrevCooldown.clear();
 
@@ -122,6 +130,150 @@ export class MicroDetailsLayer {
         // 5. Seed Rare Interior Ground-Tile Rock Worms (TODO 2) & Downward Water Trickles (TODO 3)
         if (level.rawMap) {
             this.initInteriorRockLifeAndTrickles(level, cfg);
+            this.initOresAndShiftingGround(level, cfg);
+            this.initBaseCrews(level, cfg);
+        }
+    }
+
+    initOresAndShiftingGround(level, cfg) {
+        const map = level.rawMap;
+        const h = map.length;
+        const w = h > 0 ? map[0].length : 0;
+        const groundSet = new Set([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0B, 0x0D, 0x0F, 0x11, 0x13, 0x14, 0x16, 0x17, 0x19, 0x1A, 0x21, 0x22]);
+        const interiorSet = new Set([0x16, 0x21, 0x22, 0x0D, 0x0F, 0x11, 0x14, 0x17]);
+
+        let seed = (level.name ? level.name.charCodeAt(level.name.length - 1) : 13) * 8191 + 73;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+                const tid = map[y][x];
+                if (!groundSet.has(tid)) continue;
+
+                const isInterior = interiorSet.has(tid) &&
+                    interiorSet.has(map[y - 1][x]) && interiorSet.has(map[y + 1][x]) &&
+                    interiorSet.has(map[y][x - 1]) && interiorSet.has(map[y][x + 1]);
+
+                // Rare Gold / Silver / Iron Ore Deposits breaking out of ground tiles
+                if (cfg.oreDepositsEnabled !== false && rng() < 0.045) {
+                    const roll = rng();
+                    const oreType = roll < 0.25 ? 'GOLD' : (roll < 0.60 ? 'SILVER' : 'IRON');
+                    const nuggets = [];
+                    const count = 3 + Math.floor(rng() * 3);
+                    for (let n = 0; n < count; n++) {
+                        nuggets.push({
+                            ox: (rng() - 0.5) * 16,
+                            oy: (rng() - 0.5) * 14,
+                            rx: 2.2 + rng() * 2.8,
+                            ry: 1.5 + rng() * 2.0,
+                            ang: rng() * Math.PI
+                        });
+                    }
+                    this.oreDeposits.push({
+                        x: x * 32 + 16,
+                        y: y * 32 + 16,
+                        oreType,
+                        phase: rng() * Math.PI * 2,
+                        nuggets
+                    });
+                }
+
+                // Subtle subterranean moving patches on interior ground tiles
+                if (cfg.subterraneanRumblesEnabled !== false && isInterior && rng() < 0.055 && this.shiftingPatches.length < 18) {
+                    this.shiftingPatches.push({
+                        x: x * 32 + 16,
+                        y: y * 32 + 16,
+                        radius: 13 + rng() * 7,
+                        phase: rng() * Math.PI * 2,
+                        speed: 0.55 + rng() * 0.55,
+                        dirAngle: rng() * Math.PI * 2
+                    });
+                }
+            }
+        }
+    }
+
+    initBaseCrews(level, cfg) {
+        if (cfg.baseCrewEnabled === false) return;
+        const prefabs = level.highRes?.prefabs || [];
+        const spawns = (level.entities || []).filter(e => e.type === 'spawn');
+        const bases = prefabs.filter(p => p.kind === 'BASE_STRUCTURE');
+
+        // Identify primary home pads (tileId === 0x15 or pads with a player spawn or adjacent base building)
+        const homePads = prefabs.filter(p => {
+            if (p.kind !== 'PAD') return false;
+            if (p.tileId === 0x15) return true;
+            return spawns.some(s => Math.abs(s.x - (p.x + p.w * 0.5)) < p.w * 0.7 && Math.abs(s.y - p.y) < 48);
+        });
+
+        let seed = 51515;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        for (let pIdx = 0; pIdx < homePads.length; pIdx++) {
+            const pad = homePads[pIdx];
+            // Find nearest base building on or near this pad, or use one end of the pad as the shelter door
+            let doorX = pad.x + 10;
+            for (const b of bases) {
+                if (Math.abs((b.x + b.w * 0.5) - (pad.x + pad.w * 0.5)) < pad.w + 96 && Math.abs((b.y + b.h) - pad.y) < 64) {
+                    doorX = Math.max(pad.x + 6, Math.min(pad.x + pad.w - 6, b.x + b.w * 0.5));
+                    break;
+                }
+            }
+
+            const crewCount = 3 + (pIdx % 2);
+            const workers = [];
+            for (let i = 0; i < crewCount; i++) {
+                const workX = pad.x + 12 + rng() * Math.max(8, pad.w - 24);
+                workers.push({
+                    x: doorX + (rng() - 0.5) * 14,
+                    workX,
+                    targetX: workX,
+                    walkSpeed: 0.32 + rng() * 0.22,
+                    runSpeed: 0.68 + rng() * 0.42, // Varied speeds so they never look robotic
+                    suitColor: i === 0 ? '#f59e0b' : (i === 1 ? '#38bdf8' : '#e2e8f0'),
+                    phase: rng() * Math.PI * 2,
+                    pauseTimer: Math.floor(rng() * 80),
+                    welding: false
+                });
+            }
+
+            this.baseCrews.push({
+                padX: pad.x,
+                padY: pad.y,
+                padW: pad.w,
+                doorX,
+                workers
+            });
+        }
+    }
+
+    spawnShipDebris(x, y, vx = 0, vy = 0) {
+        const cfg = RENDER_CONFIG.details;
+        if (!cfg || cfg.shipDebrisEnabled === false) return;
+        const count = 5;
+        for (let i = 0; i < count && this.shipDebris.length < 30; i++) {
+            const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+            const spd = 1.6 + Math.random() * 2.8;
+            const maxLife = 190 + Math.floor(Math.random() * 70); // ~3.5 - 4.3 seconds
+            this.shipDebris.push({
+                x: x + (Math.random() - 0.5) * 8,
+                y: y + (Math.random() - 0.5) * 8,
+                vx: (vx || 0) * 0.35 + Math.cos(ang) * spd,
+                vy: (vy || 0) * 0.35 + Math.sin(ang) * spd - 1.0,
+                angle: Math.random() * Math.PI * 2,
+                spin: (Math.random() > 0.5 ? 1 : -1) * (0.14 + Math.random() * 0.22),
+                w: 5.5 + Math.random() * 4.5,
+                h: 2.5 + Math.random() * 2.5,
+                life: maxLife,
+                maxLife,
+                shape: i % 3
+            });
         }
     }
 
@@ -547,6 +699,8 @@ export class MicroDetailsLayer {
         // Lead slightly along impact velocity so high-speed crashes stain deep into the wall they hit
         const impactX = x + (vx || 0) * 1.5;
         const impactY = y + (vy || 0) * 1.5;
+        if (scale >= 0.95) this.spawnShipDebris(x, y, vx, vy);
+
         const radius = (cfg.crashStainRadius ?? 38) * scale;
         const alpha = cfg.crashStainAlpha ?? 0.72;
         const rays = Math.round((cfg.crashRayCount ?? 14) * scale);
@@ -812,6 +966,80 @@ export class MicroDetailsLayer {
         this.lastUpdateTimeSec = timeSec;
 
         ctx.save();
+
+        // 0.0A. Subterranean Shifting Ground Patches (Slow underground movement on interior ground tiles)
+        if (cfg.subterraneanRumblesEnabled !== false && this.shiftingPatches.length > 0) {
+            for (let i = 0; i < this.shiftingPatches.length; i++) {
+                const sp = this.shiftingPatches[i];
+                if (sp.x < camera.x - 32 || sp.x > camera.x + viewW + 32 ||
+                    sp.y < camera.y - 32 || sp.y > camera.y + viewH + 32) continue;
+
+                const wave = Math.sin(timeSec * sp.speed + sp.phase);
+                const shiftX = Math.cos(sp.dirAngle) * wave * 2.4;
+                const shiftY = Math.sin(sp.dirAngle) * wave * 1.8;
+                const swell = 1.0 + 0.12 * Math.sin(timeSec * (sp.speed * 1.3) + sp.phase);
+                const r = sp.radius * swell;
+
+                // Subtle shifting shadow & highlight bulge
+                ctx.fillStyle = 'rgba(10, 5, 3, 0.26)';
+                ctx.beginPath();
+                ctx.arc(sp.x + shiftX + 1.5, sp.y + shiftY + 1.8, r, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(115, 75, 46, 0.16)';
+                ctx.beginPath();
+                ctx.arc(sp.x + shiftX - 1.0, sp.y + shiftY - 1.0, r * 0.78, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 0.0B. Natural Ore Deposits (Gold / Silver / Iron glimmering on ground tiles)
+        if (cfg.oreDepositsEnabled !== false && this.oreDeposits.length > 0) {
+            const camShimmer = (camera.x + camera.y) * 0.025;
+            for (let i = 0; i < this.oreDeposits.length; i++) {
+                const ore = this.oreDeposits[i];
+                if (ore.x < camera.x - 24 || ore.x > camera.x + viewW + 24 ||
+                    ore.y < camera.y - 24 || ore.y > camera.y + viewH + 24) continue;
+
+                let baseCol, hiCol, glintCol;
+                if (ore.oreType === 'GOLD') {
+                    baseCol = '#b8860b'; hiCol = '#ffd700'; glintCol = '#fff8b0';
+                } else if (ore.oreType === 'SILVER') {
+                    baseCol = '#7f8c9a'; hiCol = '#d8e6f3'; glintCol = '#ffffff';
+                } else {
+                    baseCol = '#4a5560'; hiCol = '#8fa3b8'; glintCol = '#d0e8ff';
+                }
+
+                for (let n = 0; n < ore.nuggets.length; n++) {
+                    const ng = ore.nuggets[n];
+                    const nx = ore.x + ng.ox;
+                    const ny = ore.y + ng.oy;
+                    ctx.save();
+                    ctx.translate(nx, ny);
+                    ctx.rotate(ng.ang);
+                    ctx.fillStyle = baseCol;
+                    ctx.fillRect(-ng.rx, -ng.ry, ng.rx * 2, ng.ry * 2);
+                    ctx.fillStyle = hiCol;
+                    ctx.fillRect(-ng.rx, -ng.ry, ng.rx * 1.2, ng.ry);
+                    ctx.restore();
+                }
+
+                // Periodic metallic sparkle glint
+                const glint = Math.sin(timeSec * 2.6 + ore.phase + camShimmer);
+                if (glint > 0.86) {
+                    const gInt = (glint - 0.86) / 0.14;
+                    const gr = 4.2 * gInt;
+                    const gx = ore.x + ore.nuggets[0].ox;
+                    const gy = ore.y + ore.nuggets[0].oy;
+                    ctx.strokeStyle = glintCol;
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(gx - gr, gy); ctx.lineTo(gx + gr, gy);
+                    ctx.moveTo(gx, gy - gr); ctx.lineTo(gx, gy + gr);
+                    ctx.stroke();
+                }
+            }
+        }
 
         // 0.A. Update & Draw Rare Interior Ground-Tile Rock Worms (TODO 2)
         if (cfg.rockWormsEnabled !== false && this.rockWorms.length > 0) {
@@ -1136,6 +1364,114 @@ export class MicroDetailsLayer {
             ctx.restore();
         }
 
+        // 1.8. Primary Base Ground Crew (Working at base, running out to landed home ship, dodging incoming/departing ships)
+        if (cfg.baseCrewEnabled !== false && this.baseCrews.length > 0) {
+            const shipList = players ? Object.values(players).filter(s => !s.isDead) : [];
+            for (let b = 0; b < this.baseCrews.length; b++) {
+                const base = this.baseCrews[b];
+                if (base.padX + base.padW < camera.x - 40 || base.padX > camera.x + viewW + 40 ||
+                    base.padY < camera.y - 40 || base.padY > camera.y + viewH + 40) continue;
+
+                let landedShip = null;
+                let dangerShip = null;
+                for (let s = 0; s < shipList.length; s++) {
+                    const sh = shipList[s];
+                    const overPad = sh.x >= base.padX - 24 && sh.x <= base.padX + base.padW + 24;
+                    const nearPadY = sh.y >= base.padY - 95 && sh.y <= base.padY + 16;
+                    if (!overPad || !nearPadY) continue;
+
+                    const isThrusting = Boolean(sh.inputs && (sh.inputs.up || sh.inputs.analogUp > 0));
+                    if (sh.isLanded && !isThrusting && Math.abs(sh.y - (base.padY - 14)) < 12) {
+                        landedShip = sh;
+                    } else {
+                        dangerShip = sh;
+                    }
+                }
+
+                for (let w = 0; w < base.workers.length; w++) {
+                    const wk = base.workers[w];
+                    let speed = wk.walkSpeed;
+                    wk.welding = false;
+
+                    if (dangerShip) {
+                        // Scramble back to the base building OR dodge away from an incoming ship
+                        speed = wk.runSpeed * 1.35;
+                        const distToDoor = Math.abs(wk.x - base.doorX);
+                        const distToDanger = Math.abs(wk.x - dangerShip.x);
+                        if (distToDanger < 34 && Math.abs(base.doorX - dangerShip.x) < distToDanger) {
+                            wk.targetX = wk.x < dangerShip.x
+                                ? Math.max(base.padX + 6, dangerShip.x - 42)
+                                : Math.min(base.padX + base.padW - 6, dangerShip.x + 42);
+                        } else {
+                            wk.targetX = base.doorX;
+                        }
+                    } else if (landedShip) {
+                        // Run out from the base building at varied speeds to service the landed ship!
+                        speed = wk.runSpeed;
+                        const serviceOffsets = [-11, 11, -18, 18];
+                        wk.targetX = Math.max(base.padX + 6, Math.min(base.padX + base.padW - 6, landedShip.x + serviceOffsets[w % serviceOffsets.length]));
+                    } else {
+                        // Ambient base maintenance patrol
+                        if (Math.abs(wk.x - wk.targetX) < 2.0) {
+                            wk.pauseTimer -= dt60;
+                            if (wk.pauseTimer <= 0) {
+                                wk.pauseTimer = 70 + Math.floor(Math.random() * 110);
+                                wk.targetX = (Math.random() < 0.35)
+                                    ? base.doorX
+                                    : (base.padX + 10 + Math.random() * Math.max(8, base.padW - 20));
+                            }
+                        }
+                    }
+
+                    const dx = wk.targetX - wk.x;
+                    const isMoving = Math.abs(dx) > 1.2;
+                    if (isMoving) {
+                        wk.x += Math.sign(dx) * Math.min(Math.abs(dx), speed * dt60);
+                    } else if (landedShip && Math.abs(wk.x - landedShip.x) < 22) {
+                        wk.welding = true;
+                    }
+
+                    // Hide inside the base doorway when fully retreated during takeoff/danger
+                    if (dangerShip && Math.abs(wk.x - base.doorX) < 3.0) continue;
+
+                    const wy = base.padY;
+                    const stride = isMoving ? Math.sin(timeSec * (speed > 0.5 ? 22 : 13) + wk.phase) * 1.8 : 0;
+                    const bob = isMoving ? Math.abs(Math.cos(timeSec * (speed > 0.5 ? 22 : 13) + wk.phase)) * 0.9 : 0;
+
+                    // Legs
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(wk.x - 0.8, wy - 2.5 - bob);
+                    ctx.lineTo(wk.x - 1.2 - stride, wy);
+                    ctx.moveTo(wk.x + 0.8, wy - 2.5 - bob);
+                    ctx.lineTo(wk.x + 1.2 + stride, wy);
+                    ctx.stroke();
+
+                    // Hazmat torso
+                    ctx.fillStyle = wk.suitColor;
+                    ctx.fillRect(wk.x - 1.6, wy - 5.8 - bob, 3.2, 3.4);
+
+                    // Helmet & glowing cyan visor
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.beginPath();
+                    ctx.arc(wk.x, wy - 7.0 - bob, 1.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#00f2fe';
+                    const faceDir = dx >= 0 ? 0.5 : -1.3;
+                    ctx.fillRect(wk.x + faceDir, wy - 7.5 - bob, 1.1, 0.9);
+
+                    //Tiny welding arc flash when servicing the ship
+                    if (wk.welding && Math.sin(timeSec * 38 + wk.phase) > 0.55) {
+                        ctx.fillStyle = '#a8f5ff';
+                        ctx.beginPath();
+                        ctx.arc(wk.x + (landedShip.x > wk.x ? 2.5 : -2.5), wy - 4.5, 1.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
         // 2. Ship Thruster Surface Dust/Scorch & Landing Touchdown Effects
         if (players && level?.rawMap) {
             for (const id in players) {
@@ -1143,6 +1479,27 @@ export class MicroDetailsLayer {
                 const prev = this.shipPrev.get(id);
 
                 if (!p.isDead) {
+                    // Huge billowing launch pad smoke cloud strictly when taking off from a landed state!
+                    if (cfg.takeoffSmokeEnabled !== false && prev && prev.isLanded && !p.isLanded) {
+                        for (let k = 0; k < 16 && this.smokePuffs.length < 95; k++) {
+                            const spreadX = (Math.random() - 0.5) * 20;
+                            const sideVx = spreadX * 0.014 + (Math.random() - 0.5) * 0.14;
+                            const lifeTicks = 135 + Math.floor(Math.random() * 65);
+                            this.smokePuffs.push({
+                                x: p.x + spreadX,
+                                y: p.y + 11 + Math.random() * 4,
+                                vx: sideVx,
+                                vy: -0.05 - Math.random() * 0.16,
+                                r: 5.5 + Math.random() * 4.5,
+                                grow: 0.11,
+                                life: lifeTicks,
+                                maxLife: lifeTicks,
+                                rgb: k % 3 === 0 ? '210, 222, 235' : '165, 178, 192',
+                                peakAlpha: 0.52
+                            });
+                        }
+                    }
+
                     // Check Landing Touchdown transition
                     if (cfg.landingEffectsEnabled !== false && prev && !prev.isLanded && p.isLanded) {
                         const impactVy = Math.max(0, prev.vy || 0.8);
@@ -1470,6 +1827,76 @@ export class MicroDetailsLayer {
                 ctx.fill();
             }
             ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // 4.5. Update & Draw Spinning, Glowing & Smoking Ship Wreckage Chunks
+        if (this.shipDebris.length > 0) {
+            for (let i = this.shipDebris.length - 1; i >= 0; i--) {
+                const d = this.shipDebris[i];
+                d.vy += 0.045 * dt60;
+                d.x += d.vx * dt60;
+                d.y += d.vy * dt60;
+                d.vx *= Math.pow(0.992, dt60);
+                d.angle += d.spin * dt60;
+                d.life -= dt60;
+
+                if (d.life <= 0) {
+                    this.shipDebris.splice(i, 1);
+                    continue;
+                }
+
+                // Bounce off solid cavern tiles so wreckage clatters around the death site
+                const tx = Math.floor(d.x / 32);
+                const ty = Math.floor(d.y / 32);
+                const tid = level?.rawMap?.[ty]?.[tx] ?? 0;
+                if (tid > 0 && tid < 0x90 && tid !== 0x20) {
+                    d.vy = -Math.abs(d.vy) * 0.55;
+                    d.vx *= 0.72;
+                    d.spin *= 0.75;
+                    d.y -= 2;
+                }
+
+                // Emit trailing wisp of dark smoke & ember sparks while spinning
+                if (rollChance(0.32, dt60) && this.smokePuffs.length < 95) {
+                    this.smokePuffs.push({
+                        x: d.x,
+                        y: d.y,
+                        vx: (Math.random() - 0.5) * 0.2,
+                        vy: -0.25 - Math.random() * 0.2,
+                        r: 2.4 + Math.random() * 1.8,
+                        grow: 0.08,
+                        life: 36,
+                        maxLife: 36,
+                        rgb: '42, 38, 35',
+                        peakAlpha: 0.42 * (d.life / d.maxLife)
+                    });
+                }
+
+                const lifeRatio = Math.min(1, d.life / 35);
+                ctx.save();
+                ctx.translate(d.x, d.y);
+                ctx.rotate(d.angle);
+                ctx.globalAlpha = lifeRatio;
+
+                // Hot ember glow aura on spinning metal chunk
+                ctx.fillStyle = `rgba(255, 110, 30, ${0.38 * (d.life / d.maxLife)})`;
+                ctx.beginPath();
+                ctx.arc(0, 0, d.w * 1.15, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = d.shape === 0 ? '#aeb6bf' : '#4a525d';
+                ctx.strokeStyle = '#ff7b29';
+                ctx.lineWidth = 0.9;
+                ctx.beginPath();
+                ctx.moveTo(-d.w, -d.h);
+                ctx.lineTo(d.w, -d.h * 0.4);
+                ctx.lineTo(d.w * 0.5, d.h);
+                ctx.lineTo(-d.w * 0.7, d.h * 0.8);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
         }
 
         // 5. Update & Draw Turret Muzzle & Crash-Site Smoke Puffs (with Ship Swirl Interaction)

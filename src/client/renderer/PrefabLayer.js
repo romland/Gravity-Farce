@@ -275,29 +275,31 @@ export class PrefabLayer {
     drawAntennaMast(ctx, p, timeSec) {
         ctx.save();
         const cx = p.x + p.w * 0.5;
-        ctx.strokeStyle = '#7f8c8d';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(cx, p.y + p.h);
-        ctx.lineTo(cx, p.y + 6);
-        ctx.stroke();
+        const pinW = 6;
+        const halfW = pinW * 0.5;
+        const lampTopY = p.y + 4;
 
-        // Blinking warning beacon
+        // Square metallic guidance pin mast
+        ctx.fillStyle = '#495664';
+        ctx.fillRect(cx - halfW, lampTopY + pinW, pinW, Math.max(2, p.h - (lampTopY - p.y) - pinW));
+        ctx.fillStyle = '#7f92a6';
+        ctx.fillRect(cx - halfW, lampTopY + pinW, 2, Math.max(2, p.h - (lampTopY - p.y) - pinW));
+
+        // Unlit square lamp housing (exact same width as the square pole)
+        ctx.fillStyle = '#2a1616';
+        ctx.fillRect(cx - halfW, lampTopY, pinW, pinW);
+
+        // Blinking square landing-strip guidance beacon
         const blink = 0.5 + 0.5 * Math.sin(timeSec * 7 + p.x);
         if (blink > 0.25) {
-            const g = ctx.createRadialGradient(cx, p.y + 6, 1, cx, p.y + 6, 18 * blink);
-            g.addColorStop(0, `rgba(255, 75, 60, ${0.45 * blink})`);
-            g.addColorStop(0.4, `rgba(255, 45, 30, ${0.18 * blink})`);
-            g.addColorStop(1, 'rgba(255, 45, 30, 0)');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(cx, p.y + 6, 18 * blink, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillStyle = `rgba(255, 65, 50, ${0.22 * blink})`;
+            ctx.fillRect(cx - halfW - 4, lampTopY - 4, pinW + 8, pinW + 8);
 
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(cx, p.y + 6, 3.5, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillStyle = '#ff4b3a';
+            ctx.fillRect(cx - halfW, lampTopY, pinW, pinW);
+
+            ctx.fillStyle = '#ffd6cf';
+            ctx.fillRect(cx - halfW + 1.5, lampTopY + 1.5, pinW - 3, pinW - 3);
         }
         ctx.restore();
     }

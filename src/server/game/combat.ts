@@ -7,7 +7,7 @@ import { spawnExplosionFragments } from './debris';
 import { TILE_DICTIONARY } from '../core/tiles';
 import { recordDB, getActivePhysicsHash } from '../core/records';
 import { tagPlayerDamage, attributeDogfightDeath } from './dogfight';
-import { checkShipBoxCollision } from './player-shared';
+import { checkShipBoxCollision, isNearSolidTile } from './player-shared';
 import { SERVER_CONFIG } from '../core/config';
 
 export function spawnBullet(ecs: Registry, x: number, y: number, vx: number, vy: number, isPlayer: boolean, ownerId: string, life = 400) {
@@ -197,15 +197,6 @@ export function sysBullets(ecs: Registry, room: Room) {
         if (checkPolyIntersect(bLine, room.level.floor) || checkPolyIntersect(bLine, room.level.ceiling)) {
             hit = true;
         }
-        
-        if (!hit && room.level.walls) {
-            for (const wall of room.level.walls) {
-                if (checkPolyIntersect(bLine, wall)) { 
-                    hit = true; 
-                    break; 
-                }
-            }
-        }
 
         // Fallback: If bullet spawned directly inside a solid block (e.g. rear-shot while landed)
         if (!hit && room.level.rawMap) {
@@ -217,7 +208,30 @@ export function sysBullets(ecs: Registry, room: Room) {
             }
         }
 
-        for (const [pe, p] of ecs.players.entries()) {
+        // Broad-phase tile check + segment AABB cull: avoids 5,000+ lineIntersect calls per bullet in open air!
+        if (!hit && room.level.walls && isNearSolidTile(room.level.rawMap, t.x, t.y, 1)) {
+            const minBx = Math.min(ox, t.x) - 2;
+            const maxBx = Math.max(ox, t.x) + 2;
+            const minBy = Math.min(oy, t.y) - 2;
+            const maxBy = Math.max(oy, t.y) + 2;
+            for (let w = 0; w < room.level.walls.length && !hit; w++) {
+                const wall = room.level.walls[w];
+                for (let i = 0; i < wall.length - 1; i++) {
+                    const p1 = wall[i];
+                    const p2 = wall[i + 1];
+                    if ((p1.x < minBx && p2.x < minBx) || (p1.x > maxBx && p2.x > maxBx) ||
+                        (p1.y < minBy && p2.y < minBy) || (p1.y > maxBy && p2.y > maxBy)) {
+                        continue;
+                    }
+                    if (lineIntersect(ox, oy, t.x, t.y, p1.x, p1.y, p2.x, p2.y)) {
+                        hit = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!hit) for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
             
             const pt = ecs.transforms.get(pe)!;
@@ -243,7 +257,7 @@ export function sysBullets(ecs: Registry, room: Room) {
             }
         }
 
-        if (b.isPlayer) {
+        if (!hit && b.isPlayer) {
             for (const [te, turret] of ecs.turrets.entries()) {
                 if (!turret.active) continue;
                 const tt = ecs.transforms.get(te)!;

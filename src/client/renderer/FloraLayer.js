@@ -8,6 +8,7 @@ export class FloraLayer {
         this.spores = [];
         this.ripples = [];
         this.leafConfetti = [];
+        this.creepingVines = [];
         this.builtForLevel = null;
         this.lastTimeSec = 0;
         this.haloSprites = new Map();
@@ -56,6 +57,7 @@ export class FloraLayer {
         this.spores = [];
         this.ripples = [];
         this.leafConfetti = [];
+        this.creepingVines = [];
 
         // Seed interactive bioluminescent spore-fireflies around glowing flora
         if (RENDER_CONFIG.flora.firefliesEnabled !== false) {
@@ -74,6 +76,91 @@ export class FloraLayer {
                         phase: a.seed,
                         color: a.kind === 'CAVE_FLOWER' ? '#ff7eb3' : (a.kind === 'GLOW_SHROOM' ? '#00f2fe' : '#7dffaa')
                     });
+                }
+            }
+        }
+
+        if (RENDER_CONFIG.flora.creepingVinesEnabled !== false && level) {
+            this.initCreepingVines(level);
+        }
+    }
+
+    initCreepingVines(level) {
+        let seed = 314159;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        const patchNoise = (wx, wy) => {
+            return Math.sin(wx * 0.009 + 1.3) * Math.cos(wy * 0.009 - 0.7);
+        };
+
+        // 1. Contour-hugging creeping vines (inward-offset so the collision contour is NEVER obscured)
+        if (level.walls) {
+            for (const wall of level.walls) {
+                const n = wall.length;
+                if (n < 16) continue;
+                for (let i = 0; i < n - 8; i += 10) {
+                    const p0 = wall[i];
+                    if (patchNoise(p0.x, p0.y) < 0.38 || rng() > 0.42) continue;
+
+                    const span = 5 + Math.floor(rng() * 5);
+                    const nodes = [];
+                    for (let k = 0; k < span && (i + k + 1) < n; k++) {
+                        const a = wall[i + k];
+                        const b = wall[i + k + 1];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const len = Math.hypot(dx, dy) || 1;
+                        // Outward air normal is (dy/len, -dx/len); inward rock normal is (-dy/len, dx/len)
+                        const inX = -dy / len;
+                        const inY = dx / len;
+                        const inset = 4.5 + Math.sin(k * 1.4 + seed) * 2.5;
+                        nodes.push({
+                            x: a.x + inX * inset,
+                            y: a.y + inY * inset,
+                            leafSide: (k % 2 === 0 ? 1 : -1)
+                        });
+                    }
+                    if (nodes.length >= 3) {
+                        this.creepingVines.push({ nodes, seed: rng() * 100, kind: 'contour' });
+                    }
+                }
+            }
+        }
+
+        // 2. Tree-dressing & Teal-brick climbing vines (strictly inside solid tile bounds)
+        if (level.rawMap) {
+            const map = level.rawMap;
+            const treeTiles = new Set([0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A]);
+            const tealTiles = new Set([0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x21, 0x24, 0x25, 0x26, 0x27, 0x28]);
+            for (let y = 1; y < map.length - 1; y++) {
+                for (let x = 1; x < map[y].length - 1; x++) {
+                    const tid = map[y][x];
+                    const isTree = treeTiles.has(tid);
+                    const isTeal = tealTiles.has(tid);
+                    if (!isTree && !isTeal) continue;
+
+                    const wx = x * 32 + 16;
+                    const wy = y * 32 + 16;
+                    if (isTeal && (patchNoise(wx, wy) < 0.25 || rng() > 0.35)) continue;
+                    if (isTree && rng() > 0.65) continue;
+
+                    // Keep 6px inside the 32x32 tile so outer collision contour stays 100% clear
+                    const nodes = [];
+                    const segs = 4;
+                    const startX = x * 32 + 7 + rng() * 18;
+                    const startY = y * 32 + 6;
+                    for (let s = 0; s <= segs; s++) {
+                        const t = s / segs;
+                        nodes.push({
+                            x: startX + Math.sin(t * Math.PI * 1.5 + seed) * 5,
+                            y: startY + t * 20,
+                            leafSide: s % 2 === 0 ? 1 : -1
+                        });
+                    }
+                    this.creepingVines.push({ nodes, seed: rng() * 100, kind: isTree ? 'tree' : 'teal' });
                 }
             }
         }
@@ -175,6 +262,42 @@ export class FloraLayer {
         const bulletList = Array.isArray(bullets) ? bullets : [];
 
         ctx.save();
+
+        // Draw subtle creeping vines along contours, teal bricks & trees (never obscuring collision edges)
+        if (cfg.creepingVinesEnabled !== false && this.creepingVines.length > 0) {
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            for (let i = 0; i < this.creepingVines.length; i++) {
+                const cv = this.creepingVines[i];
+                const n0 = cv.nodes[0];
+                if (n0.x < camMinX || n0.x > camMaxX || n0.y < camMinY || n0.y > camMaxY) continue;
+
+                const sway = Math.sin(timeSec * cfg.windSpeed + cv.seed) * 1.2;
+                ctx.strokeStyle = cv.kind === 'teal' ? 'rgba(42, 155, 88, 0.72)' : 'rgba(46, 168, 86, 0.78)';
+                ctx.lineWidth = cv.kind === 'tree' ? 2.2 : 1.8;
+                ctx.beginPath();
+                for (let k = 0; k < cv.nodes.length; k++) {
+                    const nd = cv.nodes[k];
+                    const px = nd.x + sway * (k / cv.nodes.length);
+                    const py = nd.y + sway * 0.4 * (k / cv.nodes.length);
+                    if (k === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(68, 205, 112, 0.75)';
+                ctx.beginPath();
+                for (let k = 1; k < cv.nodes.length; k++) {
+                    const nd = cv.nodes[k];
+                    const px = nd.x + sway * (k / cv.nodes.length) + nd.leafSide * 2.5;
+                    const py = nd.y;
+                    ctx.moveTo(px + 2.5, py);
+                    ctx.ellipse(px, py, 2.8, 1.3, nd.leafSide * 0.4, 0, Math.PI * 2);
+                }
+                ctx.fill();
+            }
+        }
+
         for (const a of this.anchors) {
             if (a.kind === 'DRIP_EMITTER') {
                 if (rollChance(cfg.dripSpawnChance, dt60) && this.drips.length < cfg.maxDrips) {
@@ -277,7 +400,7 @@ export class FloraLayer {
                     if (b.y < minY - 8 || b.y > maxY + 8) continue;
 
                     if (dCfg.bulletWakeEnabled !== false) {
-                        const push = (b.x <= a.x ? 1 : -1) * 0.08;
+                        const push = (b.x <= a.x ? 1 : -1) * (dCfg.bulletWakeStrength ?? 0.024);
                         a.bendVel += push;
                     }
 

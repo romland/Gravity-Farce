@@ -19,6 +19,7 @@ export const RENDER_CONFIG = {
         shroomWashScale: 20.0,   // How far glow shrooms displace per radian of bend
         dripSpawnChance: 0.006,  // Chance per frame per emitter to spawn a water drop
         maxDrips: 35,            // Max concurrent falling water drops
+        creepingVinesEnabled: true,
         broadleafEnabled: true,
         caveFlowerEnabled: true,
         vineBlossomsEnabled: true,
@@ -140,6 +141,7 @@ export const RENDER_CONFIG = {
         foliageShreddingEnabled: true,
         maxLeafConfetti: 40,
         bulletWakeEnabled: true,
+        bulletWakeStrength: 0.024,
         bulletWakeRadius: 28,
         turretBarrelSmokeEnabled: true,
         turretSmokeChance: 0.018,
@@ -155,7 +157,7 @@ export const RENDER_CONFIG = {
         shyFloraEnabled: true,
         shySpeedThreshold: 4.2,
         shyShipRadius: 95,
-        shyBulletRadius: 85,
+        shyBulletRadius: 48,
         shyRecoveryRate: 0.015,
         gravityStreamsEnabled: true,
         gravityMotesPerTile: 2,
@@ -218,7 +220,13 @@ export const RENDER_CONFIG = {
         rockTricklesEnabled: true,
         rockTrickleLevelChance: 0.55,  // ~once per level (55% of levels get 1 subterranean fissure waterfall)
         rockTrickleCascadeLenPx: 72,   // Straight-down vertical plunge distance
-        rockTrickleMistCount: 8        // Number of CPU-cheated procedural mist/droplet nodes
+        rockTrickleMistCount: 8,      // Number of CPU-cheated procedural mist/droplet nodes
+        oreDepositsEnabled: true,
+        subterraneanRumblesEnabled: true,
+        baseCrewEnabled: true,
+        shipDebrisEnabled: true,
+        takeoffSmokeEnabled: true,
+        thrusterParticlesEnabled: true
     }
 };
 

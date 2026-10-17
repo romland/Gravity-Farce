@@ -790,7 +790,7 @@ setInterval(() => {
         pendingPingTimestamps.set(id, now);
         io.to(id).emit('ping', now);
     }
-}, 500);
+}, 2000);
 
 setInterval(() => {
     profiler.begin();
