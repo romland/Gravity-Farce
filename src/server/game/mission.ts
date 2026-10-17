@@ -155,10 +155,10 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
             displayValue: `SCR:${op.score} | FUL:${Math.floor(room.ecs.fuelTanks.get(oe)?.consumed || 0)} | SHT:${room.ecs.weaponMounts.get(oe)?.shotsFired || 0}`
         })) : [
             { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
-            { rankLabel: 'SCORE', alias: 'CAVERN PTS', displayValue: String(levelPoints).padStart(6, '0'), isMe: true, isNewPb: false },
+            { rankLabel: 'SCORE', alias: 'SCORE', displayValue: String(levelPoints).padStart(6, '0'), isMe: true, isNewPb: false },
             { rankLabel: 'STREAK', alias: `C${String(startLvl).padStart(2, '0')}-C${String(room.levelIndex).padStart(2, '0')} (${p.lives}♥)`, displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
             { rankLabel: 'FUEL', alias: 'CONSUMED', displayValue: `${Math.floor(f?.consumed || 0)}F`, isMe: true, isNewPb: false },
-            { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
+            { rankLabel: 'SHOTS', alias: 'SHOTS', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
             { rankLabel: 'STATUS', alias: 'DESTROYED', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
         ];
     if (botCount > 0) {

@@ -8,6 +8,7 @@ export class DialogManager {
 
         this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal'];
         this.hintTimer = null;
+        this.bindGlobalKeyboard();
     }
 
     closeAnyOpen() {
@@ -33,6 +34,72 @@ export class DialogManager {
             return true;
         }
         return false;
+    }
+
+    bindGlobalKeyboard() {
+        window.addEventListener('keydown', (e) => {
+            const openModalId = this.modals.find(id => {
+                const el = document.getElementById(id);
+                return el && el.style.display && el.style.display !== 'none';
+            });
+            if (!openModalId) return;
+
+            if (openModalId === 'leaderboard-modal') {
+                const tabs = Array.from(document.querySelectorAll('#board-tabs-container .board-tab'));
+                if (tabs.length > 0) {
+                    const activeIdx = tabs.findIndex(t => t.classList.contains('active'));
+                    if (e.key >= '1' && e.key <= '9') {
+                        const targetIdx = parseInt(e.key, 10) - 1;
+                        if (targetIdx >= 0 && targetIdx < tabs.length) {
+                            e.preventDefault();
+                            this.switchBoardTab(targetIdx);
+                            return;
+                        }
+                    }
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        let nextIdx = activeIdx + (e.key === 'ArrowRight' ? 1 : -1);
+                        if (nextIdx < 0) nextIdx = tabs.length - 1;
+                        if (nextIdx >= tabs.length) nextIdx = 0;
+                        this.switchBoardTab(nextIdx);
+                        return;
+                    }
+                }
+            }
+
+            const modalEl = document.getElementById(openModalId);
+            if (modalEl) {
+                const focusables = Array.from(modalEl.querySelectorAll('button, input, [tabindex="0"]'))
+                    .filter(el => el.offsetParent !== null);
+                if (focusables.length > 0) {
+                    let currentIdx = focusables.indexOf(document.activeElement);
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        currentIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % focusables.length;
+                        focusables[currentIdx].focus();
+                        return;
+                    }
+                    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        currentIdx = currentIdx === -1 ? focusables.length - 1 : (currentIdx - 1 + focusables.length) % focusables.length;
+                        focusables[currentIdx].focus();
+                        return;
+                    }
+                }
+
+                if (e.key === 'Enter') {
+                    if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+                        return;
+                    }
+                    e.preventDefault();
+                    const primaryBtn = modalEl.querySelector('.gbtn-emerald, .gbtn-amber, button.gbtn') || modalEl.querySelector('button');
+                    if (primaryBtn) {
+                        primaryBtn.click();
+                    }
+                    return;
+                }
+            }
+        });
     }
 
     openControlsModal() {
@@ -159,7 +226,7 @@ export class DialogManager {
             const tabBtn = document.createElement('button');
             tabBtn.type = 'button';
             tabBtn.className = `board-tab ${tabIdx === 0 ? 'active' : ''} ${(shouldHighlightTop10Tabs && top10TabIndices.includes(tabIdx)) ? 'top10-highlight' : ''}`;
-            tabBtn.textContent = b.title;
+            tabBtn.textContent = tabIdx < 9 ? `${b.title} [${tabIdx + 1}]` : b.title;
             tabBtn.onclick = () => this.switchBoardTab(tabIdx);
             tabsRoot.appendChild(tabBtn);
 
@@ -208,7 +275,8 @@ export class DialogManager {
                     const repBtn = document.createElement('button');
                     repBtn.type = 'button';
                     repBtn.className = 'gbtn gbtn-crimson';
-                    repBtn.style.marginLeft = '8px';
+                    repBtn.style.cssText = 'margin-left:8px; padding:2px 6px; font-size:var(--fs-xs); height:22px; line-height:1; vertical-align:middle;';
+                    repBtn.style.cssText = 'margin-left:8px; padding:0 5px; font-size:10px; height:18px; line-height:16px; vertical-align:baseline;';
                     repBtn.textContent = 'REPLAY';
                     repBtn.onclick = () => this.onWatchReplay(e.replayId);
                     tdPilot.appendChild(repBtn);

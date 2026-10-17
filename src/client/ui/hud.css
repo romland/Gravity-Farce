@@ -483,6 +483,16 @@ html, body {
     overflow-x: hidden;
 }
 
+#leaderboard-modal {
+    /*height: 740px;*/
+}
+
+#leaderboard-content {
+    min-height: 440px;
+    max-height: 440px;
+    /*overflow-y: auto;*/
+}
+
 .gmodal-header {
     display: flex;
     align-items: center;
@@ -578,6 +588,8 @@ html, body {
 .board-table td {
     padding: calc(6px * var(--gf-ui-scale));
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    height: calc(36px * var(--gf-ui-scale));
+    vertical-align: middle;
 }
 
 .row-me td { color: var(--col-emerald) !important; }
