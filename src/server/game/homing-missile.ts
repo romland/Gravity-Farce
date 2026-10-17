@@ -2,7 +2,7 @@ import { Registry, type Entity } from '../core/ecs';
 import type { Room } from '../Room';
 import { killPlayer, bumpPlayer } from './combat';
 
-// Authentic Amiga Homing Missile System (Reverse-engineered from $00031570 / $00036188)
+// No homing missiles in the original, but keeping this one around ... just in case.
 export interface HomingLauncherSpec {
     hpMax: number;
     cooldownMax: number;
@@ -33,9 +33,9 @@ export function sysHomingMissiles(ecs: Registry, room: Room) {
     for (const [e, missile] of ecs.homingMissiles.entries()) {
         if (!missile.active) continue;
 
-        // Find closest living player for authentic proximity steering ($00034AC4 range check)
+        // Find closest living player for proximity steering
         let closestPlayerPos: { x: number, y: number } | null = null;
-        let minDist = 400; // Activation radius matching $00034ADA (#$0030 tile delta scale)
+        let minDist = 400; // Activation radius matching 
 
         for (const [pe, p] of ecs.players.entries()) {
             if (p.isDead) continue;
@@ -49,7 +49,7 @@ export function sysHomingMissiles(ecs: Registry, room: Room) {
             }
         }
 
-        // Steer toward player using precalculated trajectory stepping model ($00036188)
+        // Steer toward player using precalculated trajectory stepping model
         if (closestPlayerPos) {
             const angle = Math.atan2(closestPlayerPos.y - missile.y, closestPlayerPos.x - missile.x);
             const speed = 2.0;

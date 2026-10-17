@@ -6,9 +6,7 @@ import type { PlayerStats } from '../core/types';
 import { scaleAmigaPerFrameDelta, scaleAmigaDrag, scaleAmigaFrameTimer } from '../core/math';
 import { SERVER_CONFIG } from '../core/config';
 
-// ============================================================================
-// AUTHENTIC AMIGA 68K CONSTANTS (Reverse-Engineered & Scaled from 50Hz PAL)
-// ============================================================================
+// Constants lifted from the original Amiga Gravity-Force (50Hz PAL). But since: changed brutally
 
 // 0x0002E196: 72-step sine/cosine lookup table (360 deg / 5 deg = 72 steps).
 // Accumulator full circle is 72,000 units (1,000 units per 5-deg step).
@@ -34,12 +32,10 @@ export const CLASSIC_THRUST_IMPULSE = scaleAmigaPerFrameDelta(0.070 * 1.12);
 export const CLASSIC_TAKEOFF_THRUST_THRESHOLD = 0.5;
 export const CLASSIC_TAKEOFF_VY = -scaleAmigaPerFrameDelta(1.2);
 
-// ============================================================================
-// MOMENTUM, GLIDE & RETRO-BRAKING TUNING CONSTANTS (Classic Player Only)
-// ============================================================================
+// MOMENTUM, GLIDE & RETRO-BRAKING TUNING CONSTANTS
 // How much speed is retained after 1 full second (50 PAL frames / 60 server ticks) of coasting:
 //   - 0.9975 per 60Hz tick -> 86.0% retained after 1s (stops sideways drift too easily on its own)
-//   - 0.9992 per 50Hz frame -> 96.1% retained after 1s (authentic icy glide; requires active retro-burn to stop)
+//   - 0.9992 per 50Hz frame -> 96.1% retained after 1s (icy glide; requires active retro-burn to stop)
 //   - 0.9996 per 50Hz frame -> 98.0% retained after 1s (near-vacuum inertia)
 //   - 1.0000                -> 100% retained (pure Newtonian vacuum, zero passive slowdown)
 export const CLASSIC_COAST_DRAG_X = scaleAmigaDrag(0.9945);
@@ -81,8 +77,8 @@ export const CLASSIC_UPRIGHT_TOLERANCE_STEPS = 2;
 export const CLASSIC_SHIP_BASE_SIZE = 16;
 export const CLASSIC_PVP_HIT_RADIUS = 20;
 export const CLASSIC_SMALL_CARGO_ID = 0xD1;
-export const CLASSIC_SMALL_CARGO_WEIGHT = 1;
-export const CLASSIC_LARGE_CARGO_WEIGHT = 2;
+export const CLASSIC_SMALL_CARGO_WEIGHT = 2;
+export const CLASSIC_LARGE_CARGO_WEIGHT = 4;
 
 // 0x00038062 & 0x00031B28: Active fuel deduction rate = 0x0000000F (15 units/frame at 50Hz = 750 units/sec)
 export const CLASSIC_FUEL_DRAIN = scaleAmigaPerFrameDelta(15);

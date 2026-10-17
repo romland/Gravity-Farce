@@ -26,7 +26,7 @@ export function sysCargo(ecs: Registry, room: Room) {
 
         if (p.isDead) {
             if (inv.stack.length > 0) {
-                // IMPNOTE: The Hard Reset - Authentic Amiga punishment. 
+                // The Hard Reset - punishment. 
                 // Cargo instantly respawns at its original starting coordinates if the player explodes.
                 inv.stack = [];
                 for (const [ce, cargo] of ecs.cargos.entries()) {

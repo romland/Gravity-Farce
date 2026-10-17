@@ -464,7 +464,7 @@ socket.on('state', (state) => {
         }
     }
 
-    // Track flying enemies & tanks in renderState for silky 144Hz+ sub-tick interpolation
+    // Track flying enemies & tanks in renderState for sub-tick interpolation (for that silky feel on high freq panels)
     const seenFlying = new Set();
     for (const f of (serverState.flying || [])) {
         const key = f.id ?? f.debugId;
@@ -874,7 +874,7 @@ function gameLoop(timestamp = performance.now()) {
             const s = serverState.players[id];
             const r = renderState.players[id];
             if (r) {
-                // Sub-tick velocity dead-reckoning for silky 144Hz/240Hz motion between 60Hz server packets
+                // Sub-tick velocity dead-reckoning for silky 60+Hz freq. motion between 60Hz server packets
                 const predX = (!s.isDead && !s.isLanded) ? (s.x + (s.vx || 0) * subTick) : s.x;
                 const predY = (!s.isDead && !s.isLanded) ? (s.y + (s.vy || 0) * subTick) : s.y;
                 const dist = Math.hypot(r.x - predX, r.y - predY);
@@ -883,7 +883,11 @@ function gameLoop(timestamp = performance.now()) {
                     r.y = predY;
                     r.angle = s.angle;
                 } else {
-                    const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
+                    // const posBlend = id === myId ? (1.0 - Math.pow(1.0 - 0.75, dt60)) : blendFactor;
+                    // r.x = lerp(r.x, predX, posBlend);
+                    // r.y = lerp(r.y, predY, posBlend);
+                    // r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
+                    const posBlend = id === myId ? 1.0 : blendFactor;
                     r.x = lerp(r.x, predX, posBlend);
                     r.y = lerp(r.y, predY, posBlend);
                     r.angle = s.angleStep !== undefined ? s.angle : lerpAngle(r.angle, s.angle, posBlend);
