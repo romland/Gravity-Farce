@@ -71,6 +71,22 @@ It was fun with a joystick but you had to master both the stick and the keyboard
 
 **Server Admins:** Analog precision gives players a competitive advantage, by default I have it `disabled` -- for that sweet digital experience. But you can set `"allowAnalogControl": true` in `server_config.json` if you want it differently. Regardless of that setting, gamepads/controllers will still work perfectly fine without analog controls, but will then require the same amount of work as a keyboard.
 
+## Authoritative Server
+Even with an authoritative server, players can still attempt several types of exploits in multiplayer. I document these 
+things to encourage server admins to review sus games and get rid of their offenders. With a bit of practice you'll see 
+them from miles away. You can always just send replays to me and I'll take a peek.
+
+
+So these are pretty much impossible to completely combat with code:
+* **ESP:** The server needs to broadcast player states earlier than what is currently in view to not have things plop into existance. This can be abused to see things early. I do minimize this distance, and I think it's a decent balance at the time. That said, don't ban _me_! I always spam bullet rains in the direction I think or know the enemy will come. It's not always easy to spot these and uncanny stuff happens. This is more about "this dude _always_ does 'this'..."  
+* **Aimbots and Input Automation:** As with any game, an aimbot is _always_ possible. It would be possible if you played a video stream, you'd just train a model to detect your targets. These guys are easy to spot in most games, though.  
+* **Lag Switching / Latency Manipulation:** Artificially delaying outgoing network packets or inducing packet loss can freeze a player's perceived position or cause erratic interpolation behavior on opponents' screens. This is not always easy to see, but if it only happens repeatedly when they are in a pickle... probably bye?  
+* **Client is client:** The code is executed on their machine. We're not installing any root-kits like the big players are. Users can modify the game, alter rendering layer visibility etc. While server validation prevents direct score or position spoofing, UI-level modifications can still provide some advantage. BUT, I have put effort into making this very very minimal. I can imagine you might want to hide under a plant or so, but yeah, no. The plant won't let you.  
+* **Hardware/Software Macroing:** Making full-out bots, I don't really have a problem with this, but please mark your bot as a bot when you register the pilot. Then you'll compete with other bots. I guess there are some other scenarios where automation is interesting too, perhaps for auto-fire. "Joystick murder ftw" can be circumvented, but yeah, the rapid fire is capped. Anyway, let bots play bots!  
+
+Maybe with some trained models it could be automated, but there would always be false positives -- a good player is a good player, and banning them is just a shame. But hey, cheaters are worse. Don't be too good? :)
+
+
 ### Amiga
 Oh how awesome you were. I have not used any emulator or a real Amiga in decades,
 and what really surprised me was that while digging around in the 68k code
