@@ -1440,6 +1440,8 @@ async function bootstrapGame() {
     try {
         await assetManager.loadMultiple({
             '0xE5': 'assets/enemies/e5-enemy-384x256.webp',
+            '0xE7': 'assets/enemies/e7-enemy-384x256.webp',
+            '0xE8': 'assets/enemies/e8-enemy-384x256.webp',
             '0xEB': 'assets/enemies/e5-enemy-384x256.webp'
         });
         if (myAlias) {

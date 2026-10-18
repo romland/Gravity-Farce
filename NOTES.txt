@@ -142,8 +142,10 @@ COLOR31	0000	#000000
 Art
 I need 2026 art for this graphic, which is from the old Amiga game Gravity Force ... spice it up and make
 it very detailed. It will be used in a game. It's a 2D game...
-No perspective ... it's seen straight from the side and I want plain black background.
-Make it in-theme with what the game is about and where its situated (caverns).
+No perspective ... it's seen straight from the side and I want plain black background. It's a game sprite.
+Make it in-theme with what the game is about and where its situated (caverns). The blue smaller picture
+is from the original game and should be used as shape and in general, the higher resolution sets the colors/look
+for the new game. Important: I need the shape of the blue original to come through in the new version. Don't make a fucking carbon copy of the example I gave you.
 
 ----
 https://www.gravityforce20.com/ looks fun, but eh, not really original GF  
