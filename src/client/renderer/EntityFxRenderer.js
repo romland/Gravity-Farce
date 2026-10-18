@@ -295,49 +295,52 @@ export class EntityFxRenderer {
     }
 
     drawContainmentShield(ctx, layer, pal, w, h, seed, timeSec) {
-        const hw = w * 0.49;
-        const hh = h * 0.49;
+        const baseRx = w * 0.52;
+        const baseRy = h * 0.52;
         const pulse = 0.65 + 0.35 * Math.sin(timeSec * (layer.pulseSpeed || 3.2) + seed);
         const alpha = (layer.alpha || 0.35) * pulse;
 
-        // 1. Chamfered Octagonal Containment Field around the 192x128 collision box
+        // 1. Organic, morphing, moving plasma energy shell
         if (layer.hexField) {
-            const chX = w * 0.14;
-            const chY = h * 0.18;
             ctx.strokeStyle = pal.glow;
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = alpha * 0.75;
+            ctx.lineWidth = 1.8;
+            ctx.globalAlpha = alpha * 0.85;
+            
+            const steps = 36;
             ctx.beginPath();
-            ctx.moveTo(-hw + chX, -hh);
-            ctx.lineTo(hw - chX, -hh);
-            ctx.lineTo(hw, -hh + chY);
-            ctx.lineTo(hw, hh - chY);
-            ctx.lineTo(hw - chX, hh);
-            ctx.lineTo(-hw + chX, hh);
-            ctx.lineTo(-hw, hh - chY);
-            ctx.lineTo(-hw, -hh + chY);
+            for (let i = 0; i <= steps; i++) {
+                const theta = (i / steps) * Math.PI * 2;
+                const wave = Math.sin(theta * 4.0 + timeSec * 3.0 + seed) * 4.5 +
+                             Math.cos(theta * 6.0 - timeSec * 2.0 + seed) * 3.0;
+                const rx = baseRx + wave;
+                const ry = baseRy + wave * 0.7;
+                const px = Math.cos(theta) * rx;
+                const py = Math.sin(theta) * ry;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Inner swirling plasma ring rotating in reverse
+            ctx.strokeStyle = pal.core;
+            ctx.lineWidth = 1.0;
+            ctx.globalAlpha = alpha * 0.5;
+            ctx.beginPath();
+            for (let i = 0; i <= steps; i++) {
+                const theta = (i / steps) * Math.PI * 2;
+                const wave = Math.cos(theta * 5.0 - timeSec * 4.0 + seed) * 3.5;
+                const rx = baseRx * 0.9 + wave;
+                const ry = baseRy * 0.9 + wave * 0.7;
+                const px = Math.cos(theta) * rx;
+                const py = Math.sin(theta) * ry;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
             ctx.closePath();
             ctx.stroke();
         }
 
-        // 2. High-tech Corner Deflector Pylon Brackets (shows exact hitbox bounds!)
-        if (layer.cornerBrackets) {
-            const bw = w * 0.12;
-            const bh = h * 0.16;
-            ctx.strokeStyle = pal.core;
-            ctx.lineWidth = 2.0;
-            ctx.globalAlpha = Math.min(1.0, alpha * 1.6);
-            ctx.beginPath();
-            // Top-Left
-            ctx.moveTo(-hw, -hh + bh); ctx.lineTo(-hw, -hh); ctx.lineTo(-hw + bw, -hh);
-            // Top-Right
-            ctx.moveTo(hw - bw, -hh); ctx.lineTo(hw, -hh); ctx.lineTo(hw, -hh + bh);
-            // Bottom-Right
-            ctx.moveTo(hw, hh - bh); ctx.lineTo(hw, hh); ctx.lineTo(hw - bw, hh);
-            // Bottom-Left
-            ctx.moveTo(-hw + bw, hh); ctx.lineTo(-hw, hh); ctx.lineTo(-hw, hh - bh);
-            ctx.stroke();
-        }
     }
 
     drawJacobsLadder(ctx, layer, pal, w, h, seed, timeSec) {
