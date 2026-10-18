@@ -368,7 +368,7 @@ export const ENTITY_FX_PROFILES = {
     }
 };
 
-// Populate derived heavy/variant profiles cleanly (DRY)
+// Populate derived heavy/variant profiles cleanly
 ENTITY_FX_PROFILES['0xEE'] = {
     layers: [
         ...ENTITY_FX_PROFILES['0xE8'].layers,

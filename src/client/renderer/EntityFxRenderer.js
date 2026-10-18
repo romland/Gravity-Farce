@@ -300,13 +300,14 @@ export class EntityFxRenderer {
         const pulse = 0.65 + 0.35 * Math.sin(timeSec * (layer.pulseSpeed || 3.2) + seed);
         const alpha = (layer.alpha || 0.35) * pulse;
 
-        // 1. Organic, morphing, moving plasma energy shell
+        // 1. Organic, morphing, glowing plasma energy shell with multi-pass bloom
         if (layer.hexField) {
-            ctx.strokeStyle = pal.glow;
-            ctx.lineWidth = 1.8;
-            ctx.globalAlpha = alpha * 0.85;
-            
             const steps = 36;
+            
+            // Outer Bloom Pass
+            ctx.strokeStyle = pal.glow;
+            ctx.lineWidth = 5.0;
+            ctx.globalAlpha = alpha * 0.30;
             ctx.beginPath();
             for (let i = 0; i <= steps; i++) {
                 const theta = (i / steps) * Math.PI * 2;
@@ -322,10 +323,47 @@ export class EntityFxRenderer {
             ctx.closePath();
             ctx.stroke();
 
-            // Inner swirling plasma ring rotating in reverse
+            // Main Sharp Core Pass
             ctx.strokeStyle = pal.core;
-            ctx.lineWidth = 1.0;
-            ctx.globalAlpha = alpha * 0.5;
+            ctx.lineWidth = 2.2;
+            ctx.globalAlpha = alpha * 0.95;
+            ctx.beginPath();
+            for (let i = 0; i <= steps; i++) {
+                const theta = (i / steps) * Math.PI * 2;
+                const wave = Math.sin(theta * 4.0 + timeSec * 3.0 + seed) * 4.5 +
+                             Math.cos(theta * 6.0 - timeSec * 2.0 + seed) * 3.0;
+                const rx = baseRx + wave;
+                const ry = baseRy + wave * 0.7;
+                const px = Math.cos(theta) * rx;
+                const py = Math.sin(theta) * ry;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Inner swirling reverse-rotating bloom pass
+            ctx.strokeStyle = pal.glow;
+            ctx.lineWidth = 3.5;
+            ctx.globalAlpha = alpha * 0.25;
+            ctx.beginPath();
+            for (let i = 0; i <= steps; i++) {
+                const theta = (i / steps) * Math.PI * 2;
+                const wave = Math.cos(theta * 5.0 - timeSec * 4.0 + seed) * 3.5;
+                const rx = baseRx * 0.9 + wave;
+                const ry = baseRy * 0.9 + wave * 0.7;
+                const px = Math.cos(theta) * rx;
+                const py = Math.sin(theta) * ry;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Inner core reverse-rotating ring
+            ctx.strokeStyle = pal.core;
+            ctx.lineWidth = 1.4;
+            ctx.globalAlpha = alpha * 0.70;
             ctx.beginPath();
             for (let i = 0; i <= steps; i++) {
                 const theta = (i / steps) * Math.PI * 2;
