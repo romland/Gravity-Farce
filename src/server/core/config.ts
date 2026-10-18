@@ -18,6 +18,7 @@ export interface ServerConfig {
     shipScale: number;
     classicLandingBounce: boolean;
     allowSpSpectating: boolean;
+    allowPilotFollowing: boolean;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
@@ -36,7 +37,8 @@ const DEFAULT_CONFIG: ServerConfig = {
     viewHeight: 900,
     shipScale: 1.2, // Scales both visual ship and collision polygon 1:1 (baked into physicsHash)
     classicLandingBounce: false, // Optional toggle for 0x000352A8 landing bounce
-    allowSpSpectating: true // Master server toggle allowing spectators in SP rooms (if pilot also allows)
+    allowSpSpectating: true, // Master server toggle allowing spectators in SP rooms (if pilot also allows)
+    allowPilotFollowing: true // Toggle allowing spectators to persistently follow a pilot across room/cavern switches
 };
 
 export class ConfigManager {

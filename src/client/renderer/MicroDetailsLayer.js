@@ -1,4 +1,5 @@
 import { RENDER_CONFIG, rollChance } from './RenderConfig.js';
+import { BaseCrewController } from './BaseCrewController.js';
 
 const METAL_TILES = new Set([
     0x15, 0x29, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x21, 0x24, 0x25, 0x26, 0x27, 0x28,
@@ -36,7 +37,7 @@ export class MicroDetailsLayer {
         this.rockTrickles = [];
         this.oreDeposits = [];
         this.shiftingPatches = [];
-        this.baseCrews = [];
+        this.baseCrewController = new BaseCrewController();
         this.shipDebris = [];
         this.shipPrev = new Map();
         this.turretPrevCooldown = new Map();
@@ -105,7 +106,6 @@ export class MicroDetailsLayer {
         this.rockTrickles = [];
         this.oreDeposits = [];
         this.shiftingPatches = [];
-        this.baseCrews = [];
         this.shipDebris = [];
         this.shipPrev.clear();
         this.turretPrevCooldown.clear();
@@ -175,7 +175,7 @@ export class MicroDetailsLayer {
         if (level.rawMap) {
             this.initInteriorRockLifeAndTrickles(level, cfg);
             this.initOresAndShiftingGround(level, cfg);
-            this.initBaseCrews(level, cfg);
+            this.baseCrewController.init(level, cfg);
         }
     }
 
@@ -240,111 +240,8 @@ export class MicroDetailsLayer {
         }
     }
 
-    initBaseCrews(level, cfg) {
-        if (cfg.baseCrewEnabled === false) return;
-        const prefabs = level.highRes?.prefabs || [];
-        const spawns = (level.entities || []).filter(e => e.type === 'spawn');
-        const bases = prefabs.filter(p => p.kind === 'BASE_STRUCTURE');
-
-        // Identify primary home pads (tileId === 0x15 or pads with a player spawn or adjacent base building)
-        const homePads = prefabs.filter(p => {
-            if (p.kind !== 'PAD') return false;
-            if (p.tileId === 0x15) return true;
-            return spawns.some(s => Math.abs(s.x - (p.x + p.w * 0.5)) < p.w * 0.7 && Math.abs(s.y - p.y) < 48);
-        });
-
-        let seed = 51515;
-        const rng = () => {
-            seed = (seed * 16807) % 2147483647;
-            return (seed - 1) / 2147483646;
-        };
-
-        for (let pIdx = 0; pIdx < homePads.length; pIdx++) {
-            const pad = homePads[pIdx];
-            // Find nearest base building on or near this pad, or use one end of the pad as the shelter door
-            let doorX = pad.x + 10;
-            for (const b of bases) {
-                if (Math.abs((b.x + b.w * 0.5) - (pad.x + pad.w * 0.5)) < pad.w + 96 && Math.abs((b.y + b.h) - pad.y) < 64) {
-                    doorX = Math.max(pad.x + 6, Math.min(pad.x + pad.w - 6, b.x + b.w * 0.5));
-                    break;
-                }
-            }
-
-            const crewCount = 3 + (pIdx % 2);
-            const workers = [];
-            for (let i = 0; i < crewCount; i++) {
-                const workX = pad.x + 12 + rng() * Math.max(8, pad.w - 24);
-                workers.push({
-                    x: doorX + (rng() - 0.5) * 14,
-                    workX,
-                    targetX: workX,
-                    walkSpeed: 0.32 + rng() * 0.22,
-                    runSpeed: 0.68 + rng() * 0.42, // Varied speeds so they never look robotic
-                    suitColor: i === 0 ? '#f59e0b' : (i === 1 ? '#38bdf8' : '#e2e8f0'),
-                    phase: rng() * Math.PI * 2,
-                    pauseTimer: Math.floor(rng() * 80),
-                    welding: false
-                });
-            }
-
-            this.baseCrews.push({
-                padX: pad.x,
-                padY: pad.y,
-                padW: pad.w,
-                doorX,
-                workers,
-                cargoStack: [],
-                hauler: {
-                    state: 'idle', // 'idle' | 'fetching' | 'attaching' | 'dragging'
-                    x: doorX,
-                    timer: 0,
-                    draggedCrate: null,
-                    phase: rng() * Math.PI * 2
-                }
-            });
-        }
-    }
-
     onCargoUnloaded(x, y, typeId) {
-        if (!this.baseCrews || this.baseCrews.length === 0) return;
-        let bestBase = this.baseCrews[0];
-        let bestDist = Infinity;
-        for (const b of this.baseCrews) {
-            const cx = b.padX + b.padW * 0.5;
-            const d = Math.hypot(x - cx, y - b.padY);
-            if (d < bestDist) {
-                bestDist = d;
-                bestBase = b;
-            }
-        }
-        if (!bestBase) return;
-
-        const isLarge = typeId === 0xD2;
-        const size = isLarge ? 14 : 11;
-        const dirFromDoor = bestBase.doorX < (bestBase.padX + bestBase.padW * 0.5) ? 1 : -1;
-        const stackAnchorX = Math.max(
-            bestBase.padX + 16,
-            Math.min(bestBase.padX + bestBase.padW - 16, x + dirFromDoor * 12)
-        );
-
-        // Stack directly on top of existing crates on this pad!
-        let topY = bestBase.padY;
-        let baseStackX = stackAnchorX;
-        for (const c of bestBase.cargoStack) {
-            baseStackX = c.x;
-            topY = Math.min(topY, c.y - c.size * 0.5);
-        }
-
-        bestBase.cargoStack.push({
-            x: baseStackX + (Math.random() - 0.5) * 1.5,
-            y: topY - size * 0.5,
-            vx: 0,
-            vy: 0,
-            angle: 0,
-            vAngle: 0,
-            size,
-            isLarge
-        });
+        this.baseCrewController.onCargoUnloaded(x, y, typeId);
     }
 
     spawnShipDebris(x, y, vx = 0, vy = 0) {
@@ -1459,113 +1356,8 @@ export class MicroDetailsLayer {
         }
 
         // 1.8. Primary Base Ground Crew (Working at base, running out to landed home ship, dodging incoming/departing ships)
-        if (cfg.baseCrewEnabled !== false && this.baseCrews.length > 0) {
-            const shipList = players ? Object.values(players).filter(s => !s.isDead) : [];
-            for (let b = 0; b < this.baseCrews.length; b++) {
-                const base = this.baseCrews[b];
-                if (base.padX + base.padW < camera.x - 40 || base.padX > camera.x + viewW + 40 ||
-                    base.padY < camera.y - 40 || base.padY > camera.y + viewH + 40) continue;
-
-                let landedShip = null;
-                let dangerShip = null;
-                for (let s = 0; s < shipList.length; s++) {
-                    const sh = shipList[s];
-                    const overPad = sh.x >= base.padX - 24 && sh.x <= base.padX + base.padW + 24;
-                    const nearPadY = sh.y >= base.padY - 95 && sh.y <= base.padY + 16;
-                    if (!overPad || !nearPadY) continue;
-
-                    const isThrusting = Boolean(sh.inputs && (sh.inputs.up || sh.inputs.analogUp > 0));
-                    if (sh.isLanded && !isThrusting && Math.abs(sh.y - (base.padY - 14)) < 12) {
-                        landedShip = sh;
-                    } else {
-                        dangerShip = sh;
-                    }
-                }
-
-                for (let w = 0; w < base.workers.length; w++) {
-                    const wk = base.workers[w];
-                    let speed = wk.walkSpeed;
-                    wk.welding = false;
-
-                    if (dangerShip) {
-                        // Scramble back to the base building OR dodge away from an incoming ship
-                        speed = wk.runSpeed * 1.35;
-                        const distToDoor = Math.abs(wk.x - base.doorX);
-                        const distToDanger = Math.abs(wk.x - dangerShip.x);
-                        if (distToDanger < 34 && Math.abs(base.doorX - dangerShip.x) < distToDanger) {
-                            wk.targetX = wk.x < dangerShip.x
-                                ? Math.max(base.padX + 6, dangerShip.x - 42)
-                                : Math.min(base.padX + base.padW - 6, dangerShip.x + 42);
-                        } else {
-                            wk.targetX = base.doorX;
-                        }
-                    } else if (landedShip) {
-                        // Run out from the base building at varied speeds to service the landed ship!
-                        speed = wk.runSpeed;
-                        const serviceOffsets = [-11, 11, -18, 18];
-                        wk.targetX = Math.max(base.padX + 6, Math.min(base.padX + base.padW - 6, landedShip.x + serviceOffsets[w % serviceOffsets.length]));
-                    } else {
-                        // Ambient base maintenance patrol
-                        if (Math.abs(wk.x - wk.targetX) < 2.0) {
-                            wk.pauseTimer -= dt60;
-                            if (wk.pauseTimer <= 0) {
-                                wk.pauseTimer = 70 + Math.floor(Math.random() * 110);
-                                wk.targetX = (Math.random() < 0.35)
-                                    ? base.doorX
-                                    : (base.padX + 10 + Math.random() * Math.max(8, base.padW - 20));
-                            }
-                        }
-                    }
-
-                    const dx = wk.targetX - wk.x;
-                    const isMoving = Math.abs(dx) > 1.2;
-                    if (isMoving) {
-                        wk.x += Math.sign(dx) * Math.min(Math.abs(dx), speed * dt60);
-                    } else if (landedShip && Math.abs(wk.x - landedShip.x) < 22) {
-                        wk.welding = true;
-                    }
-
-                    // Hide inside the base doorway when fully retreated during takeoff/danger
-                    if (dangerShip && Math.abs(wk.x - base.doorX) < 3.0) continue;
-
-                    const wy = base.padY;
-                    const stride = isMoving ? Math.sin(timeSec * (speed > 0.5 ? 22 : 13) + wk.phase) * 1.8 : 0;
-                    const bob = isMoving ? Math.abs(Math.cos(timeSec * (speed > 0.5 ? 22 : 13) + wk.phase)) * 0.9 : 0;
-
-                    // Legs
-                    ctx.strokeStyle = '#1e293b';
-                    ctx.lineWidth = 1.2;
-                    ctx.beginPath();
-                    ctx.moveTo(wk.x - 0.8, wy - 2.5 - bob);
-                    ctx.lineTo(wk.x - 1.2 - stride, wy);
-                    ctx.moveTo(wk.x + 0.8, wy - 2.5 - bob);
-                    ctx.lineTo(wk.x + 1.2 + stride, wy);
-                    ctx.stroke();
-
-                    // Hazmat torso
-                    ctx.fillStyle = wk.suitColor;
-                    ctx.fillRect(wk.x - 1.6, wy - 5.8 - bob, 3.2, 3.4);
-
-                    // Helmet & glowing cyan visor
-                    ctx.fillStyle = '#e2e8f0';
-                    ctx.beginPath();
-                    ctx.arc(wk.x, wy - 7.0 - bob, 1.6, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#00f2fe';
-                    const faceDir = dx >= 0 ? 0.5 : -1.3;
-                    ctx.fillRect(wk.x + faceDir, wy - 7.5 - bob, 1.1, 0.9);
-
-                    //Tiny welding arc flash when servicing the ship
-                    if (wk.welding && Math.sin(timeSec * 38 + wk.phase) > 0.55) {
-                        ctx.fillStyle = '#a8f5ff';
-                        ctx.beginPath();
-                        ctx.arc(wk.x + (landedShip.x > wk.x ? 2.5 : -2.5), wy - 4.5, 1.8, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-
-                this.updateAndDrawBaseCargoHauler(ctx, base, dangerShip, timeSec, dt60);
-            }
+        if (cfg.baseCrewEnabled !== false) {
+            this.baseCrewController.updateAndDraw(ctx, camera, viewW, viewH, players, this.sparks, timeSec, dt60);
         }
 
         // 2. Ship Thruster Surface Dust/Scorch & Landing Touchdown Effects
@@ -2177,194 +1969,6 @@ export class MicroDetailsLayer {
             ctx.globalAlpha = 1.0;
         }
 
-        ctx.restore();
-    }
-
-    updateAndDrawBaseCargoHauler(ctx, base, dangerShip, timeSec, dt60) {
-        const stack = base.cargoStack;
-        const h = base.hauler;
-        if (!h) return;
-
-        // 1. Update & Draw Stacked Crates on Pad (with Tumble & Settle Physics when bottom crate is yanked!)
-        let currentFloorY = base.padY;
-        for (let i = 0; i < stack.length; i++) {
-            const c = stack[i];
-            const targetY = currentFloorY - c.size * 0.5;
-            if (c.y < targetY - 0.2 || Math.abs(c.vy) > 0.05) {
-                c.vy += 0.14 * dt60;
-                c.x += c.vx * dt60;
-                c.y += c.vy * dt60;
-                c.angle += c.vAngle * dt60;
-                c.x = Math.max(base.padX + 8, Math.min(base.padX + base.padW - 8, c.x));
-                if (c.y >= targetY) {
-                    c.y = targetY;
-                    if (c.vy > 0.9 && this.sparks.length < 90) {
-                        this.sparks.push({
-                            x: c.x, y: base.padY,
-                            vx: (Math.random() - 0.5) * 1.2, vy: -0.6 - Math.random() * 0.6,
-                            gravity: 0.08, life: 12, maxLife: 12, size: 1.3, color: '#ffd260'
-                        });
-                    }
-                    c.vy = -c.vy * 0.28;
-                    c.vx *= 0.6;
-                    c.vAngle *= 0.5;
-                    if (Math.abs(c.vy) < 0.18) {
-                        c.vy = 0;
-                        c.vx = 0;
-                        c.vAngle = 0;
-                    }
-                }
-            } else {
-                c.y = targetY;
-                c.angle *= Math.pow(0.82, dt60);
-            }
-            currentFloorY = c.y - c.size * 0.5;
-            this.drawPadCargoCrate(ctx, c);
-        }
-
-        // 2. Update Struggling Rope-Hauler State Machine
-        if (h.state === 'idle') {
-            if (!dangerShip && stack.length > 0) {
-                h.state = 'fetching';
-            } else {
-                return;
-            }
-        }
-
-        if (h.state === 'fetching') {
-            if (stack.length === 0) {
-                h.state = 'idle';
-                return;
-            }
-            const bottomCrate = stack[0];
-            const stopSide = Math.sign(base.doorX - bottomCrate.x) || -1;
-            const hookX = bottomCrate.x + stopSide * (bottomCrate.size * 0.5 + 4);
-            const dx = hookX - h.x;
-            if (Math.abs(dx) > 1.5) {
-                h.x += Math.sign(dx) * Math.min(Math.abs(dx), 0.78 * dt60);
-            } else {
-                h.state = 'attaching';
-                h.timer = 22;
-            }
-        } else if (h.state === 'attaching') {
-            h.timer -= dt60;
-            if (h.timer <= 0) {
-                if (stack.length === 0) {
-                    h.state = 'idle';
-                    return;
-                }
-                // Yank the BOTTOM crate out from underneath the stack!
-                const yanked = stack.shift();
-                const pullDir = Math.sign(base.doorX - yanked.x) || -1;
-                h.draggedCrate = yanked;
-                h.state = 'dragging';
-
-                // Tablecloth-pull effect: all crates stacked above it topple, spin, and drop!
-                for (let i = 0; i < stack.length; i++) {
-                    const upper = stack[i];
-                    upper.vy = -0.35 - i * 0.15;
-                    upper.vx = -pullDir * (0.45 + Math.random() * 0.55) + (Math.random() - 0.5) * 0.35;
-                    upper.vAngle = -pullDir * (0.06 + Math.random() * 0.08);
-                }
-            }
-        } else if (h.state === 'dragging') {
-            const dc = h.draggedCrate;
-            if (!dc) {
-                h.state = 'idle';
-                return;
-            }
-            const pullDir = Math.sign(base.doorX - dc.x) || -1;
-            // Struggling rhythmic heave-ho pull speed (leans hard & surges every step)
-            const heavePulse = 0.35 + 0.65 * Math.pow(Math.max(0, Math.sin(timeSec * 5.5 + h.phase)), 2);
-            const weightFactor = dc.isLarge ? 0.19 : 0.27;
-            const step = weightFactor * heavePulse * dt60;
-
-            const ropeLen = 13;
-            h.x += pullDir * step;
-            const desiredCrateX = h.x - pullDir * ropeLen;
-            if ((pullDir > 0 && dc.x < desiredCrateX) || (pullDir < 0 && dc.x > desiredCrateX)) {
-                dc.x = desiredCrateX;
-            }
-            dc.y = base.padY - dc.size * 0.5;
-            dc.angle = Math.sin(timeSec * 11 + h.phase) * 0.04;
-
-            // Friction sparks under the heavy dragged crate
-            if (heavePulse > 0.75 && rollChance(0.18, dt60) && this.sparks.length < 90) {
-                this.sparks.push({
-                    x: dc.x - pullDir * (dc.size * 0.4),
-                    y: base.padY,
-                    vx: -pullDir * (0.4 + Math.random() * 0.5),
-                    vy: -0.3 - Math.random() * 0.4,
-                    gravity: 0.06, life: 10, maxLife: 10, size: 1.1, color: '#f59e0b'
-                });
-            }
-
-            this.drawPadCargoCrate(ctx, dc);
-
-            // Draw taut high-tension tow rope from worker hands to crate hook
-            ctx.strokeStyle = '#d6bc8b';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(h.x - pullDir * 1.5, base.padY - 3.8);
-            ctx.lineTo(dc.x + pullDir * (dc.size * 0.5), dc.y);
-            ctx.stroke();
-
-            if (Math.abs(dc.x - base.doorX) < 5.0) {
-                h.draggedCrate = null;
-                h.state = stack.length > 0 ? 'fetching' : 'idle';
-                return;
-            }
-        }
-
-        // 3. Draw the Cargo Hauler Crewman (leaning heavily forward when dragging!)
-        const wy = base.padY;
-        const isDragging = h.state === 'dragging';
-        const moveDir = isDragging
-            ? (Math.sign(base.doorX - h.x) || -1)
-            : (stack[0] ? (Math.sign(stack[0].x - h.x) || 1) : 1);
-        const leanX = isDragging ? (moveDir * 2.8) : 0;
-        const cycle = timeSec * (isDragging ? 11 : 18) + h.phase;
-        const stride = (h.state === 'attaching') ? 0 : Math.sin(cycle) * (isDragging ? 2.2 : 1.7);
-        const bob = (h.state === 'attaching') ? 1.2 : Math.abs(Math.cos(cycle)) * 0.8;
-
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-        ctx.moveTo(h.x + leanX * 0.5, wy - 2.6 - bob);
-        ctx.lineTo(h.x - 1.4 - stride, wy);
-        ctx.moveTo(h.x + leanX * 0.5, wy - 2.6 - bob);
-        ctx.lineTo(h.x + 1.4 + stride, wy);
-        ctx.stroke();
-
-        // Straining tilted torso
-        ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = 3.0;
-        ctx.beginPath();
-        ctx.moveTo(h.x + leanX * 0.3, wy - 2.5 - bob);
-        ctx.lineTo(h.x + leanX, wy - 5.8 - bob);
-        ctx.stroke();
-
-        // Helmet & visor
-        ctx.fillStyle = '#e2e8f0';
-        ctx.beginPath();
-        ctx.arc(h.x + leanX * 1.15, wy - 7.0 - bob, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#00f2fe';
-        ctx.fillRect(h.x + leanX * 1.15 + (moveDir >= 0 ? 0.4 : -1.3), wy - 7.5 - bob, 1.1, 0.9);
-    }
-
-    drawPadCargoCrate(ctx, c) {
-        ctx.save();
-        ctx.translate(c.x, c.y);
-        ctx.rotate(c.angle || 0);
-        const hs = c.size * 0.5;
-        ctx.fillStyle = c.isLarge ? '#2c1e14' : '#1e2417';
-        ctx.strokeStyle = c.isLarge ? '#e67e22' : '#f1c40f';
-        ctx.lineWidth = 1.3;
-        ctx.fillRect(-hs, -hs, c.size, c.size);
-        ctx.strokeRect(-hs, -hs, c.size, c.size);
-        ctx.fillStyle = c.isLarge ? '#f39c12' : '#f1c40f';
-        ctx.fillRect(-hs + 2, -1, c.size - 4, 2);
         ctx.restore();
     }
 }

@@ -1,6 +1,7 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
 import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
+import { pilotStatsDB } from '../core/pilot-stats';
 
 export function sysMission(ecs: Registry, room: Room) {
     if (room.category !== 'mission') return;
@@ -44,12 +45,12 @@ export function sysMission(ecs: Registry, room: Room) {
             p.advancing = true;
             room.tracker.isCompleted = true;
             ecs.events.push({ type: 'floating_text', text: 'CAVERN SECURED', color: '#4facfe', x: t.x, y: t.y - 60 });
-            if (!room.isReplayMode) setTimeout(() => room.transitionPlayer(p.id), 3000);
+            setTimeout(() => room.transitionPlayer(p.id), 3000);
         }
     }
 }
 
-export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: number) {
+export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: number, streakSegments?: string[]) {
     const e = room.ecs.getPlayerEntity(playerId);
     if (e === undefined) return null;
     if (room.ecs.bots.has(e)) return null;
@@ -68,10 +69,20 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         return buildMissionLeaderboards(room.levelIndex, mode, physicsHash, p.uuid, p.alias, undefined, undefined, undefined, botCount, isBotPilot);
     }
 
+    if (!isBotPilot) {
+        pilotStatsDB.completeAttempt(p.uuid, p.alias, room.levelIndex);
+    }
+
     const rFast = recordDB.submitRecord('sp_fastest', room.levelIndex, mode, physicsHash, 'asc_desc', { playerId: p.uuid, alias: p.alias, value: timeTaken, secondaryValue: levelPoints, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
     const rSneak = recordDB.submitRecord('sp_sneakiest', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: levelPoints, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
     const rEco = recordDB.submitRecord('sp_eco', room.levelIndex, mode, physicsHash, 'asc_asc', { playerId: p.uuid, alias: p.alias, value: Math.floor(f?.consumed || 0), secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
     const rBest = recordDB.submitRecord('sp_level_best', room.levelIndex, mode, physicsHash, 'desc_asc', { playerId: p.uuid, alias: p.alias, value: levelPoints, secondaryValue: timeTaken, metadata: { replayId: room.tracker.uuid, botCount } }, 100, isBotPilot);
+
+    // Always keep this cavern's replay segment while the player is alive on a sequential 5-lives mission streak
+    room.tracker.keepForStreak = true;
+    if (streakSegments && streakSegments.length > 0) {
+        room.tracker.setStreakSegments(streakSegments);
+    }
 
     // Bank 5-Lives Sequential Streak Score automatically upon completing each cavern in the sequence.
     // Why maxEntriesPerPlayer = 1 (TODO 5): A single 9-level streak or multiple attempts should never
@@ -82,7 +93,7 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         alias: p.alias,
         value: p.score,
         secondaryValue: timeTaken,
-        metadata: { replayId: room.tracker.uuid, botCount, startLevel: startLvl, endLevel: room.levelIndex }
+        metadata: { replayId: room.tracker.uuid, streakReplays: streakSegments, botCount, startLevel: startLvl, endLevel: room.levelIndex }
     }, 100, isBotPilot, 1);
 
     // Update 50-Cavern Campaign Mastery Aggregates (Levels 0-49)
@@ -149,6 +160,8 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         botCount, isBotPilot
     );
 
+    // Commented out for now, but keep it around in case we want to reinstate it later.
+    // const cavStats = pilotStatsDB.getCavernStats(p.uuid, room.levelIndex);
     const runSummaryEntries = mode === 'MP' ?
         Array.from(room.ecs.players.entries()).map(([oe, op]) => ({
             rankLabel: op.id === playerId ? 'YOU' : 'PILOT', alias: op.alias, isMe: op.id === playerId, isNewPb: false,
@@ -156,10 +169,11 @@ export function evaluateMissionEnd(room: Room, playerId: string, timeTaken: numb
         })) : [
             { rankLabel: 'TIME', alias: 'DURATION', displayValue: formatTimeMs(timeTaken), isMe: true, isNewPb: false },
             { rankLabel: 'SCORE', alias: 'SCORE', displayValue: String(levelPoints).padStart(6, '0'), isMe: true, isNewPb: false },
-            { rankLabel: 'STREAK', alias: `C${String(startLvl).padStart(2, '0')}-C${String(room.levelIndex).padStart(2, '0')} (${p.lives}♥)`, displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
+            { rankLabel: 'STREAK', alias: `CAVERNS ${String(startLvl).padStart(2, '0')}-${String(room.levelIndex).padStart(2, '0')} (${p.lives}♥)`, displayValue: String(p.score).padStart(6, '0'), isMe: true, isNewPb: false },
             { rankLabel: 'FUEL', alias: 'CONSUMED', displayValue: `${Math.floor(f?.consumed || 0)}F`, isMe: true, isNewPb: false },
             { rankLabel: 'SHOTS', alias: 'SHOTS', displayValue: String(w?.shotsFired || 0), isMe: true, isNewPb: false },
-            { rankLabel: 'STATUS', alias: 'DESTROYED', displayValue: `${completionPct}%`, isMe: true, isNewPb: false }
+            { rankLabel: 'STATUS', alias: 'DESTROYED', displayValue: `${completionPct}%`, isMe: true, isNewPb: false },
+            // { rankLabel: 'ATTEMPTS', alias: 'FAILED / OK', displayValue: `${cavStats.failedAttempts} / ${cavStats.completions}`, isMe: true, isNewPb: false }
         ];
     if (botCount > 0) {
         runSummaryEntries.push({ rankLabel: 'BOTS', alias: 'WITH BOTS', displayValue: `${botCount} AI`, isMe: true, isNewPb: false });
@@ -175,12 +189,12 @@ export function buildMissionLeaderboards(pLevel: number, mode: 'SP' | 'MP', phys
     const formatStreak = (x: any) => {
         const sLvl = x.metadata?.startLevel;
         const eLvl = x.metadata?.endLevel;
-        const rangeStr = (sLvl !== undefined && eLvl !== undefined) ? ` (C${String(sLvl).padStart(2, '0')}-C${String(eLvl).padStart(2, '0')})` : '';
+        const rangeStr = (sLvl !== undefined && eLvl !== undefined) ? ` (CAVERNS ${String(sLvl).padStart(2, '0')}-${String(eLvl).padStart(2, '0')})` : '';
         return `${String(x.value).padStart(6, '0')} PTS${rangeStr}`;
     };
     const formatCampScore = (x: any) => {
         const cCount = x.metadata?.cavernsCleared ?? '?';
-        return `${String(x.value).padStart(6, '0')} PTS (${cCount}/50) | ${formatTimeMs(x.secondaryValue ?? 0)}`;
+        return `${String(x.value).padStart(6, '0')} PTS (${cCount}/50 CAVERNS) | ${formatTimeMs(x.secondaryValue ?? 0)}`;
     };
     const formatCampTime = (x: any) => `${x.value}/50 CAVERNS | ${formatTimeMs(x.secondaryValue ?? 0)}`;
     const formatCampFuel = (x: any) => `${x.value}/50 CAVERNS | ${x.secondaryValue ?? 0}F`;

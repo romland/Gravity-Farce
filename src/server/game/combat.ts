@@ -5,7 +5,9 @@ import type { Room } from '../Room';
 import { getTurretSpecByTile } from './turret-defs';
 import { spawnExplosionFragments } from './debris';
 import { TILE_DICTIONARY } from '../core/tiles';
+import { tileMaskRegistry, getTileCategory } from '../core/tile-masks';
 import { recordDB, getActivePhysicsHash } from '../core/records';
+import { pilotStatsDB } from '../core/pilot-stats';
 import { tagPlayerDamage, attributeDogfightDeath } from './dogfight';
 import { checkShipBoxCollision, isNearSolidTile } from './player-shared';
 import { SERVER_CONFIG } from '../core/config';
@@ -103,6 +105,9 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     if (room) {
         const t = ecs.transforms.get(e);
         room.tracker.logEvent(p.id, { type: 'death', x: t?.x || 0, y: t?.y || 0 });
+        if (!room.isReplayMode && !ecs.bots.has(e) && !p.isBotPilot) {
+            pilotStatsDB.recordDeath(p.uuid, p.alias, room.levelIndex);
+        }
         if (room.category === 'dogfight') {
             attributeDogfightDeath(ecs, e, room);
         }
@@ -138,6 +143,7 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
         }
         
         if (room && !ecs.bots.has(e) && !room.isReplayMode) {
+            if (!p.isBotPilot) pilotStatsDB.flushPendingAsFailed(p.uuid, p.alias);
             room.emitToPlayer(p.id, 'game_over', { score: p.score, levelName: room.level.name });
             room.checkAllPlayersOutOfLives();
         }
@@ -209,12 +215,21 @@ export function sysBullets(ecs: Registry, room: Room) {
         }
 
         // Fallback: If bullet spawned directly inside a solid block (e.g. rear-shot while landed)
+        // Must check exact 8x8 bitplane pixel mask (not the coarse 32x32 tile box!) so bullets flying
+        // near sloped/thin ground tiles or under decorative base tiles are NEVER culled in open air!
         if (!hit && room.level.rawMap) {
             const tx = Math.floor(t.x / 32);
             const ty = Math.floor(t.y / 32);
             const tId = room.level.rawMap[ty]?.[tx];
-            if (tId !== undefined && (TILE_DICTIONARY[tId]?.solid || TILE_DICTIONARY[tId]?.pad)) {
+            if (tId !== undefined && TILE_DICTIONARY[tId]?.pad) {
                 hit = true;
+            } else if (tId !== undefined && getTileCategory(tId) !== 'NONE') {
+                const mask = tileMaskRegistry.getMask(tId);
+                const subX = Math.min(7, Math.max(0, Math.floor((t.x - tx * 32) / 4)));
+                const subY = Math.min(7, Math.max(0, Math.floor((t.y - ty * 32) / 4)));
+                if (mask[subY]?.[subX]) {
+                    hit = true;
+                }
             }
         }
 
@@ -410,7 +425,8 @@ export function sysTurrets(ecs: Registry, room: Room) {
                     vec.vy * speed,
                     false,
                     'npc',
-                    90
+                    // Verified at 0x000348EA: Turret bullets do not decay mid-air on a timer; they travel until hitting solid terrain
+                    0
                 );
             }
             ecs.events.push({ type: 'sound', soundId: spec.soundId, x: t.x, y: t.y });

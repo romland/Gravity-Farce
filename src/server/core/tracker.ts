@@ -46,6 +46,7 @@ export interface LogEntry {
         _pingSamples?: number[]; // Internal tracking, removed before save
     }>;
     replayData?: any;
+    streakSegments?: string[];
 }
 
 const REPLAY_WORKER_CODE = `
@@ -56,11 +57,20 @@ const zlib = require('zlib');
 
 parentPort.on('message', (msg) => {
     try {
-        const { entry, useGzip } = msg;
         const dir = path.resolve(process.cwd(), 'data/replays');
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
+        if (msg.deleteUuids && Array.isArray(msg.deleteUuids)) {
+            for (const id of msg.deleteUuids) {
+                for (const ext of ['.json', '.gfr']) {
+                    const p = path.join(dir, id + ext);
+                    if (fs.existsSync(p)) try { fs.unlinkSync(p); } catch {}
+                }
+            }
+            return;
+        }
+        const { entry, useGzip } = msg;
         const ext = useGzip ? '.gfr' : '.json';
         const filepath = path.join(dir, entry.gameUuid + ext);
         
@@ -86,6 +96,7 @@ export class GameTracker {
     private isActive: boolean = true;
     public isCompleted: boolean = false;
     public hasHighscore: boolean = false;
+    public keepForStreak: boolean = false;
     
     constructor(levelIndex: number, category: string, mode: 'SP' | 'MP', physicsHash: string, isDebug: boolean) {
         this.uuid = crypto.randomUUID();
@@ -186,14 +197,21 @@ export class GameTracker {
         if (this.isActive) this.entry.replayData.frames.push(frameData);
     }
 
+    public setStreakSegments(segmentUuids: string[]) {
+        this.entry.streakSegments = [...segmentUuids];
+    }
+
+    public static deleteOrphanedStreakReplays(uuids: string[]) {
+        if (uuids.length > 0) replayWorker.postMessage({ deleteUuids: uuids });
+    }
+
     public finishAndSave() {
         if (!this.isActive) return;
         this.isActive = false;
         
-        if (!this.isCompleted && !this.hasHighscore) return; // Discard failed attempts unless they scored a record
+        if (!this.isCompleted && !this.hasHighscore && !this.keepForStreak) return; // Discard failed attempts unless they scored a record
 
         this.entry.endedAt = Date.now();
-        if (!this.isCompleted && !this.hasHighscore) return; // Discard failed attempts unless they scored a record
         this.entry.durationMs = this.entry.endedAt - this.entry.startedAt;
         this.entry.events.push({ timestamp: this.entry.endedAt, event: { type: 'game_end', reason: 'completed' } });
         
@@ -218,7 +236,7 @@ export class GameTracker {
         
         fs.appendFileSync(logPath, JSON.stringify(this.entry) + '\n');
 
-        if (this.hasHighscore) {
+        if (this.hasHighscore || this.keepForStreak) {
             replayWorker.postMessage({ entry: this.entry, useGzip: !this.entry.isDebug });
         }
     }

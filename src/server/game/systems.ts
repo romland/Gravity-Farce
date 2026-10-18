@@ -153,6 +153,7 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
     
     const safeClientIds = (room && typeof room === 'object' && room.activeClientIds) ? room.activeClientIds : [];
     for (const clientId of safeClientIds) {
+        if (clientId === '__REPLAY_FF__') continue;
         let e = ecs.getPlayerEntity(clientId);
         let t = e !== undefined ? ecs.transforms.get(e) : null;
 

@@ -48,6 +48,8 @@ export class PerfReportGenerator {
             return { key: k, ...st, budgetPct };
         }).sort((a, b) => b.avg - a.avg);
 
+        profiler.markHz('Ship.ActualPaintHz');
+        profiler.markHz('Ship.ActualPaintMeHz');
         const cDraws = profiler.getSeries('Canvas.DrawCalls').computeStats(samples);
         const cImgs = profiler.getSeries('Canvas.DrawImage').computeStats(samples);
         const cFills = profiler.getSeries('Canvas.Fills').computeStats(samples);

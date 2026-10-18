@@ -70,10 +70,12 @@ export interface PlayerStats {
     streakStartLevel?: number;
     streakLastLevel?: number;
     streakId?: string;
+    streakReplays?: string[];
     team?: 'E2' | 'E3';
     sessionMode?: 'SP' | 'MP';
     roomCode?: string;
     allowSpectators?: boolean;
+    followingPilotId?: string;
 }
 
 export interface BotState {

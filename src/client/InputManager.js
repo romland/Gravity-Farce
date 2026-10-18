@@ -13,7 +13,8 @@ const DEFAULT_INPUT_CONFIG = {
     },
     system: {
         escape: ['Escape'],
-        watchReplay: ['KeyR'],
+        restartCavern: ['Slash', 'NumpadDivide', 'Backslash'],
+        watchReplay: ['KeyX'],
         pause: ['KeyP'],
         toggleDebugLines: ['KeyV'],
         toggleFreecam: ['KeyC'],
@@ -82,6 +83,7 @@ class InputManager {
         if (isPressed && !e.repeat && this.config.system) {
             for (const [action, keys] of Object.entries(this.config.system)) {
                 if (keys.includes(e.code)) {
+                    e.preventDefault();
                     if (this.onAction) this.onAction(action);
                     return; // System keys absorb the input
                 }

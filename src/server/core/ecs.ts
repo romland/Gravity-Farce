@@ -70,6 +70,7 @@ export interface Player {
     deaths: number;
     unforcedErrors: number;
     lastDamagedBy?: { attackerId: string; tick: number };
+    attemptRegistered?: boolean;
 }
 
 export interface FuelTank {

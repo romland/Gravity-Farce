@@ -119,7 +119,7 @@ export class HudManager {
         cActions.classList.add('hud-actions');
         cActions.innerHTML = `
             <button class="gbtn" id="btn-hud-scores" type="button">LEADERBOARDS</button>
-            <button class="gbtn gbtn-amber" id="btn-hud-restart" type="button" title="Restart Cavern">RESTART</button>
+            <button class="gbtn gbtn-amber" id="btn-hud-restart" type="button" title="Restart Cavern (Shortcut: /)">RESTART [/]</button>
             <button class="gbtn gbtn-emerald" id="btn-room-mode" type="button">SOLO (SP)</button>
             <!--
             <button class="gbtn gbtn-crimson" id="btn-spawn-bot" type="button" style="display:none;">+ BOT</button>

@@ -544,10 +544,12 @@ export function buildLeaderboardContext(
         const isThisNewPb = isMe && isNewPb && rec.timestamp === newEntryTimestamp;
         const isCurrentRun = isMe && rec.timestamp === newEntryTimestamp;
         const ageStr = (i === 0 && rec.timestamp) ? getRelativeTimeStr(rec.timestamp) : undefined;
+        // TODO 10: Players can replay their own races/runs for 1 hour; admins/debug can view all replays
+        const canWatchReplay = SERVER_CONFIG.debugMode || (isMe && (Date.now() - (rec.timestamp || 0)) <= 3600 * 1000);
         
         results.push({
             rank: i + 1, rankLabel: `#${i+1}`, alias: rec.alias, ageStr, displayValue: formatFn(rec),
-            isMe, isNewPb: isThisNewPb, isCurrentRun, replayId: rec.metadata?.replayId
+            isMe, isNewPb: isThisNewPb, isCurrentRun, replayId: canWatchReplay ? rec.metadata?.replayId : undefined
         });
     }
     
@@ -557,13 +559,16 @@ export function buildLeaderboardContext(
         }
         if (pIdx - 1 >= topN) {
             const rec = recordsCopy[pIdx-1];
-            results.push({ rank: pIdx, rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: rec.metadata?.replayId });
+            const canWatchPrev = SERVER_CONFIG.debugMode || (rec.playerId === playerId && (Date.now() - (rec.timestamp || 0)) <= 3600 * 1000);
+            results.push({ rank: pIdx, rankLabel: `#${pIdx}`, alias: rec.alias, displayValue: formatFn(rec), isMe: rec.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: canWatchPrev ? rec.metadata?.replayId : undefined });
         }
         const recMe = recordsCopy[pIdx];
-        results.push({ rank: pIdx + 1, rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true, replayId: recMe.metadata?.replayId });
+        const canWatchMe = SERVER_CONFIG.debugMode || (Date.now() - (recMe.timestamp || 0)) <= 3600 * 1000;
+        results.push({ rank: pIdx + 1, rankLabel: `#${pIdx+1}`, alias: recMe.alias, displayValue: formatFn(recMe), isMe: true, isNewPb: isNewPb && (newEntryTimestamp === undefined || recMe.timestamp === newEntryTimestamp), isCurrentRun: true, replayId: canWatchMe ? recMe.metadata?.replayId : undefined });
         if (pIdx + 1 < recordsCopy.length) {
             const recNext = recordsCopy[pIdx+1];
-            results.push({ rank: pIdx + 2, rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: recNext.metadata?.replayId });
+            const canWatchNext = SERVER_CONFIG.debugMode || (recNext.playerId === playerId && (Date.now() - (recNext.timestamp || 0)) <= 3600 * 1000);
+            results.push({ rank: pIdx + 2, rankLabel: `#${pIdx+2}`, alias: recNext.alias, displayValue: formatFn(recNext), isMe: recNext.playerId === playerId, isNewPb: false, isCurrentRun: false, replayId: canWatchNext ? recNext.metadata?.replayId : undefined });
         }
     }
 

@@ -17,6 +17,7 @@ import { spawnRacingBot } from './game/bot-racing';
 import { spawnMissionBot } from './game/bot-mission';
 import { logRacingCrash } from './game/bot-utils';
 import { logDogfightCrash } from './game/bot-utils';
+import { GameTracker } from './core/tracker';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -53,6 +54,10 @@ let nextLiveRoomId = 1;
 const playerRooms = new Map<string, number>();
 const playerSessionStats = new Map<string, PlayerStats>();
 const pendingPingTimestamps = new Map<string, number>();
+// Authoritative per-UUID last level memory so immediate browser reloads after jumping NEVER revert (TODO 6)
+const lastLevelByUuid = new Map<string, number>();
+// Map of leader socketId -> Set of follower spectator socketIds (TODO 2.4 Spectate Pilot)
+const pilotFollowers = new Map<string, Set<string>>();
 
 function sanitizeRoomCode(code?: string): string {
     if (typeof code !== 'string') return '';
@@ -105,6 +110,17 @@ function createRoomInstance(levelIndex: number, mode: 'SP' | 'MP', customCode?: 
         mode,
         code
     );
+    room.onSpectatorRoomExpired = (expiredRoomId: number) => {
+        const expRoom = rooms.get(expiredRoomId);
+        if (!expRoom) return;
+        for (const sid of Array.from(expRoom.activeClientIds)) {
+            if (expRoom.ecs.getPlayerEntity(sid) === undefined) {
+                const st = playerSessionStats.get(sid);
+                if (st) st.followingPilotId = undefined;
+                handleTransitionToLevel(sid, expRoom.levelIndex, true, 'SP', '');
+            }
+        }
+    };
     rooms.set(rId, room);
     roomsByCode.set(code, rId);
     return room;
@@ -143,6 +159,146 @@ function resolveOrCreateTargetRoom(levelIndex: number, mode: 'SP' | 'MP', reques
     return { room: createRoomInstance(levelIndex, 'SP'), asSpectator: false };
 }
 
+const loadReplayObject = (replayId: string): any | null => {
+    if (typeof replayId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(replayId)) return null;
+    const dir = path.resolve(process.cwd(), 'data/replays');
+    let dataRaw: string | undefined;
+    if (fs.existsSync(path.join(dir, `${replayId}.json`))) {
+        dataRaw = fs.readFileSync(path.join(dir, `${replayId}.json`), 'utf-8');
+    } else if (fs.existsSync(path.join(dir, `${replayId}.gfr`))) {
+        const zipped = fs.readFileSync(path.join(dir, `${replayId}.gfr`));
+        dataRaw = zlib.gunzipSync(zipped).toString('utf-8');
+    } else {
+        return null;
+    }
+    return JSON.parse(dataRaw);
+};
+
+function startReplayForSocket(targetSocketId: string, replayId: string, explicitQueue?: string[], fullStreak: boolean = false) {
+    const targetSocket = io.sockets.sockets.get(targetSocketId);
+    if (!targetSocket) return;
+    try {
+        let replay = loadReplayObject(replayId);
+        if (!replay) return;
+
+        // TODO 10: Enforce replay viewing authorization on server!
+        // Players may replay their own runs for 1 hour; otherwise only debugMode/admins can watch replays.
+        const viewerStats = playerSessionStats.get(targetSocketId);
+        const viewerUuid = viewerStats?.uuid || targetSocket.handshake.auth?.uuid;
+        const isOwnReplay = Object.values(replay.playerStats || {}).some((ps: any) => ps.uuid === viewerUuid);
+        const ageMs = Date.now() - (replay.endedAt || replay.startedAt || 0);
+        if (!SERVER_CONFIG.debugMode && !(isOwnReplay && ageMs <= 3600 * 1000)) {
+            targetSocket.emit('playfield_announce', { text: 'REPLAY RESTRICTED (OWN RUNS < 1H ONLY)', color: '#ef4444' });
+            return;
+        }
+
+        // TODO 13: If this replay is the final/latest segment of a multi-cavern 5-Lives Streak,
+        // start from segment 0 and queue the remaining segments!
+        let queue = explicitQueue;
+        if (fullStreak && !queue && Array.isArray(replay.streakSegments) && replay.streakSegments.length > 1) {
+            const allSegs = [...replay.streakSegments];
+            const firstSegId = allSegs.shift()!;
+            const firstReplay = loadReplayObject(firstSegId);
+            if (firstReplay) {
+                replay = firstReplay;
+                queue = allSegs;
+                targetSocket.emit('playfield_announce', {
+                    text: `MULTI-CAVERN STREAK REPLAY (${replay.streakSegments.length} CAVERNS) — STARTING FROM CAVERN ${String(replay.levelIndex).padStart(2, '0')}`,
+                    color: '#ffd700'
+                });
+            }
+        }
+
+        targetSocket.emit('hide_leaderboard');
+
+        // Cleanly exit the spectator's current room first (destroying it if empty)
+        leaveCurrentRoom(targetSocketId);
+
+        const rId = nextReplayRoomId--;
+        const replayMode: 'SP' | 'MP' = replay.mode === 'MP' ? 'MP' : 'SP';
+        const newRoom = new Room(
+            rId,
+            replay.levelIndex,
+            getLevelData(replay.levelIndex),
+            io,
+            handleTransition,
+            SERVER_CONFIG.lethalRacingEnemies,
+            SERVER_CONFIG.raceBumpModifier,
+            true,
+            replayMode,
+            '',
+            replay.replayData.seed
+        );
+        if (queue && queue.length > 0) {
+            newRoom.replayQueue = queue;
+        }
+
+        // Namespace replay actor IDs so they can NEVER collide with live socket IDs
+        // TODO 9: Fast-forward idle pad delay! Find the first tick where any player presses a key
+        // and start playback right before the first keypress!
+        const rawFrames = Array.isArray(replay.replayData.frames) ? replay.replayData.frames : [];
+        let firstActiveTick = 0;
+        for (const f of rawFrames) {
+            if (f.i && Object.values(f.i).some((m: any) => (m & 0xFFFF1F) !== 0)) {
+                firstActiveTick = Math.max(0, (f.t || 0) - 10); // Keep a 10-tick (160ms) lead-in before liftoff
+                break;
+            }
+        }
+
+        newRoom.replayFrames = rawFrames.map((f: any) => {
+            const mappedInputs: Record<string, number> = {};
+            if (f.i) {
+                for (const [pid, mask] of Object.entries(f.i)) {
+                    mappedInputs[`REPLAY_${pid}`] = mask as number;
+                }
+            }
+            return { t: f.t, i: mappedInputs };
+        });
+
+        const statsEntries = Object.entries(replay.playerStats || {});
+        for (let idx = 0; idx < statsEntries.length; idx++) {
+            const [pid, rawStat] = statsEntries[idx];
+            const pstat = { ...(rawStat as any) };
+            // Fallback for older dogfight replays recorded before team/homeSpawnX were saved in playerStats
+            if (newRoom.category === 'dogfight' && !pstat.team) {
+                const isBotId = pid.includes('BOT_') || pid.includes('RACER_') || pid.includes('MBOT_') || Boolean(pstat.isBot);
+                pstat.team = (replayMode === 'SP') ? (isBotId ? 'E3' : 'E2') : (idx % 2 === 0 ? 'E2' : 'E3');
+            }
+            const joinTick = pstat.joinedAtTick ?? 0;
+            if (joinTick > 0) {
+                newRoom.pendingReplayActors.push({
+                    actorId: `REPLAY_${pid}`,
+                    type: pstat.shipType || 'classic',
+                    stats: pstat,
+                    joinedAtTick: joinTick
+                });
+            } else {
+                newRoom.addReplayActor(`REPLAY_${pid}`, pstat.shipType || 'classic', pstat);
+            }
+        }
+        rooms.set(rId, newRoom);
+
+        // Deterministically simulate ticks 0..firstActiveTick so PRNG, tank movement, and flying enemies
+        // are 100% bit-for-bit identical to the live game when playback begins!
+        if (firstActiveTick > 0) {
+            newRoom.activeClientIds.add('__REPLAY_FF__');
+            for (let ff = 0; ff < firstActiveTick; ff++) {
+                newRoom.tick(false);
+            }
+            newRoom.activeClientIds.delete('__REPLAY_FF__');
+        }
+
+        targetSocket.join(newRoom.channel);
+        playerRooms.set(targetSocketId, rId);
+        targetSocket.emit('initLevel', newRoom.level);
+        targetSocket.emit('flora_burn_reset');
+        targetSocket.emit('levelIndex', newRoom.levelIndex);
+        newRoom.addSpectator(targetSocketId);
+        emitRoomInfo(targetSocket, newRoom);
+    } catch (e) { console.error("Replay load failed", e); }
+}
+
+
 function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classic' | 'modern'; stats: PlayerStats } {
     const socket = io.sockets.sockets.get(id);
     const currentRoomId = playerRooms.get(id);
@@ -169,8 +325,11 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
                         streakScore: p.score,
                         streakStartLevel: p.streakStartLevel,
                         streakLastLevel: room.levelIndex,
+                        streakReplays: stats.streakReplays,
                         sessionMode: stats.sessionMode || room.sessionMode,
-                        roomCode: stats.roomCode
+                        roomCode: stats.roomCode,
+                        allowSpectators: stats.allowSpectators,
+                        followingPilotId: stats.followingPilotId
                     };
                     playerSessionStats.set(id, stats);
                 }
@@ -191,6 +350,8 @@ function leaveCurrentRoom(id: string): { lastActiveLevel: number; pType: 'classi
 }
 
 function emitRoomInfo(socket: any, room: Room) {
+    const isSpectating = room.isReplayMode || room.ecs.getPlayerEntity(socket.id) === undefined;
+    const st = playerSessionStats.get(socket.id);
     socket.emit('room_info', {
         roomId: room.roomId,
         joinCode: room.joinCode,
@@ -198,7 +359,10 @@ function emitRoomInfo(socket: any, room: Room) {
         levelIndex: room.levelIndex,
         category: room.category,
         playerCount: room.activeClientIds.size,
-        allowSpectators: room.allowSpectators
+        allowSpectators: room.allowSpectators,
+        isSpectating,
+        isReplay: room.isReplayMode,
+        followingPilotId: st?.followingPilotId
     });
 }
 
@@ -211,7 +375,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     const prevPlayerEnt = (currentRoom && !currentRoom.isReplayMode) ? currentRoom.ecs.getPlayerEntity(id) : undefined;
     const wasAdvancing = prevPlayerEnt !== undefined ? Boolean(currentRoom?.ecs.players.get(prevPlayerEnt)?.advancing) : false;
 
-    if (!forceReset && !overrideMode && !overrideCode && currentRoom && currentRoom.levelIndex === targetLevel) {
+    if (!forceReset && !overrideMode && !overrideCode && currentRoom && !currentRoom.isReplayMode && currentRoom.ecs.getPlayerEntity(id) !== undefined && currentRoom.levelIndex === targetLevel) {
         return;
     }
 
@@ -225,6 +389,9 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         newRoom.allowSpectators = stats.allowSpectators !== false;
     }
     const actualLevel = newRoom.levelIndex;
+    if (stats.uuid) {
+        lastLevelByUuid.set(stats.uuid, actualLevel);
+    }
 
     if (asSpectator) {
         playerSessionStats.set(id, stats);
@@ -238,6 +405,9 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         return;
     }
 
+    // Clear any pilot-follow subscription when spawning as an active pilot
+    stats.followingPilotId = undefined;
+
     // Enforce 5-Lives Sequential Streak rules on Mission Levels (0-49):
     // Advancing sequentially via legitimate cavern completion (wasAdvancing && lastLevel -> lastLevel + 1)
     // preserves accumulated score & remaining lives. Jumping, reloading, or retrying resets the streak!
@@ -249,10 +419,14 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         && (stats.lives ?? 0) > 0;
 
     if (!isSequentialMissionAdvance) {
+        if (stats.streakReplays && stats.streakReplays.length > 0) {
+            stats.streakReplays = [];
+        }
         stats.score = 0;
         stats.lives = SERVER_CONFIG.defaultLives;
         stats.streakStartLevel = actualLevel;
         stats.streakLastLevel = actualLevel;
+        stats.streakReplays = [];
     } else {
         stats.streakLastLevel = actualLevel;
         // TODO 4: Every 10 caverns survived on a 5-lives sequential mission streak awards +1 Extra Life!
@@ -274,7 +448,7 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
     }
     playerSessionStats.set(id, stats);
 
-    if (forceReset && newRoom.ecs.players.size === 0) {
+    if (forceReset && newRoom.ecs.players.size === 0 && newRoom.globalWaveTimer > 0) {
         newRoom.resetLevel();
     }
     socket.join(newRoom.channel);
@@ -288,17 +462,36 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         const s = io.sockets.sockets.get(cid);
         if (s) emitRoomInfo(s, newRoom);
     }
+
+    // TODO 2.4: Bring along any spectators who are actively following this pilot's UUID across rooms/reloads!
+    const followers = stats.uuid ? pilotFollowers.get(stats.uuid) : undefined;
+    if (followers && followers.size > 0 && (newRoom.sessionMode === 'MP' || (SERVER_CONFIG.allowSpSpectating && newRoom.allowSpectators))) {
+        for (const followerId of Array.from(followers)) {
+            const fSock = io.sockets.sockets.get(followerId);
+            if (!fSock || followerId === id) {
+                followers.delete(followerId);
+                continue;
+            }
+            handleTransitionToLevel(followerId, actualLevel, false, newRoom.sessionMode, newRoom.joinCode);
+            fSock.emit('playfield_announce', { text: `FOLLOWING ${stats.alias} TO ${newRoom.level.name}`, color: '#00f2fe' });
+        }
+    }
 }
 
-function handleTransition(actorOrSocketId: string) {
-    // Locate the room containing this player/replay actor
+function handleTransition(actorOrSocketId: string, sourceRoomId?: number) {
+    // Locate the exact room that triggered this transition (fixes TODO 12 race condition!)
     let oldRoom: Room | null = null;
     let rIdToRemove: number | null = null;
-    for (const [rId, room] of rooms.entries()) {
-        if (room.ecs.getPlayerEntity(actorOrSocketId) !== undefined) {
-            oldRoom = room;
-            rIdToRemove = rId;
-            break;
+    if (sourceRoomId !== undefined && rooms.has(sourceRoomId)) {
+        oldRoom = rooms.get(sourceRoomId)!;
+        rIdToRemove = sourceRoomId;
+    } else {
+        for (const [rId, room] of rooms.entries()) {
+            if (room.ecs.getPlayerEntity(actorOrSocketId) !== undefined) {
+                oldRoom = room;
+                rIdToRemove = rId;
+                break;
+            }
         }
     }
 
@@ -309,10 +502,26 @@ function handleTransition(actorOrSocketId: string) {
             const timeTaken = Math.round((oldRoom.globalWaveTimer - p.joinedAtTick) * (1000 / SERVER_CONFIG.tickRate));
 
             if (oldRoom.category === 'mission') {
-                const boards = evaluateMissionEnd(oldRoom, actorOrSocketId, timeTaken);
+                const st = playerSessionStats.get(actorOrSocketId);
+                if (st && !oldRoom.isReplayMode) {
+                    if (!st.streakReplays) st.streakReplays = [];
+                    if (!st.streakReplays.includes(oldRoom.tracker.uuid)) {
+                        st.streakReplays.push(oldRoom.tracker.uuid);
+                    }
+                }
+                const boards = evaluateMissionEnd(oldRoom, actorOrSocketId, timeTaken, st?.streakReplays);
                 oldRoom.tracker.finishAndSave(); // Now that highscores are logged, save the replay!
                 if (boards) {
                     if (oldRoom.isReplayMode) {
+                        // TODO 13: If this replay has remaining multi-cavern streak segments, advance to the next segment automatically!
+                        if (oldRoom.replayQueue && oldRoom.replayQueue.length > 0) {
+                            const nextSegId = oldRoom.replayQueue.shift()!;
+                            const remainQueue = [...oldRoom.replayQueue];
+                            for (const sid of Array.from(oldRoom.activeClientIds)) {
+                                startReplayForSocket(sid, nextSegId, remainQueue);
+                            }
+                            return;
+                        }
                         for (const sid of oldRoom.activeClientIds) oldRoom.emitToPlayer(sid, 'show_leaderboard', boards, false);
                     } else {
                         oldRoom.emitToPlayer(p.id, 'show_leaderboard', boards, false);
@@ -375,7 +584,10 @@ io.on('connection', (socket) => {
     }
 
     const requestedLevel = typeof auth.levelIndex === 'number' ? auth.levelIndex : parseInt(auth.levelIndex, 10);
-    const initialLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : 0;
+    const rememberedLevel = lastLevelByUuid.get(uuid);
+    const candidateLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : (rememberedLevel ?? 0);
+    const initialLevel = isValidLevelIndex(candidateLevel) ? candidateLevel : 0;
+    lastLevelByUuid.set(uuid, initialLevel);
     const initialMode: 'SP' | 'MP' = auth.mode === 'MP' ? 'MP' : 'SP';
     const initialRoomCode = sanitizeRoomCode(auth.roomCode);
     const allowSpectatorsPref = auth.allowSpectators !== false;
@@ -417,6 +629,19 @@ io.on('connection', (socket) => {
         if (s) emitRoomInfo(s, room);
     }
 
+    // TODO 2.4: If any spectators are following this pilot's persistent UUID across reloads/reconnections, pull them into the new room!
+    if (!asSpectator && stats.uuid) {
+        const followers = pilotFollowers.get(stats.uuid);
+        if (followers && followers.size > 0 && (room.sessionMode === 'MP' || (SERVER_CONFIG.allowSpSpectating && room.allowSpectators))) {
+            for (const followerId of Array.from(followers)) {
+                const fSock = io.sockets.sockets.get(followerId);
+                if (!fSock || followerId === socket.id) continue;
+                handleTransitionToLevel(followerId, room.levelIndex, false, room.sessionMode, room.joinCode);
+                fSock.emit('playfield_announce', { text: `FOLLOWING ${stats.alias} TO ${room.level.name}`, color: '#00f2fe' });
+            }
+        }
+    }
+
     socket.on('debug_action', (action: string, payload) => {
         if (!SERVER_CONFIG.debugMode) {
             return;
@@ -427,6 +652,8 @@ io.on('connection', (socket) => {
         } else if (action === 'jump') {
             const tgt = parseInt(payload?.levelIndex, 10);
             if (!isNaN(tgt) && isValidLevelIndex(tgt)) {
+                const st = playerSessionStats.get(socket.id);
+                if (st?.uuid) lastLevelByUuid.set(st.uuid, tgt);
                 handleTransitionToLevel(socket.id, tgt, true);
             }
         } else if (action === 'add_life') {
@@ -521,88 +748,15 @@ io.on('connection', (socket) => {
         }
     });
 
-    const startReplay = (replayId: string) => {
-        if (typeof replayId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(replayId)) {
-            return;
-        }
-        try {
-            const dir = path.resolve(process.cwd(), 'data/replays');
-            let dataRaw;
-            if (fs.existsSync(path.join(dir, `${replayId}.json`))) {
-                dataRaw = fs.readFileSync(path.join(dir, `${replayId}.json`), 'utf-8');
-            } else if (fs.existsSync(path.join(dir, `${replayId}.gfr`))) {
-                const zipped = fs.readFileSync(path.join(dir, `${replayId}.gfr`));
-                dataRaw = zlib.gunzipSync(zipped).toString('utf-8');
-            } else {
-                return;
-            }
-            const replay = JSON.parse(dataRaw);
-            socket.emit('hide_leaderboard');
-
-            // Cleanly exit the spectator's current room first (destroying it if empty)
-            leaveCurrentRoom(socket.id);
-
-            const rId = nextReplayRoomId--;
-            const replayMode: 'SP' | 'MP' = replay.mode === 'MP' ? 'MP' : 'SP';
-            const newRoom = new Room(
-                rId,
-                replay.levelIndex,
-                getLevelData(replay.levelIndex),
-                io,
-                handleTransition,
-                SERVER_CONFIG.lethalRacingEnemies,
-                SERVER_CONFIG.raceBumpModifier,
-                true,
-                replayMode,
-                '',
-                replay.replayData.seed
-            );
-
-            // Namespace replay actor IDs so they can NEVER collide with live socket IDs
-            const rawFrames = Array.isArray(replay.replayData.frames) ? replay.replayData.frames : [];
-            newRoom.replayFrames = rawFrames.map((f: any) => {
-                const mappedInputs: Record<string, number> = {};
-                if (f.i) {
-                    for (const [pid, mask] of Object.entries(f.i)) {
-                        mappedInputs[`REPLAY_${pid}`] = mask as number;
-                    }
-                }
-                return { t: f.t, i: mappedInputs };
-            });
-
-            const statsEntries = Object.entries(replay.playerStats || {});
-            for (let idx = 0; idx < statsEntries.length; idx++) {
-                const [pid, rawStat] = statsEntries[idx];
-                const pstat = { ...(rawStat as any) };
-                // Fallback for older dogfight replays recorded before team/homeSpawnX were saved in playerStats
-                if (newRoom.category === 'dogfight' && !pstat.team) {
-                    const isBotId = pid.includes('BOT_') || pid.includes('RACER_') || pid.includes('MBOT_') || Boolean(pstat.isBot);
-                    pstat.team = (replayMode === 'SP') ? (isBotId ? 'E3' : 'E2') : (idx % 2 === 0 ? 'E2' : 'E3');
-                }
-                const joinTick = pstat.joinedAtTick ?? 0;
-                if (joinTick > 0) {
-                    newRoom.pendingReplayActors.push({
-                        actorId: `REPLAY_${pid}`,
-                        type: pstat.shipType || 'classic',
-                        stats: pstat,
-                        joinedAtTick: joinTick
-                    });
-                } else {
-                    newRoom.addReplayActor(`REPLAY_${pid}`, pstat.shipType || 'classic', pstat);
-                }
-            }
-            rooms.set(rId, newRoom);
-
-            socket.join(newRoom.channel);
-            playerRooms.set(socket.id, rId);
-            socket.emit('initLevel', newRoom.level);
-            socket.emit('flora_burn_reset');
-            socket.emit('levelIndex', newRoom.levelIndex);
-            newRoom.addSpectator(socket.id);
-        } catch (e) { console.error("Replay load failed", e); }
+    const startReplay = (replayId: string, explicitQueue?: string[], fullStreak: boolean = false) => {
+        startReplayForSocket(socket.id, replayId, explicitQueue, fullStreak);
     };
 
-    socket.on('watch_replay', startReplay);
+    socket.on('watch_replay', (payload: string | { replayId: string; fullStreak?: boolean }) => {
+        const replayId = typeof payload === 'object' ? payload?.replayId : payload;
+        const fullStreak = typeof payload === 'object' ? Boolean(payload?.fullStreak) : false;
+        startReplay(replayId, undefined, fullStreak);
+    });
 
     socket.on('watch_latest_replay', () => {
         try {
@@ -618,10 +772,63 @@ io.on('connection', (socket) => {
 
     socket.on('leave_replay', () => {
         const rId = playerRooms.get(socket.id);
-        if (rId !== undefined && rId < 0) {
-            const targetLvl = rooms.get(rId)?.levelIndex ?? 0;
-            handleTransitionToLevel(socket.id, isValidLevelIndex(targetLvl) ? targetLvl : 0, true);
+        if (rId !== undefined) {
+            const curRoom = rooms.get(rId);
+            const isSpectatingLive = curRoom && !curRoom.isReplayMode && curRoom.ecs.getPlayerEntity(socket.id) === undefined;
+            if (rId < 0 || isSpectatingLive) {
+                const st = playerSessionStats.get(socket.id);
+                if (st?.followingPilotId) {
+                    pilotFollowers.get(st.followingPilotId)?.delete(socket.id);
+                    st.followingPilotId = undefined;
+                }
+                const targetLvl = curRoom?.levelIndex ?? (st?.uuid ? lastLevelByUuid.get(st.uuid) : 0) ?? 0;
+                handleTransitionToLevel(socket.id, isValidLevelIndex(targetLvl) ? targetLvl : 0, true, 'SP', '');
+            }
         }
+    });
+
+    // TODO 2.4: Spectate a specific pilot and automatically follow them when they switch caverns/rooms!
+socket.on('spectate_pilot', (targetPilotId: string) => {
+         if (!SERVER_CONFIG.allowPilotFollowing || !targetPilotId) return;
+        let targetUuid: string | undefined;
+        let targetRoom: Room | undefined;
+
+        const targetRId = playerRooms.get(targetPilotId);
+        if (targetRId !== undefined) {
+            targetRoom = rooms.get(targetRId);
+            const ent = targetRoom?.ecs.getPlayerEntity(targetPilotId);
+            const p = ent !== undefined ? targetRoom?.ecs.players.get(ent) : undefined;
+            targetUuid = p?.uuid || playerSessionStats.get(targetPilotId)?.uuid;
+        } else {
+            targetUuid = targetPilotId;
+            for (const r of rooms.values()) {
+                for (const [e, p] of r.ecs.players.entries()) {
+                    if (p.uuid === targetUuid && !r.isReplayMode) {
+                        targetRoom = r;
+                        break;
+                    }
+                }
+                if (targetRoom) break;
+            }
+        }
+
+        if (!targetUuid || !targetRoom || targetRoom.isReplayMode) return;
+        if (targetRoom.sessionMode === 'SP' && (!SERVER_CONFIG.allowSpSpectating || !targetRoom.allowSpectators)) return;
+ 
+        const st = playerSessionStats.get(socket.id);
+        if (st) {
+            if (st.followingPilotId) {
+                pilotFollowers.get(st.followingPilotId)?.delete(socket.id);
+            }
+            st.followingPilotId = targetUuid;
+            if (!pilotFollowers.has(targetUuid)) {
+                pilotFollowers.set(targetUuid, new Set());
+            }
+            pilotFollowers.get(targetUuid)!.add(socket.id);
+        }
+        socket.emit('hide_leaderboard');
+        socket.emit('hide_game_over');
+        handleTransitionToLevel(socket.id, targetRoom.levelIndex, false, targetRoom.sessionMode, targetRoom.joinCode);
     });
 
     socket.on('next_level', () => {
@@ -656,7 +863,10 @@ io.on('connection', (socket) => {
         for (const r of rooms.values()) {
             if (r.isReplayMode || r.activeClientIds.size === 0) continue;
             if (r.sessionMode === 'SP' && (!SERVER_CONFIG.allowSpSpectating || !r.allowSpectators)) continue;
-            const pilots = Array.from(r.ecs.players.values()).filter(p => !r.ecs.bots.has(r.ecs.getPlayerEntity(p.id)!)).map(p => p.alias);
+            const pilotObjs = Array.from(r.ecs.players.values())
+                .filter(p => !r.ecs.bots.has(r.ecs.getPlayerEntity(p.id)!))
+                .map(p => ({ id: p.id, alias: p.alias }));
+            const pilots = pilotObjs.map(p => p.alias);
             list.push({
                 joinCode: r.joinCode,
                 mode: r.sessionMode,
@@ -666,7 +876,8 @@ io.on('connection', (socket) => {
                 category: r.category,
                 playerCount: r.activeClientIds.size,
                 botCount: r.getBotCount(),
-                pilots
+                pilots,
+                pilotObjs
             });
         }
         socket.emit('room_list', list);
@@ -832,6 +1043,11 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         const disconnectedAlias = playerSessionStats.get(socket.id)?.alias || alias || 'UNK';
         console.log(`Pilot "${disconnectedAlias}" disconnected:`, socket.id);
+        const st = playerSessionStats.get(socket.id);
+        if (st?.followingPilotId) {
+            pilotFollowers.get(st.followingPilotId)?.delete(socket.id);
+        }
+        pilotFollowers.delete(socket.id);
         const prevRId = playerRooms.get(socket.id);
         leaveCurrentRoom(socket.id);
         if (prevRId !== undefined && rooms.has(prevRId)) {

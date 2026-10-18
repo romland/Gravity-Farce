@@ -1,17 +1,19 @@
 export class DialogManager {
-    constructor(socket, onWatchReplay, onNextLevel, onRetryLevel, onSwitchSession) {
+    constructor(socket, onWatchReplay, onNextLevel, onRetryLevel, onSwitchSession, onSpectatePilot) {
         this.socket = socket;
         this.onWatchReplay = onWatchReplay;
         this.onNextLevel = onNextLevel;
         this.onRetryLevel = onRetryLevel;
         this.onSwitchSession = onSwitchSession;
+        this.onSpectatePilot = onSpectatePilot;
 
-        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal', 'fullscreen-modal', 'quick-restart-modal'];
+        this.modals = ['leaderboard-modal', 'room-modal', 'gameover-modal', 'controls-modal', 'fullscreen-modal', 'quick-restart-modal', 'jump-modal'];
         this.hintTimer = null;
         this.lastBoards = null;
         this.lastIsHud = false;
         this.lastCategory = 'mission';
         this.lastLevelName = 'CAVERN 00';
+        this.modalOpenedAt = 0;
         this.bindGlobalKeyboard();
     }
 
@@ -57,6 +59,7 @@ export class DialogManager {
         this.closeAnyOpen();
         if (!isOpen) {
             el.style.display = 'flex';
+            this.modalOpenedAt = performance.now();
             if (onOpenFn) onOpenFn();
             return true;
         }
@@ -70,6 +73,14 @@ export class DialogManager {
                 return el && el.style.display && el.style.display !== 'none';
             });
             if (!openModalId) return;
+
+            // Guard against in-flight shoot/steering keys (Enter/Arrows) firing actions the same moment a modal pops up
+            if (openModalId === 'leaderboard-modal' && (performance.now() - this.modalOpenedAt) < 450) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    return;
+                }
+            }
 
             if (openModalId === 'leaderboard-modal') {
                 const tabs = Array.from(document.querySelectorAll('#board-tabs-container .board-tab'));
@@ -115,11 +126,11 @@ export class DialogManager {
                 }
 
                 if (e.key === 'Enter') {
-                    if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+                    if (document.activeElement && (document.activeElement.tagName === 'BUTTON' || document.activeElement.tagName === 'INPUT')) {
                         return;
                     }
                     e.preventDefault();
-                    const primaryBtn = modalEl.querySelector('.gbtn-emerald, .gbtn-amber, button.gbtn') || modalEl.querySelector('button');
+                    const primaryBtn = modalEl.querySelector('#modal-footer .gbtn-emerald, .gbtn-emerald, .gbtn-amber') || modalEl.querySelector('button:not(.gmodal-close)');
                     if (primaryBtn) {
                         primaryBtn.click();
                     }
@@ -162,6 +173,7 @@ export class DialogManager {
         const modal = document.getElementById('leaderboard-modal');
         if (!modal || !Array.isArray(boards)) return;
 
+        const wasAlreadyOpen = modal.style.display && modal.style.display !== 'none';
         this.lastBoards = boards;
         this.lastIsHud = isHud;
         this.lastCategory = currentCategory || 'mission';
@@ -371,7 +383,8 @@ export class DialogManager {
                     repBtn.style.cssText = 'margin-left:8px; padding:2px 6px; font-size:var(--fs-xs); height:22px; line-height:1; vertical-align:middle;';
                     repBtn.style.cssText = 'margin-left:8px; padding:0 5px; font-size:10px; height:18px; line-height:16px; vertical-align:baseline;';
                     repBtn.textContent = 'REPLAY';
-                    repBtn.onclick = () => this.onWatchReplay(e.replayId);
+                    const isArcadeStreakBoard = b.title === '5-LIVES STREAK' || b.category === 'arcade';
+                    repBtn.onclick = () => this.onWatchReplay(e.replayId, isArcadeStreakBoard);
                     tdPilot.appendChild(repBtn);
                 }
 
@@ -413,6 +426,9 @@ export class DialogManager {
 
         if (boardIndex > 0) this.switchBoardTab(targetTabIndex);
         if (!isHud && gotRankOne && onRankOne) onRankOne();
+        if (!wasAlreadyOpen) {
+            this.modalOpenedAt = performance.now();
+        }
         modal.style.display = 'flex';
     }
 
@@ -443,27 +459,47 @@ export class DialogManager {
 
         for (const r of list) {
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; background:rgba(0,0,0,0.45); padding:6px 10px; border:1px solid rgba(0,242,254,0.2);';
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(0,0,0,0.45); padding:6px 10px; border:1px solid rgba(0,242,254,0.2); flex-wrap:wrap;';
             const info = document.createElement('span');
             info.className = 'hud-val';
             const pilotsStr = (r.pilots && r.pilots.length > 0) ? r.pilots.join(', ') : 'EMPTY';
             info.textContent = `[${r.mode} #${r.joinCode}] ${r.levelName} (${pilotsStr}${r.botCount ? ` +${r.botCount}AI` : ''})`;
             row.appendChild(info);
 
+            const actionsWrap = document.createElement('div');
+            actionsWrap.style.cssText = 'display:flex; align-items:center; gap:6px;';
+
+            // TODO 2.4: Clickable pilot buttons to spectate & follow that specific pilot across rooms
+            if (Array.isArray(r.pilotObjs) && r.pilotObjs.length > 0 && r.joinCode !== currentJoinCode && this.onSpectatePilot) {
+                for (const pObj of r.pilotObjs) {
+                    const pBtn = document.createElement('button');
+                    pBtn.type = 'button';
+                    pBtn.className = 'gbtn gbtn-amber';
+                    pBtn.title = `Follow ${pObj.alias} across caverns`;
+                    pBtn.textContent = `👁 ${pObj.alias}`;
+                    pBtn.onclick = () => {
+                        this.closeAnyOpen();
+                        this.onSpectatePilot(pObj.id);
+                    };
+                    actionsWrap.appendChild(pBtn);
+                }
+            }
+
             if (r.joinCode === currentJoinCode) {
                 const badge = document.createElement('span');
                 badge.className = 'hud-label';
                 badge.style.color = 'var(--col-cyan)';
                 badge.textContent = 'ACTIVE';
-                row.appendChild(badge);
+                actionsWrap.appendChild(badge);
             } else {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = r.spectateOnly ? 'gbtn gbtn-amber' : 'gbtn';
-                btn.textContent = r.spectateOnly ? 'SPECTATE' : 'JOIN';
+                btn.textContent = r.spectateOnly ? 'SPECTATE ROOM' : 'JOIN';
                 btn.onclick = () => this.onSwitchSession(r.spectateOnly ? 'SP' : 'MP', r.joinCode);
-                row.appendChild(btn);
+                actionsWrap.appendChild(btn);
             }
+            row.appendChild(actionsWrap);
             container.appendChild(row);
         }
     }

@@ -1,6 +1,7 @@
 import { Registry } from '../core/ecs';
 import type { Room } from '../Room';
 import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
+import { pilotStatsDB } from '../core/pilot-stats';
 import { SERVER_CONFIG } from '../core/config';
 
 export function sysRacing(ecs: Registry, room: Room) {
@@ -117,6 +118,9 @@ export function sysRacing(ecs: Registry, room: Room) {
 
                         let rRace = { rank: -1, isNewPb: false, timestamp: 0 };
                         if (!isBot && !room.isReplayMode) {
+                            if (!isBotPilot) {
+                                pilotStatsDB.completeAttempt(p.uuid, p.alias, room.levelIndex);
+                            }
                             rRace = recordDB.submitRecord('race_time', room.levelIndex, mode, physicsHash, 'asc', {
                                 playerId: p.uuid,
                                 alias: p.alias,
@@ -163,6 +167,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                             }
 
                             const raceDuration = now - p.race.startTime;
+                            // Commented out for now, but keep it around in case we want to reinstate it later.
+                            // const cavStats = pilotStatsDB.getCavernStats(p.uuid, room.levelIndex);
                             const raceSummaryEntries = mode === 'MP' ?
                                 Array.from(room.ecs.players.entries()).map(([oe, op]) => {
                                     const oF = room.ecs.fuelTanks.get(oe);
@@ -178,7 +184,8 @@ export function sysRacing(ecs: Registry, room: Room) {
                                     { rankLabel: 'TIME', alias: 'TOTAL RACE', displayValue: formatTimeMs(raceDuration), isMe: true, isNewPb: false },
                                     ...p.race.lapTimes.map((lt, idx) => ({ rankLabel: `LAP ${idx + 1}`, alias: idx === 0 ? 'STANDING' : 'FLYING', displayValue: formatTimeMs(lt), isMe: true, isNewPb: false })),
                                     { rankLabel: 'FUEL', alias: 'USED', displayValue: `${Math.floor(room.ecs.fuelTanks.get(pe)?.consumed || 0)}F`, isMe: true, isNewPb: false },
-                                    { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false }
+                                    { rankLabel: 'SHOTS', alias: 'SHOTS FIRED', displayValue: String(ecs.weaponMounts.get(pe)?.shotsFired || 0), isMe: true, isNewPb: false },
+                                    // { rankLabel: 'ATTEMPTS', alias: 'FAILED / OK', displayValue: `${cavStats.failedAttempts} / ${cavStats.completions}`, isMe: true, isNewPb: false }
                                 ];
                             if (botCount > 0 && mode !== 'MP') {
                                 raceSummaryEntries.push({ rankLabel: 'BOTS', alias: 'WITH BOTS', displayValue: `${botCount} AI`, isMe: true, isNewPb: false });
@@ -190,13 +197,16 @@ export function sysRacing(ecs: Registry, room: Room) {
                             if (p.race.totalLaps > 1) boards.push({ title: `TOP ${mode} FLYING LAPS`, description: tag ? tag.trim() : undefined, entries: ctxFlying });
                         }
 
-                        if (room.isReplayMode) {
-                            for (const spectatorId of room.activeClientIds) {
-                                room.emitToPlayer(spectatorId, 'show_leaderboard', boards);
+                        const targetPlayerId = p.id;
+                        setTimeout(() => {
+                            if (room.isReplayMode) {
+                                for (const spectatorId of room.activeClientIds) {
+                                    room.emitToPlayer(spectatorId, 'show_leaderboard', boards);
+                                }
+                            } else {
+                                room.emitToPlayer(targetPlayerId, 'show_leaderboard', boards);
                             }
-                        } else {
-                            room.emitToPlayer(p.id, 'show_leaderboard', boards);
-                        }
+                        }, 1200);
 
                     } else {
                         p.race.currentLap++;

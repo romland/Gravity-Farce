@@ -22,6 +22,7 @@ import { GameTracker } from './core/tracker';
 import { SERVER_CONFIG } from './core/config';
 import { createPRNG } from './core/math';
 import { getActivePhysicsHash } from './core/records';
+import { pilotStatsDB } from './core/pilot-stats';
 import { FloraBurnSystem, type FloraBurnRecord } from './game/highres/FloraBurnSystem';
 import { botPathWorker } from './game/bot-path-worker';
 
@@ -44,16 +45,19 @@ export class Room {
     public lastClientViews = new Map<string, { x: number; y: number }>();
     public assignedHomes = new Map<string, { x: number; y: number }>();
     private gameOverResetTimer: any = null;
+    public spectatorCleanupTimer: any = null;
     public dogfightCompleted: boolean = false;
     public allowSpectators: boolean = true;
     public pendingReplayActors: { actorId: string; type: 'classic' | 'modern'; stats: any; joinedAtTick: number }[] = [];
+    public replayQueue: string[] = [];
+    public onSpectatorRoomExpired?: (roomId: number) => void;
 
     constructor(
         public roomId: number,
         public levelIndex: number,
         public level: LevelData,
         private io: Server,
-        private transitionCb: (id: string) => void,
+        private transitionCb: (id: string, roomId?: number) => void,
         public isLethalRacing: boolean = false,
         public raceBumpModifier: number = 0.4,
         public isReplayMode: boolean = false,
@@ -252,6 +256,11 @@ export class Room {
                     }
                 }
                 if (p.respawnRequest) { p.respawnRequest = false; if (p.lives > 0) this.trySpawnPlayer(p.id, p.type); }
+                // Register an active cavern attempt as soon as a human pilot lifts off the pad!
+                if (!this.isReplayMode && !p.attemptRegistered && !p.isDead && !p.isLanded && !this.ecs.bots.has(e) && !p.isBotPilot) {
+                    p.attemptRegistered = true;
+                    pilotStatsDB.beginAttempt(p.uuid, p.alias, this.levelIndex);
+                }
             }
 
             sysModernPlayers(this.ecs, this);
@@ -306,7 +315,7 @@ export class Room {
 
     addPlayer(id: string, type: 'classic' | 'modern', stats?: Partial<PlayerStats>) {
         this.activeClientIds.add(id);
-        if (this.ecs.players.size === 0) {
+        if (this.ecs.players.size === 0 && this.globalWaveTimer > 0) {
             this.resetLevel();
         }
         if (this.sessionMode === 'MP' || this.activeClientIds.size > 1) {
@@ -364,9 +373,37 @@ export class Room {
             this.ecs.destroy(e);
         }
         if (this.activeClientIds.size === 0) {
+            if (this.spectatorCleanupTimer) {
+                clearTimeout(this.spectatorCleanupTimer);
+                this.spectatorCleanupTimer = null;
+            }
             this.destroyAllEntities();
         } else {
             this.checkAllPlayersOutOfLives();
+            this.checkSpectatorOnlyCleanup();
+        }
+    }
+
+    public checkSpectatorOnlyCleanup() {
+        if (this.isReplayMode || this.activeClientIds.size === 0) return;
+        let humanPilots = 0;
+        for (const [e] of this.ecs.players.entries()) {
+            if (!this.ecs.bots.has(e)) humanPilots++;
+        }
+        if (humanPilots === 0 && !this.spectatorCleanupTimer) {
+            for (const sid of this.activeClientIds) {
+                this.emitToPlayer(sid, 'playfield_announce', {
+                    text: 'PILOT DEPARTED — CLOSING CAVERN IN 10S',
+                    color: '#f59e0b'
+                });
+            }
+            this.spectatorCleanupTimer = setTimeout(() => {
+                this.spectatorCleanupTimer = null;
+                if (this.onSpectatorRoomExpired) this.onSpectatorRoomExpired(this.roomId);
+            }, 10000);
+        } else if (humanPilots > 0 && this.spectatorCleanupTimer) {
+            clearTimeout(this.spectatorCleanupTimer);
+            this.spectatorCleanupTimer = null;
         }
     }
 
@@ -523,7 +560,7 @@ export class Room {
     }
 
     transitionPlayer(id: string) {
-        this.transitionCb(id);
+        this.transitionCb(id, this.roomId);
     }
 
     broadcastTileUpdate(x: number, y: number, tile: number) {

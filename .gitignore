@@ -17,3 +17,4 @@ dist
 release
 gf-prod-release.tar.gz
 data/game_log.jsonl
+data/pilot_stats.json

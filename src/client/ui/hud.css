@@ -736,6 +736,25 @@ html, body {
     text-shadow: 0 0 22px rgba(0, 0, 0, 0.95);
 }
 
+#mode-status-badge {
+    position: absolute;
+    top: calc(16px * var(--gf-ui-scale));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 88;
+    pointer-events: auto;
+    cursor: pointer;
+    display: none;
+    background: rgba(14, 22, 32, 0.92);
+    border: 1px solid var(--col-amber);
+    color: var(--col-amber);
+    padding: calc(6px * var(--gf-ui-scale)) calc(16px * var(--gf-ui-scale));
+    font-size: var(--fs-sm);
+    letter-spacing: 1.5px;
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75);
+}
+
 #touch-controls {
     position: absolute;
     bottom: calc(28px * var(--gf-ui-scale));

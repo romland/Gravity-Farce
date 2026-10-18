@@ -62,7 +62,8 @@ let myAlias = localStorage.getItem('gf_alias');
 let myIsBot = localStorage.getItem('gf_is_bot') === 'true';
 let mySessionMode = localStorage.getItem('gf_session_mode') === 'MP' ? 'MP' : 'SP';
 let myAllowSpectators = localStorage.getItem('gf_sp_allow_spectators') !== '0';
-let currentRoomInfo = { roomId: 0, joinCode: '', mode: mySessionMode, levelIndex: 0, category: 'mission', playerCount: 1 };
+const initialSavedLvl = parseInt(localStorage.getItem('gf_dev_level') || '0', 10);
+let currentRoomInfo = { roomId: 0, joinCode: '', mode: mySessionMode, levelIndex: isNaN(initialSavedLvl) ? 0 : initialSavedLvl, category: 'mission', playerCount: 1, isSpectating: false, isReplay: false };
 let currentRoomRules = { discipline: 'mission', flavor: 'STANDARD', objectiveText: '' };
 
 const socket = io({ autoConnect: false });
@@ -177,10 +178,11 @@ function switchSessionMode(mode, roomCode) {
 
 const dialogManager = new DialogManager(
     socket,
-    (replayId) => socket.emit('watch_replay', replayId),
+    (replayId, fullStreak) => socket.emit('watch_replay', { replayId, fullStreak }),
     requestNextLevel,
     requestReplayLevel,
-    switchSessionMode
+    switchSessionMode,
+    (pilotId) => socket.emit('spectate_pilot', pilotId)
 );
 
 // Wire HUD & Modal Buttons
@@ -244,6 +246,23 @@ document.getElementById('btn-hint-dismiss').onclick = () => {
     document.getElementById('tactical-hint-toast').style.display = 'none';
 };
 
+function submitJumpLevel() {
+    const inp = document.getElementById('jump-level-input');
+    const modal = document.getElementById('jump-modal');
+    if (modal) modal.style.display = 'none';
+    if (!inp) return;
+    const parsedLvl = parseInt(inp.value, 10);
+    if (!isNaN(parsedLvl)) {
+        localStorage.setItem('gf_dev_level', parsedLvl.toString());
+        currentRoomInfo.levelIndex = parsedLvl;
+        if (socket.auth) socket.auth.levelIndex = parsedLvl;
+        socket.emit('debug_action', 'jump', { levelIndex: parsedLvl });
+    }
+}
+
+const btnJumpConfirm = document.getElementById('btn-jump-confirm');
+if (btnJumpConfirm) btnJumpConfirm.onclick = submitJumpLevel;
+
 for (const closeBtn of document.querySelectorAll('[data-close-modal]')) {
     closeBtn.onclick = () => {
         const target = document.getElementById(closeBtn.getAttribute('data-close-modal'));
@@ -270,9 +289,12 @@ const inputManager = new InputManager(null, (inputs) => {
         } else if (!dialogManager.closeAnyOpen()) {
             socket.emit('leave_replay');
         }
+    } else if (action === 'restartCavern') {
+        triggerSpRestart();
     } else if (action === 'inputEnter') {
         if (payload === 'alias-input') attemptLogin(aliasInput.value);
         else if (payload === 'room-code-input') document.getElementById('btn-room-join-code').click();
+        else if (payload === 'jump-level-input') submitJumpLevel();
     } else if (action === 'watchReplay') {
         socket.emit('watch_latest_replay');
     } else if (debugMode) {
@@ -286,12 +308,14 @@ const inputManager = new InputManager(null, (inputs) => {
         else if (action === 'dumpBots') socket.emit('debug_action', 'dump_bots');
         else if (action === 'addLife') socket.emit('debug_action', 'add_life');
         else if (action === 'jumpLevel') {
-            const lvl = prompt("Jump to level (0-99):");
-            const parsedLvl = lvl !== null ? parseInt(lvl, 10) : NaN;
-            if (!isNaN(parsedLvl)) {
-                localStorage.setItem('gf_dev_level', parsedLvl.toString());
-                socket.emit('debug_action', 'jump', { levelIndex: parsedLvl });
-            }
+            dialogManager.toggleModal('jump-modal', () => {
+                const inp = document.getElementById('jump-level-input');
+                if (inp) {
+                    inp.value = String(currentRoomInfo.levelIndex ?? 0);
+                    inp.focus();
+                    inp.select();
+                }
+            });
         }
     }
 });
@@ -327,8 +351,8 @@ socket.on('ping', (serverTime) => socket.emit('pong', serverTime));
 
 socket.on('serverConfig', (config) => {
     debugMode = Boolean(config.debugMode);
-    document.getElementById('btn-spawn-bot').style.display = debugMode ? 'inline-block' : 'none';
-    document.getElementById('btn-debug-life').style.display = debugMode ? 'inline-block' : 'none';
+    // document.getElementById('btn-spawn-bot').style.display = debugMode ? 'inline-block' : 'none';
+    // document.getElementById('btn-debug-life').style.display = debugMode ? 'inline-block' : 'none';
     const specWrap = document.getElementById('room-sp-spectate-wrap');
     if (specWrap) specWrap.style.display = config.allowSpSpectating !== false ? 'flex' : 'none';
     if (typeof config.shipScale === 'number' && config.shipScale > 0) {
@@ -344,16 +368,48 @@ socket.on('serverConfig', (config) => {
 });
 
 socket.on('initTiles', (dict) => { tileDictionary = dict; });
-socket.on('levelIndex', (idx) => localStorage.setItem('gf_dev_level', idx.toString()));
+socket.on('levelIndex', (idx) => {
+    localStorage.setItem('gf_dev_level', idx.toString());
+    currentRoomInfo.levelIndex = idx;
+    if (socket.auth) socket.auth.levelIndex = idx;
+});
 socket.on('room_rules', (rules) => { if (rules) currentRoomRules = rules; });
 socket.on('game_hint', (hint) => dialogManager.showHintToast(hint));
+
+const modeBadgeEl = document.getElementById('mode-status-badge');
+if (modeBadgeEl) {
+    modeBadgeEl.onclick = () => socket.emit('leave_replay');
+}
+
+function updateModeStatusBadge() {
+    if (!modeBadgeEl) return;
+    if (currentRoomInfo.isReplay) {
+        modeBadgeEl.textContent = '▶ WATCHING REPLAY — PRESS ESC TO EXIT';
+        modeBadgeEl.style.borderColor = 'var(--col-crimson)';
+        modeBadgeEl.style.color = 'var(--col-crimson)';
+        modeBadgeEl.style.display = 'block';
+    } else if (currentRoomInfo.isSpectating) {
+        const followTag = currentRoomInfo.followingPilotId ? ' (FOLLOWING PILOT)' : '';
+        modeBadgeEl.textContent = `👁 SPECTATING${followTag} — PRESS ESC TO EXIT`;
+        modeBadgeEl.style.borderColor = 'var(--col-amber)';
+        modeBadgeEl.style.color = 'var(--col-amber)';
+        modeBadgeEl.style.display = 'block';
+    } else {
+        modeBadgeEl.style.display = 'none';
+    }
+}
 
 socket.on('room_info', (info) => {
     if (!info) return;
     currentRoomInfo = info;
+    if (typeof info.levelIndex === 'number' && !info.isReplay && !info.isSpectating) {
+        localStorage.setItem('gf_dev_level', info.levelIndex.toString());
+        if (socket.auth) socket.auth.levelIndex = info.levelIndex;
+    }
     mySessionMode = info.mode || 'SP';
     localStorage.setItem('gf_session_mode', mySessionMode);
     syncSessionModeRadios(mySessionMode);
+    updateModeStatusBadge();
     const restartBtn = document.getElementById('btn-hud-restart');
     if (restartBtn) restartBtn.style.display = mySessionMode === 'SP' ? 'inline-block' : 'none';
     const btn = document.getElementById('btn-room-mode');

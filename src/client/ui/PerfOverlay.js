@@ -54,6 +54,8 @@ export class PerfOverlay {
                 </div>
                 <div class="perf-section-title">STAGE &amp; PASS BREAKDOWN (MS)</div>
                 <div class="perf-pass-list" id="pf-pass-list"></div>
+                <div class="perf-section-title">SUBSYSTEM UPDATE RATES (HZ)</div>
+                <div class="perf-pass-list" id="pf-hz-list"></div>
                 <div class="perf-section-title">BOTTLENECK ISOLATION TOGGLES</div>
                 <div class="perf-toggle-grid" id="pf-toggles"></div>
             </div>
@@ -64,7 +66,7 @@ export class PerfOverlay {
             'dbg-ping', 'dbg-net', 'dbg-in', 'dbg-out',
             'pf-btn-rec', 'pf-btn-snap', 'perf-body',
             'pf-draws', 'pf-grads', 'pf-json', 'pf-vram',
-            'pf-pass-list', 'pf-toggles'
+            'pf-pass-list', 'pf-hz-list', 'pf-toggles'
         ];
         for (const id of ids) this.els[id] = document.getElementById(id);
 
@@ -200,6 +202,28 @@ export class PerfOverlay {
             const ema = p.getSeries(k).ema;
             rowObj.valSpan.textContent = `${ema.toFixed(2)}ms`;
             rowObj.valSpan.style.color = ema > 2.0 ? 'var(--col-crimson)' : (ema > 0.8 ? 'var(--col-amber)' : 'var(--col-emerald)');
+        }
+
+        // Render live Hz subsystem counters (including Ship.ActualPaintHz)
+        const hzContainer = this.els['pf-hz-list'];
+        if (hzContainer) {
+            if (!this.hzRows) this.hzRows = new Map();
+            for (const [k, v] of p.hzCounters.entries()) {
+                let hzRowObj = this.hzRows.get(k);
+                if (!hzRowObj) {
+                    const row = document.createElement('div');
+                    row.className = 'perf-pass-row';
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = k;
+                    const valSpan = document.createElement('b');
+                    row.append(nameSpan, valSpan);
+                    hzContainer.appendChild(row);
+                    hzRowObj = { valSpan };
+                    this.hzRows.set(k, hzRowObj);
+                }
+                hzRowObj.valSpan.textContent = `${v.hz.toFixed(1)} Hz`;
+                hzRowObj.valSpan.style.color = v.hz < 100 ? 'var(--col-amber)' : 'var(--col-emerald)';
+            }
         }
     }
 }

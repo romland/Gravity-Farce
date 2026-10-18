@@ -20,6 +20,8 @@ export class ShipRenderer {
 
     drawShip(ctx, p, isMe, debugMode, showDebugLines, shipScale, spawnParticlesFn) {
         if (p.isDead) return;
+        clientProfiler.markHz('Ship.ActualPaintHz');
+        if (isMe) clientProfiler.markHz('Ship.ActualPaintMeHz');
 
         const timeSec = performance.now() * 0.001;
 

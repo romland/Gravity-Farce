@@ -1,6 +1,7 @@
 import { Registry, type Entity, type Player } from '../core/ecs';
 import type { Room } from '../Room';
 import { recordDB, formatTimeMs, buildLeaderboardContext } from '../core/records';
+import { pilotStatsDB } from '../core/pilot-stats';
 import { SERVER_CONFIG } from '../core/config';
 
 const KILL_CREDIT_WINDOW_TICKS = 210; // 3.5 seconds at 60Hz
@@ -157,6 +158,9 @@ function evaluateDogfightEnd(room: Room, winningTeam: string, durationMs: number
         for (const [, p] of humans) {
             const won = (p.team || p.id) === winningTeam;
             if (won) {
+                if (!p.isBotPilot) {
+                    pilotStatsDB.completeAttempt(p.uuid, p.alias, room.levelIndex);
+                }
                 // Primary value: Net Kills (Kills * 100 - Deaths * 10 - UnforcedErrors * 5), Secondary: Duration ASC
                 const combatScore = (p.kills * 100) + (p.lives * 25) - (p.unforcedErrors * 10);
                 const rSp = recordDB.submitRecord(
