@@ -74,6 +74,13 @@ export function sysModernPlayers(ecs: Registry, room: Room) {
         if (p.type !== 'modern' || p.isDead) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
+        if (p.advancing || room.dogfightCompleted || p.race?.state === 2) {
+            v.vx = 0;
+            v.vy = 0;
+            v.angularVelocity = 0;
+            p.inputs = { up: false, left: false, right: false, shoot: false };
+            continue;
+        }
         const inv = ecs.cargoBays.get(e);
         const f = ecs.fuelTanks.get(e);
 

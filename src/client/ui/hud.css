@@ -755,6 +755,26 @@ html, body {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75);
 }
 
+#objective-complete-bar {
+    position: absolute;
+    top: calc(52px * var(--gf-ui-scale));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 89;
+    pointer-events: auto;
+    display: none;
+    align-items: center;
+    gap: calc(12px * var(--gf-ui-scale));
+    background: rgba(9, 18, 26, 0.94);
+    border: 1px solid var(--col-emerald);
+    color: var(--col-emerald);
+    padding: calc(6px * var(--gf-ui-scale)) calc(14px * var(--gf-ui-scale));
+    font-size: var(--fs-sm);
+    letter-spacing: 1.4px;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.85);
+}
+
 #touch-controls {
     position: absolute;
     bottom: calc(28px * var(--gf-ui-scale));

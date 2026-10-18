@@ -124,13 +124,16 @@ function getGrindState() {
 function recordIntentionalReset(lvlIdx, reason) {
     const now = Date.now();
     const st = getGrindState();
-    const validHistory = (st.levelIndex === lvlIdx && Array.isArray(st.resets))
-        ? st.resets.filter(ts => now - ts < 180000) // 3-minute rolling window
+    const sameLevel = st.levelIndex === lvlIdx;
+    const validHistory = (sameLevel && Array.isArray(st.resets))
+        ? st.resets.filter(ts => now - ts < 600000) // 10-minute rolling window
         : [];
     validHistory.push(now);
+    const inCycle = (sameLevel && Boolean(st.inCycle)) || validHistory.length >= 2;
     localStorage.setItem('gf_grind_tracker', JSON.stringify({
         levelIndex: lvlIdx,
         resets: validHistory,
+        inCycle,
         lastDeathAt: st.lastDeathAt || 0,
         lastReason: reason
     }));
@@ -138,20 +141,25 @@ function recordIntentionalReset(lvlIdx, reason) {
 
 function isPlayerInRestartCycle(lvlIdx) {
     const st = getGrindState();
-    if (st.levelIndex !== lvlIdx || !Array.isArray(st.resets)) return false;
+    if (st.levelIndex !== lvlIdx) return false;
+    if (st.inCycle) return true;
+    if (!Array.isArray(st.resets)) return false;
     const now = Date.now();
-    const recent = st.resets.filter(ts => now - ts < 180000);
+    const recent = st.resets.filter(ts => now - ts < 600000);
     // Strictly require at least 2 rapid manual restarts / post-death reloads on this cavern so newbies NEVER see it
     return recent.length >= 2;
 }
 
 function triggerSpRestart() {
     if (mySessionMode !== 'SP') return;
-    const timeInLevelMs = performance.now() - levelLoadPerfNow;
-    const timeSinceDeathMs = lastDeathPerfNow > 0 ? (performance.now() - lastDeathPerfNow) : 999999;
-    if (timeSinceDeathMs < 4000 || timeInLevelMs < 25000) {
-        recordIntentionalReset(currentRoomInfo.levelIndex || 0, 'manual_restart');
+    const myP = serverState.players?.[myId];
+    const curLvl = currentRoomInfo.levelIndex || 0;
+    const streakStart = myP?.streakStartLevel ?? curLvl;
+    const streakCount = Math.max(0, curLvl - streakStart);
+    if (streakCount >= 1 && !myP?.isDead && !window.confirm(`Are you sure you want to restart this cavern? You are on a ${streakCount + 1}-cavern streak!`)) {
+        return;
     }
+    recordIntentionalReset(curLvl, 'manual_restart');
     requestReplayLevel();
 }
 
@@ -234,7 +242,10 @@ document.getElementById('btn-fs-accept').onclick = () => {
         document.documentElement.requestFullscreen().catch(() => {});
     }
 };
-document.getElementById('btn-gameover-retry').onclick = () => socket.emit('retry_level');
+document.getElementById('btn-gameover-retry').onclick = () => {
+    recordIntentionalReset(currentRoomInfo.levelIndex || 0, 'gameover_retry');
+    requestReplayLevel();
+};
 document.getElementById('btn-room-sp').onclick = () => switchSessionMode('SP', '');
 document.getElementById('btn-room-mp').onclick = () => switchSessionMode('MP', '');
 document.getElementById('btn-room-join-code').onclick = () => {
@@ -246,13 +257,40 @@ document.getElementById('btn-hint-dismiss').onclick = () => {
     document.getElementById('tactical-hint-toast').style.display = 'none';
 };
 
+const objCompleteBarEl = document.getElementById('objective-complete-bar');
+const objCompleteTextEl = document.getElementById('objective-complete-text');
+const btnObjectiveNext = document.getElementById('btn-objective-next');
+if (btnObjectiveNext) {
+    btnObjectiveNext.onclick = () => {
+        const isRoundMode = currentRoomInfo.category === 'dogfight' || currentRoomInfo.category === 'race';
+        if (isRoundMode) requestReplayLevel();
+        else requestNextLevel();
+    };
+}
+
 function submitJumpLevel() {
     const inp = document.getElementById('jump-level-input');
     const modal = document.getElementById('jump-modal');
-    if (modal) modal.style.display = 'none';
     if (!inp) return;
     const parsedLvl = parseInt(inp.value, 10);
     if (!isNaN(parsedLvl)) {
+        const myP = serverState.players?.[myId];
+        const curLvl = currentRoomInfo.levelIndex || 0;
+        const streakCount = Math.max(0, curLvl - (myP?.streakStartLevel ?? curLvl));
+        const isLegitNext = Boolean(myP?.advancing && parsedLvl === curLvl + 1);
+        if (streakCount >= 1 && !isLegitNext && modal && modal.dataset.confirmedJump !== String(parsedLvl)) {
+            modal.dataset.confirmedJump = String(parsedLvl);
+            const warnEl = document.getElementById('jump-streak-warning');
+            if (warnEl) {
+                warnEl.textContent = `WARNING: YOU ARE ON A ${streakCount + 1}-LEVEL STREAK! CLICK WARP AGAIN TO CONFIRM RESETTING STREAK.`;
+                warnEl.style.display = 'block';
+            }
+            return;
+        }
+        if (modal) {
+            modal.dataset.confirmedJump = '';
+            modal.style.display = 'none';
+        }
         localStorage.setItem('gf_dev_level', parsedLvl.toString());
         currentRoomInfo.levelIndex = parsedLvl;
         if (socket.auth) socket.auth.levelIndex = parsedLvl;
@@ -309,6 +347,20 @@ const inputManager = new InputManager(null, (inputs) => {
         else if (action === 'addLife') socket.emit('debug_action', 'add_life');
         else if (action === 'jumpLevel') {
             dialogManager.toggleModal('jump-modal', () => {
+                const modal = document.getElementById('jump-modal');
+                if (modal) modal.dataset.confirmedJump = '';
+                const warnEl = document.getElementById('jump-streak-warning');
+                const myP = serverState.players?.[myId];
+                const curLvl = currentRoomInfo.levelIndex || 0;
+                const streakCount = Math.max(0, curLvl - (myP?.streakStartLevel ?? curLvl));
+                if (warnEl) {
+                    if (streakCount >= 1) {
+                        warnEl.textContent = `ACTIVE ${streakCount + 1}-CAVERN STREAK (${myP?.lives ?? 5} LIVES). WARPING BREAKS YOUR STREAK!`;
+                        warnEl.style.display = 'block';
+                    } else {
+                        warnEl.style.display = 'none';
+                    }
+                }
                 const inp = document.getElementById('jump-level-input');
                 if (inp) {
                     inp.value = String(currentRoomInfo.levelIndex ?? 0);
@@ -483,6 +535,7 @@ socket.on('initLevel', (data) => {
     tankDebrisPiles = [];
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('quick-restart-modal').style.display = 'none';
+    if (objCompleteBarEl) objCompleteBarEl.style.display = 'none';
     if (window.gfRenderer) {
         window.gfRenderer.rock.buildLevelCache(level);
         window.gfRenderer.flora.initLevel(level);
@@ -601,6 +654,22 @@ socket.on('state', (state) => {
     for (const id in serverState.players) {
         const s = serverState.players[id];
         const r = renderState.players[id];
+        if (id === myId && objCompleteBarEl) {
+            if (s.objectivesComplete) {
+                const isRoundMode = currentRoomInfo.category === 'dogfight' || currentRoomInfo.category === 'race';
+                if (objCompleteTextEl) {
+                    objCompleteTextEl.textContent = isRoundMode
+                        ? 'ROUND COMPLETE — STANDINGS FINALIZED'
+                        : 'OBJECTIVES COMPLETE — CAVERN SECURED';
+                }
+                if (btnObjectiveNext) {
+                    btnObjectiveNext.textContent = isRoundMode ? 'PLAY AGAIN ↻' : 'NEXT CAVERN ➔';
+                }
+                objCompleteBarEl.style.display = 'flex';
+            } else {
+                objCompleteBarEl.style.display = 'none';
+            }
+        }
         if (!r) {
             renderState.players[id] = { ...s, authX: s.x, authY: s.y, authAngle: s.angle, fuel: s.fuel ?? 76464 };
         } else {

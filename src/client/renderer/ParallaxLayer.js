@@ -190,14 +190,16 @@ export class ParallaxLayer {
 
         // Layer -2.5: Subtle Volumetric Nebula / Subterranean Ionized Gas Clouds
         if (cfg.nebulaEnabled !== false) {
-            const nebWrapW = 3200;
-            const nebWrapH = 2800;
+            const nebPadX = 1350;
+            const nebPadY = 1050;
+            const nebWrapW = this.viewW + nebPadX * 2;
+            const nebWrapH = this.viewH + nebPadY * 2;
             const nebOpacity = cfg.nebulaOpacity ?? 0.45;
             ctx.globalCompositeOperation = 'screen';
             for (const n of this.nebulas) {
                 if (!n.sprite) continue;
-                const nx = ((n.x + timeSec * n.driftX - camera.x * n.depth + 600) % nebWrapW + nebWrapW) % nebWrapW - 600;
-                const ny = ((n.y + timeSec * n.driftY - camera.y * n.depth + 500) % nebWrapH + nebWrapH) % nebWrapH - 500;
+                const nx = ((n.x + timeSec * n.driftX - camera.x * n.depth + nebPadX) % nebWrapW + nebWrapW) % nebWrapW - nebPadX;
+                const ny = ((n.y + timeSec * n.driftY - camera.y * n.depth + nebPadY) % nebWrapH + nebWrapH) % nebWrapH - nebPadY;
                 if (nx + n.w < 0 || nx > this.viewW || ny + n.h < 0 || ny > this.viewH) continue;
                 const pulse = 0.78 + 0.22 * Math.sin(timeSec * 0.45 + n.phase);
                 ctx.globalAlpha = pulse * nebOpacity;
@@ -208,11 +210,13 @@ export class ParallaxLayer {
         }
 
         // Layer -2: Distant Mega-Cavern Pillars (0.18x and 0.32x Parallax)
-        const wrapW = 2600;
-        const wrapH = 3600;
+        const pilPadX = 360;
+        const pilPadY = 1050;
+        const wrapW = Math.max(2600, this.viewW + pilPadX * 2);
+        const wrapH = Math.max(3600, this.viewH + pilPadY * 2);
         for (const p of this.pillars) {
-            const sx = ((p.x - camera.x * p.depth + 400) % wrapW + wrapW) % wrapW - 400;
-            const sy = ((p.y - camera.y * p.depth + 750) % wrapH + wrapH) % wrapH - 750;
+            const sx = ((p.x - camera.x * p.depth + pilPadX) % wrapW + wrapW) % wrapW - pilPadX;
+            const sy = ((p.y - camera.y * p.depth + pilPadY) % wrapH + wrapH) % wrapH - pilPadY;
             if (sx + p.w < 0 || sx > this.viewW || sy + p.h < 0 || sy > this.viewH) continue;
 
             if (p.sprite) {

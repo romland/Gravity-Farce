@@ -1,12 +1,25 @@
 import os from 'os';
 
+export interface ServerTelemetrySnapshot {
+    activeRoomsNow: number;
+    roomsCreated10s: number;
+    roomsCreated5m: number;
+    roomsCreated60m: number;
+    activePlayers10s: number;
+    activePlayers5m: number;
+    activePlayers60m: number;
+    pings: number[];
+}
+
 export class ServerProfiler {
     private tickTimes: number[] = [];
     private tickStart: number = 0;
     private reportIntervalMs: number;
+    private telemetryProvider?: () => ServerTelemetrySnapshot;
 
-    constructor(reportIntervalMs: number = 10000) {
+    constructor(reportIntervalMs: number = 10000, telemetryProvider?: () => ServerTelemetrySnapshot) {
         this.reportIntervalMs = reportIntervalMs;
+        this.telemetryProvider = telemetryProvider;
         setInterval(() => this.report(), this.reportIntervalMs);
     }
 
@@ -35,8 +48,9 @@ export class ServerProfiler {
 
         const budgetPct = (avg / 16.66) * 100;
         const intervalSec = this.reportIntervalMs / 1000;
+        const nowIso = new Date().toISOString();
 
-        console.log(`[PERF] ${intervalSec}s Tick (ms) - Min: ${min.toFixed(2)} | Med: ${median.toFixed(2)} | Avg: ${avg.toFixed(2)} | Max: ${max.toFixed(2)} | Budget used: ${budgetPct.toFixed(1)}%`);
+        console.log(`[PERF ${nowIso}] ${intervalSec}s Tick (ms) - Min: ${min.toFixed(2)} | Med: ${median.toFixed(2)} | Avg: ${avg.toFixed(2)} | Max: ${max.toFixed(2)} | Budget used: ${budgetPct.toFixed(1)}%`);
         this.logSystemStats();
     }
 
@@ -48,5 +62,19 @@ export class ServerProfiler {
         const load = os.loadavg();
 
         console.log(`       Heap: ${heapUsed.toFixed(1)}MB | OS Free: ${freeMem.toFixed(1)}MB / ${totalMem.toFixed(1)}MB | Load (1/5/15m): ${load[0].toFixed(2)}, ${load[1].toFixed(2)}, ${load[2].toFixed(2)}`);
+        if (this.telemetryProvider) {
+            const snap = this.telemetryProvider();
+            let pingStr = 'n/a';
+            if (snap.pings.length > 0) {
+                const sorted = [...snap.pings].sort((a, b) => a - b);
+                const pMin = sorted[0];
+                const pMax = sorted[sorted.length - 1];
+                const pAvg = Math.round(sorted.reduce((a, b) => a + b, 0) / sorted.length);
+                const pMed = sorted[Math.floor(sorted.length * 0.5)];
+                const p95 = sorted[Math.floor(sorted.length * 0.95)];
+                pingStr = `n=${sorted.length} Min:${pMin} Med:${pMed} Avg:${pAvg} P95:${p95} Max:${pMax}ms`;
+            }
+            console.log(`       Rooms [Active Now: ${snap.activeRoomsNow} | Created 10s/5m/1h: ${snap.roomsCreated10s}/${snap.roomsCreated5m}/${snap.roomsCreated60m}] | Active Pilots (10s/5m/1h): ${snap.activePlayers10s}/${snap.activePlayers5m}/${snap.activePlayers60m} | Ping: ${pingStr}`);
+        }
     }
 }

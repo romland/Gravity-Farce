@@ -10,6 +10,7 @@ import { getActivePhysicsHash, buildLeaderboardContext } from './core/records';
 import { evaluateMissionEnd, buildMissionLeaderboards } from './game/mission';
 import { authDB } from './core/auth';
 import { SERVER_CONFIG } from './core/config';
+import { pilotStatsDB } from './core/pilot-stats';
 import { buildRaceLeaderboards } from './game/racing';
 import { buildDogfightLeaderboards } from './game/dogfight';
 import { spawnDogfightBot } from './game/bot-dogfighting';
@@ -56,6 +57,14 @@ const playerSessionStats = new Map<string, PlayerStats>();
 const pendingPingTimestamps = new Map<string, number>();
 // Authoritative per-UUID last level memory so immediate browser reloads after jumping NEVER revert (TODO 6)
 const lastLevelByUuid = new Map<string, number>();
+// Rolling timestamps for server telemetry (TODO 6)
+const roomCreatedHistory: number[] = [];
+const playerLastActiveAt = new Map<string, number>();
+
+function markPlayerActive(uuidOrId: string) {
+    if (uuidOrId) playerLastActiveAt.set(uuidOrId, Date.now());
+}
+
 // Map of leader socketId -> Set of follower spectator socketIds (TODO 2.4 Spectate Pilot)
 const pilotFollowers = new Map<string, Set<string>>();
 
@@ -98,6 +107,7 @@ function generateRoomCode(): string {
 function createRoomInstance(levelIndex: number, mode: 'SP' | 'MP', customCode?: string): Room {
     const rId = nextLiveRoomId++;
     const code = (customCode && !roomsByCode.has(customCode)) ? customCode : generateRoomCode();
+    roomCreatedHistory.push(Date.now());
     const room = new Room(
         rId,
         levelIndex,
@@ -427,6 +437,9 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
         stats.streakStartLevel = actualLevel;
         stats.streakLastLevel = actualLevel;
         stats.streakReplays = [];
+        if (stats.uuid && !stats.isBot) {
+            pilotStatsDB.saveActiveStreak(stats.uuid, stats.alias || 'UNK', undefined);
+        }
     } else {
         stats.streakLastLevel = actualLevel;
         // TODO 4: Every 10 caverns survived on a 5-lives sequential mission streak awards +1 Extra Life!
@@ -444,6 +457,16 @@ function handleTransitionToLevel(id: string, targetLevel: number, forceReset: bo
                     newRoom.ecs.events.push({ type: 'floating_text', text: '+1 EXTRA LIFE!', color: '#ffd700', x: pt.x, y: pt.y - 42 });
                 }
             }, 600);
+        }
+        if (stats.uuid && !stats.isBot) {
+            pilotStatsDB.saveActiveStreak(stats.uuid, stats.alias || 'UNK', {
+                levelIndex: actualLevel,
+                startLevel: stats.streakStartLevel ?? actualLevel,
+                lives: stats.lives ?? SERVER_CONFIG.defaultLives,
+                score: stats.score ?? 0,
+                streakReplays: stats.streakReplays || [],
+                updatedAt: Date.now()
+            });
         }
     }
     playerSessionStats.set(id, stats);
@@ -507,6 +530,16 @@ function handleTransition(actorOrSocketId: string, sourceRoomId?: number) {
                     if (!st.streakReplays) st.streakReplays = [];
                     if (!st.streakReplays.includes(oldRoom.tracker.uuid)) {
                         st.streakReplays.push(oldRoom.tracker.uuid);
+                    }
+                    if (st.uuid && !st.isBot && oldRoom.levelIndex >= 0 && oldRoom.levelIndex <= 49) {
+                        pilotStatsDB.saveActiveStreak(st.uuid, st.alias || p.alias, {
+                            levelIndex: getNextLevel(oldRoom.levelIndex, 'mission'),
+                            startLevel: p.streakStartLevel ?? oldRoom.levelIndex,
+                            lives: p.lives,
+                            score: p.score,
+                            streakReplays: st.streakReplays,
+                            updatedAt: Date.now()
+                        });
                     }
                 }
                 const boards = evaluateMissionEnd(oldRoom, actorOrSocketId, timeTaken, st?.streakReplays);
@@ -584,8 +617,11 @@ io.on('connection', (socket) => {
     }
 
     const requestedLevel = typeof auth.levelIndex === 'number' ? auth.levelIndex : parseInt(auth.levelIndex, 10);
+    const savedStreak = pilotStatsDB.getActiveStreak(uuid);
     const rememberedLevel = lastLevelByUuid.get(uuid);
-    const candidateLevel = !isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : (rememberedLevel ?? 0);
+    const candidateLevel = savedStreak
+        ? savedStreak.levelIndex
+        : (!isNaN(requestedLevel) && isValidLevelIndex(requestedLevel) ? requestedLevel : (rememberedLevel ?? 0));
     const initialLevel = isValidLevelIndex(candidateLevel) ? candidateLevel : 0;
     lastLevelByUuid.set(uuid, initialLevel);
     const initialMode: 'SP' | 'MP' = auth.mode === 'MP' ? 'MP' : 'SP';
@@ -598,20 +634,22 @@ io.on('connection', (socket) => {
         room.allowSpectators = allowSpectatorsPref;
     }
     const stats: PlayerStats = {
-        score: 0,
+        score: savedStreak ? savedStreak.score : 0,
         uuid: uuid,
         alias: alias,
         isBot: authDB.isBotPilot(alias),
         shipType: useClassicPhysics ? 'classic' : 'modern',
         ip: ip,
-        lives: SERVER_CONFIG.defaultLives,
-        streakStartLevel: room.levelIndex,
+        lives: savedStreak ? savedStreak.lives : SERVER_CONFIG.defaultLives,
+        streakStartLevel: savedStreak ? savedStreak.startLevel : room.levelIndex,
         streakLastLevel: room.levelIndex,
+        streakReplays: savedStreak ? [...savedStreak.streakReplays] : [],
         sessionMode: room.sessionMode,
         roomCode: room.joinCode,
         allowSpectators: allowSpectatorsPref
     };
     playerSessionStats.set(socket.id, stats);
+    markPlayerActive(uuid);
 
     socket.join(room.channel);
     playerRooms.set(socket.id, room.roomId);
@@ -654,7 +692,13 @@ io.on('connection', (socket) => {
             if (!isNaN(tgt) && isValidLevelIndex(tgt)) {
                 const st = playerSessionStats.get(socket.id);
                 if (st?.uuid) lastLevelByUuid.set(st.uuid, tgt);
-                handleTransitionToLevel(socket.id, tgt, true);
+                const curRId = playerRooms.get(socket.id);
+                const curRoom = curRId !== undefined ? rooms.get(curRId) : undefined;
+                const pe = curRoom?.ecs.getPlayerEntity(socket.id);
+                const p = pe !== undefined ? curRoom?.ecs.players.get(pe) : undefined;
+                // If player already completed the current mission cavern and warps to the immediate next cavern, preserve their streak!
+                const isLegitNextStep = Boolean(curRoom && p?.advancing && tgt === curRoom.levelIndex + 1);
+                handleTransitionToLevel(socket.id, tgt, !isLegitNextStep);
             }
         } else if (action === 'add_life') {
             const roomIndex = playerRooms.get(socket.id);
@@ -921,8 +965,9 @@ socket.on('spectate_pilot', (targetPilotId: string) => {
         const e = room.ecs.getPlayerEntity(socket.id);
         if (e !== undefined) {
             const p = room.ecs.players.get(e)!;
+            markPlayerActive(p.uuid || socket.id);
 
-            if (!p.isDead) {
+            if (!p.isDead && !p.advancing && !room.dogfightCompleted && p.race?.state !== 2) {
                 const prevShootInput = p.inputs.shoot;
 
                 let aX = undefined;
@@ -1002,6 +1047,9 @@ socket.on('spectate_pilot', (targetPilotId: string) => {
             if (stats) {
                 stats.lives = SERVER_CONFIG.defaultLives;
                 stats.score = 0;
+                if (stats.uuid && !stats.isBot) {
+                    pilotStatsDB.saveActiveStreak(stats.uuid, stats.alias || 'UNK', undefined);
+                }
             }
             socket.emit('hide_game_over');
             socket.emit('hide_leaderboard');
@@ -1063,7 +1111,56 @@ socket.on('spectate_pilot', (targetPilotId: string) => {
 });
 
 
-const profiler = new ServerProfiler(10000);
+const profiler = new ServerProfiler(10000, () => {
+    const now = Date.now();
+    while (roomCreatedHistory.length > 0 && now - roomCreatedHistory[0] > 3600_000) {
+        roomCreatedHistory.shift();
+    }
+    let roomsCreated10s = 0;
+    let roomsCreated5m = 0;
+    const roomsCreated60m = roomCreatedHistory.length;
+    for (const ts of roomCreatedHistory) {
+        const age = now - ts;
+        if (age <= 10_000) roomsCreated10s++;
+        if (age <= 300_000) roomsCreated5m++;
+    }
+
+    let activeRoomsNow = 0;
+    const pings: number[] = [];
+    for (const r of rooms.values()) {
+        if (r.activeClientIds.size > 0) {
+            activeRoomsNow++;
+            for (const [pe, p] of r.ecs.players.entries()) {
+                if (!r.ecs.bots.has(pe) && p.ping > 0) pings.push(p.ping);
+            }
+        }
+    }
+
+    let activePlayers10s = 0;
+    let activePlayers5m = 0;
+    let activePlayers60m = 0;
+    for (const [uid, ts] of playerLastActiveAt.entries()) {
+        const age = now - ts;
+        if (age > 3600_000) {
+            playerLastActiveAt.delete(uid);
+            continue;
+        }
+        activePlayers60m++;
+        if (age <= 300_000) activePlayers5m++;
+        if (age <= 10_000) activePlayers10s++;
+    }
+
+    return {
+        activeRoomsNow,
+        roomsCreated10s,
+        roomsCreated5m,
+        roomsCreated60m,
+        activePlayers10s,
+        activePlayers5m,
+        activePlayers60m,
+        pings
+    };
+});
 
 setInterval(() => {
     const now = Date.now();

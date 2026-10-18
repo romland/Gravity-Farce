@@ -169,7 +169,7 @@ export function sysFlyingEnemies(ecs: Registry, room: Room) {
 
         // 4. Collision Check
         for (const [pe, p] of ecs.players.entries()) {
-            if (p.isDead) continue;
+            if (p.isDead || p.advancing || room.dogfightCompleted || p.race?.state === 2) continue;
             const pt = ecs.transforms.get(pe);
             if (pt && checkShipBoxCollision(pt.x, pt.y, pt.angle, t.x, t.y, enemy.width, enemy.height)) {
                 if (room.category === 'race' && !room.isLethalRacing) {

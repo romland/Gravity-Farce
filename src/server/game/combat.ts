@@ -71,7 +71,7 @@ function destroyTurretTile(room: Room, tileX: number, tileY: number) {
 
 function checkShipTurretCollisions(ecs: Registry, room: Room) {
     for (const [e, p] of ecs.players.entries()) {
-        if (p.isDead) continue;
+        if (p.isDead || p.advancing || room.dogfightCompleted || p.race?.state === 2) continue;
         const pt = ecs.transforms.get(e);
         if (!pt) continue;
         for (const [te, turret] of ecs.turrets.entries()) {
@@ -92,7 +92,7 @@ function checkShipTurretCollisions(ecs: Registry, room: Room) {
 
 export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
     const p = ecs.players.get(e);
-    if (!p || p.isDead) return;
+    if (!p || p.isDead || p.advancing || room?.dogfightCompleted || p.race?.state === 2) return;
     p.isDead = true;
     p.isLanded = false;
     const v = ecs.velocities.get(e);
@@ -106,7 +106,7 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
         const t = ecs.transforms.get(e);
         room.tracker.logEvent(p.id, { type: 'death', x: t?.x || 0, y: t?.y || 0 });
         if (!room.isReplayMode && !ecs.bots.has(e) && !p.isBotPilot) {
-            pilotStatsDB.recordDeath(p.uuid, p.alias, room.levelIndex);
+            pilotStatsDB.recordDeath(p.uuid, p.alias, room.levelIndex, t?.x, t?.y);
         }
         if (room.category === 'dogfight') {
             attributeDogfightDeath(ecs, e, room);
@@ -144,6 +144,7 @@ export function killPlayer(ecs: Registry, e: Entity, room?: Room) {
         
         if (room && !ecs.bots.has(e) && !room.isReplayMode) {
             if (!p.isBotPilot) pilotStatsDB.flushPendingAsFailed(p.uuid, p.alias);
+            if (!p.isBotPilot) pilotStatsDB.saveActiveStreak(p.uuid, p.alias, undefined);
             room.emitToPlayer(p.id, 'game_over', { score: p.score, levelName: room.level.name });
             room.checkAllPlayersOutOfLives();
         }
@@ -257,7 +258,7 @@ export function sysBullets(ecs: Registry, room: Room) {
         }
 
         if (!hit) for (const [pe, p] of ecs.players.entries()) {
-            if (p.isDead) continue;
+            if (p.isDead || p.advancing || room.dogfightCompleted || p.race?.state === 2) continue;
             
             const pt = ecs.transforms.get(pe)!;
             const hitRadius = 14 * (SERVER_CONFIG.shipScale || 1.0);

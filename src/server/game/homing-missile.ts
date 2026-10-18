@@ -68,7 +68,7 @@ export function sysHomingMissiles(ecs: Registry, room: Room) {
 
         // Collision check against living players
         for (const [pe, p] of ecs.players.entries()) {
-            if (p.isDead) continue;
+            if (p.isDead || p.advancing || room.dogfightCompleted || p.race?.state === 2) continue;
             const pt = ecs.transforms.get(pe)!;
             if (Math.hypot(missile.x - pt.x, missile.y - pt.y) < 16) {
                 if (room.category === 'race' && !room.isLethalRacing) {

@@ -115,7 +115,7 @@ function isPathNode(map: number[][], x: number, y: number): boolean {
 
 function checkTankPlayerCollisions(ecs: Registry, room: Room, tx: number, ty: number, tWidth: number, tHeight: number) {
     for (const [pe, p] of ecs.players.entries()) {
-        if (p.isDead) {
+        if (p.isDead || p.advancing || room.dogfightCompleted || p.race?.state === 2) {
             continue;
         }
 

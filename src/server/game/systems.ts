@@ -19,7 +19,7 @@ const MODERN_BULLET_SPEED = scaleAmigaPerFrameDelta(2.2 * (60 / 50));
 export function sysWeapons(ecs: Registry) {
     for (const [e, mount] of ecs.weaponMounts.entries()) {
         const p = ecs.players.get(e);
-        if (!p || p.isDead) continue;
+        if (!p || p.isDead || p.advancing || p.race?.state === 2) continue;
         const t = ecs.transforms.get(e)!;
         const v = ecs.velocities.get(e)!;
 
@@ -199,6 +199,9 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
                     angleStep: op.angleStep,
                     isDead: op.isDead,
                     isLanded: op.isLanded,
+                    advancing: Boolean(op.advancing),
+                    objectivesComplete: Boolean(op.advancing || room.dogfightCompleted || op.race?.state === 2),
+                    streakStartLevel: op.streakStartLevel ?? room.levelIndex,
                     inputs: op.inputs,
                     score: op.score,
                     cargoStack: oInv?.stack || [],
