@@ -905,21 +905,31 @@ function drawTurret(t) {
 
 function drawTank(t) {
     if (!t.active) return;
-    const w = t.width || 32;
+    const w = t.width || 64;
     const h = t.height || 24;
+    const rx = Math.round(t.x);
+    const ry = Math.round(t.y);
     ctx.save();
-    ctx.translate(t.x, t.y);
-    ctx.fillStyle = '#8a8a8a';
-    ctx.fillRect(-w / 2, -h / 2, w, h);
-    ctx.fillStyle = '#ff4b2b';
-    ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
+    ctx.translate(rx, ry);
+    // if (t.dirX === -1 || (t.dirX === undefined && t.vx < 0)) {
+    //     ctx.scale(-1, 1);
+    // }
+    const img = assetManager.get('TANK') || assetManager.get('tank');
+    if (img) {
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    } else {
+        ctx.fillStyle = '#8a8a8a';
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        ctx.fillStyle = '#ff4b2b';
+        ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
+    }
     ctx.restore();
     if (debugMode && showDebugLines) {
         ctx.fillStyle = '#0f0';
         ctx.font = '10px monospace';
-        if (t.debugId !== undefined) ctx.fillText(`ID:${t.debugId} (TANK)`, Math.round(t.x), Math.round(t.y - h / 2 - 10));
+        if (t.debugId !== undefined) ctx.fillText(`ID:${t.debugId} (TANK)`, rx, ry - h / 2 - 10);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-        ctx.strokeRect(Math.round(t.x - w / 2), Math.round(t.y - h / 2), w, h);
+        ctx.strokeRect(rx - w / 2, ry - h / 2, w, h);
     }
 }
 
@@ -1442,7 +1452,13 @@ async function bootstrapGame() {
             '0xE5': 'assets/enemies/e5-enemy-384x256.webp',
             '0xE7': 'assets/enemies/e7-enemy-384x256.webp',
             '0xE8': 'assets/enemies/e8-enemy-384x256.webp',
-            '0xEB': 'assets/enemies/e5-enemy-384x256.webp'
+            '0xE9': 'assets/enemies/e9-enemy-384x256.webp',
+            '0xEB': 'assets/enemies/e5-enemy-384x256.webp', // same as 0xE5
+            '0xEC': 'assets/enemies/ec-enemy-384x256.webp',
+            '0xED': 'assets/enemies/ec-enemy-384x256.webp', // same as 0xEC
+            '0xEE': 'assets/enemies/e8-enemy-384x256.webp', // same as 0xE8
+            '0xEF': 'assets/enemies/e9-enemy-384x256.webp', // same as 0xE9
+            'TANK': 'assets/enemies/tank-256x96.webp'
         });
         if (myAlias) {
             await attemptLogin(myAlias, true);
