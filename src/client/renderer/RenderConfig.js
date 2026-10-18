@@ -226,7 +226,8 @@ export const RENDER_CONFIG = {
         baseCrewEnabled: true,
         shipDebrisEnabled: true,
         takeoffSmokeEnabled: true,
-        thrusterParticlesEnabled: true
+        thrusterParticlesEnabled: true,
+        entityFxEnabled: true
     }
 };
 

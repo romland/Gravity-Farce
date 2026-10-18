@@ -85,8 +85,8 @@ const INITIAL_FUEL = 76464;
 const MAX_FUEL = 99999;
 
 // 0x0003580E & 0x00035852: Gravity well force vectors (tiles 0xCC..0xCF) = [02, 00, 00, 00] (0.020 units/frame = 2x gravity)
-const MAGNET_FORCE_X = scaleAmigaPerFrameDelta(0.020);
-const MAGNET_FORCE_Y = scaleAmigaPerFrameDelta(0.020);
+const MAGNET_FORCE_X = scaleAmigaPerFrameDelta(0.050);
+const MAGNET_FORCE_Y = scaleAmigaPerFrameDelta(0.050);
 
 // Actually NEVER auto-fire when holding fire button (30 ticks), fast pulse when spamming fire (6 Amiga frames)
 const AUTOFIRE_COOLDOWN = Math.round(scaleAmigaFrameTimer(25));

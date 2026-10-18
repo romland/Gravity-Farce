@@ -25,6 +25,7 @@ import { getActivePhysicsHash, recordDB } from './core/records';
 import { pilotStatsDB } from './core/pilot-stats';
 import { FloraBurnSystem, type FloraBurnRecord } from './game/highres/FloraBurnSystem';
 import { botPathWorker } from './game/bot-path-worker';
+import { attachEntityFx } from './game/entity-fx';
 
 export class Room {
     public ecs = new Registry();
@@ -298,23 +299,33 @@ export class Room {
 
         this.level.entities.forEach(ent => {
             if (ent.type === 'turret') {
-                spawnTurret(this.ecs, ent.x, ent.y, ent.props?.turretType || 0xAF, ent.props?.orientUp || false);
+                const tType = ent.props?.turretType || 0xAF;
+                const e = spawnTurret(this.ecs, ent.x, ent.y, tType, ent.props?.orientUp || false);
+                attachEntityFx(this.ecs, e, 'TURRET', this.levelIndex, ent.x, ent.y, tType);
             }
             if (ent.type === 'path_node' && ent.props?.index === 0) {
                 // We spawn one tank at the start of a path sequence (node 0)
                 // To increase density, we could spawn on multiple node indices later
                 this.debugEnemyCounter++;
-                spawnTank(this.ecs, ent.x, ent.y, this.debugEnemyCounter);
+                const e = spawnTank(this.ecs, ent.x, ent.y, this.debugEnemyCounter);
+                attachEntityFx(this.ecs, e, 'TANK', this.levelIndex, ent.x, ent.y, 0x32, this.debugEnemyCounter);
             }
             if (ent.type === 'flying_enemy') {
                 this.debugEnemyCounter++;
-                spawnFlyingEnemy(this.ecs, ent.x, ent.y, ent.props?.enemyType || 0xEC, this.debugEnemyCounter, this.prng);
+                const fType = ent.props?.enemyType || 0xEC;
+                const e = spawnFlyingEnemy(this.ecs, ent.x, ent.y, fType, this.debugEnemyCounter, this.prng);
+                const profileId = '0x' + fType.toString(16).toUpperCase();
+                attachEntityFx(this.ecs, e, profileId, this.levelIndex, ent.x, ent.y, fType, this.debugEnemyCounter);
             }
             if (ent.type === 'cargo') {
-                spawnCargo(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD1);
+                const cType = ent.props?.typeId || 0xD1;
+                const e = spawnCargo(this.ecs, ent.x, ent.y, cType);
+                attachEntityFx(this.ecs, e, 'CARGO', this.levelIndex, ent.x, ent.y, cType);
             }
             if (ent.type === 'powerup') {
-                spawnPowerup(this.ecs, ent.x, ent.y, ent.props?.typeId || 0xD6);
+                const pType = ent.props?.typeId || 0xD6;
+                const e = spawnPowerup(this.ecs, ent.x, ent.y, pType);
+                attachEntityFx(this.ecs, e, 'POWERUP', this.levelIndex, ent.x, ent.y, pType);
             }
         });
     }

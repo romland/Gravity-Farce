@@ -8,6 +8,7 @@ import { DialogManager } from './ui/DialogManager.js';
 import { clientProfiler } from './perf/ClientProfiler.js';
 import { PerfOverlay, PERF_LAYER_TOGGLES } from './ui/PerfOverlay.js';
 import { ShipRenderer } from './renderer/ShipRenderer.js';
+import { EntityFxRenderer } from './renderer/EntityFxRenderer.js';
 
 const stageEl = document.getElementById('canvas-stage');
 const canvas = document.getElementById('gameCanvas');
@@ -20,6 +21,7 @@ let VIEW_W = 1600;
 let VIEW_H = 900;
 
 const shipRenderer = new ShipRenderer();
+const entityFxRenderer = new EntityFxRenderer();
 const hudManager = new HudManager(stageEl, canvas, hudRootEl, debugHudEl);
 hudManager.setViewportSize(VIEW_W, VIEW_H);
 window.addEventListener('resize', () => hudManager.recalculateLayout());
@@ -31,7 +33,8 @@ window.gfRenderer = {
     rock: new RockLayer(),
     prefabs: new PrefabLayer(assetManager),
     flora: new FloraLayer(),
-    details: new MicroDetailsLayer()
+    details: new MicroDetailsLayer(),
+    entityFx: entityFxRenderer
 };
 
 const perfOverlay = new PerfOverlay(debugHudEl, clientProfiler, () => ({
@@ -752,6 +755,7 @@ socket.on('state', (state) => {
         } else {
             rf.authX = f.x; rf.authY = f.y; rf.vx = f.vx || 0; rf.vy = f.vy || 0;
             rf.angle = f.angle; rf.active = f.active;
+            if (f.fxSeed !== undefined) rf.fxSeed = f.fxSeed;
         }
     }
     for (const k in renderState.flying) if (!seenFlying.has(Number(k)) && !seenFlying.has(k)) delete renderState.flying[k];
@@ -766,6 +770,7 @@ socket.on('state', (state) => {
         } else {
             rt.authX = tk.x; rt.authY = tk.y; rt.vx = tk.vx || 0; rt.vy = tk.vy || 0;
             rt.active = tk.active;
+            if (tk.fxSeed !== undefined) rt.fxSeed = tk.fxSeed;
         }
     }
     for (const k in renderState.tanks) if (!seenTanks.has(Number(k)) && !seenTanks.has(k)) delete renderState.tanks[k];
@@ -896,6 +901,7 @@ function drawTurret(t) {
         ctx.fillRect(-4, -16, 8, 16);
         ctx.fillStyle = '#f44'; ctx.fillRect(-4, -18, 8, 2);
     }
+    entityFxRenderer.drawEntityFx(ctx, 'TURRET', w, h, t.fxSeed || 1, performance.now() * 0.001, t);
     ctx.restore();
     if (debugMode && showDebugLines) {
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
@@ -906,7 +912,7 @@ function drawTurret(t) {
 function drawTank(t) {
     if (!t.active) return;
     const w = t.width || 64;
-    const h = t.height || 24;
+    const h = t.height || 48;
     const rx = Math.round(t.x);
     const ry = Math.round(t.y);
     ctx.save();
@@ -923,6 +929,7 @@ function drawTank(t) {
         ctx.fillStyle = '#ff4b2b';
         ctx.fillRect(-w / 4, -h / 4, w / 2, h / 2);
     }
+    entityFxRenderer.drawEntityFx(ctx, 'TANK', w, h, t.fxSeed || t.debugId || 1, performance.now() * 0.001, t);
     ctx.restore();
     if (debugMode && showDebugLines) {
         ctx.fillStyle = '#0f0';
@@ -961,20 +968,22 @@ function drawTankDebris(d) {
 
 function drawFlyingEnemy(t) {
     if (!t.active) return;
-    const w = t.width || 96;
-    const h = t.height || 64;
+    const w = t.width || 192;
+    const h = t.height || 128;
     const rx = t.x;
     const ry = t.y;
+    const typeKey = '0x' + t.enemyType.toString(16).toUpperCase();
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(t.angle);
-    const img = assetManager.get('0x' + t.enemyType.toString(16).toUpperCase());
+    const img = assetManager.get(typeKey);
     if (img) {
         ctx.drawImage(img, -w / 2, -h / 2, w, h);
     } else {
         ctx.fillStyle = '#ff8800';
         ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(-w / 2, h / 2); ctx.lineTo(-w / 2, -h / 2); ctx.closePath(); ctx.fill();
     }
+    entityFxRenderer.drawEntityFx(ctx, typeKey, w, h, t.fxSeed || t.debugId || 1, performance.now() * 0.001, t);
     ctx.restore();
     if (debugMode && showDebugLines) {
         ctx.fillStyle = '#0f0';
@@ -1449,10 +1458,13 @@ async function bootstrapGame() {
 
     try {
         await assetManager.loadMultiple({
+            '0xE4': 'assets/enemies/e7-enemy-384x256.webp',
             '0xE5': 'assets/enemies/e5-enemy-384x256.webp',
+            '0xE6': 'assets/enemies/ec-enemy-384x256.webp',
             '0xE7': 'assets/enemies/e7-enemy-384x256.webp',
             '0xE8': 'assets/enemies/e8-enemy-384x256.webp',
             '0xE9': 'assets/enemies/e9-enemy-384x256.webp',
+            '0xEA': 'assets/enemies/e9-enemy-384x256.webp',
             '0xEB': 'assets/enemies/e5-enemy-384x256.webp', // same as 0xE5
             '0xEC': 'assets/enemies/ec-enemy-384x256.webp',
             '0xED': 'assets/enemies/ec-enemy-384x256.webp', // same as 0xEC

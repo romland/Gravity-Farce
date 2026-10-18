@@ -229,7 +229,8 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
         for (const [te, turret] of ecs.turrets.entries()) {
             const tt = ecs.transforms.get(te)!;
             if (Math.abs(tt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(tt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.turrets.push({ x: tt.x, y: tt.y, angle: tt.angle, orientUp: turret.orientUp, active: turret.active, type: turret.turretType, width: turret.width, height: turret.height });
+                const fx = ecs.visualEffects.get(te);
+                state.turrets.push({ x: tt.x, y: tt.y, angle: tt.angle, orientUp: turret.orientUp, active: turret.active, type: turret.turretType, width: turret.width, height: turret.height, fxSeed: fx?.seed });
             }
         }
         for (const [he, missile] of ecs.homingMissiles.entries()) {
@@ -241,13 +242,15 @@ export function sysNetworkSync(ecs: Registry, room: Room, io: Server) {
             const tt = ecs.transforms.get(te)!;
             if (Math.abs(tt.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(tt.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
                 const tvx = tank.moveTimer > 0 ? tank.dirX : 0;
-                state.tanks.push({ id: te, x: Math.round(tt.x * 10) / 10, y: Math.round(tt.y * 10) / 10, vx: tvx, vy: 0, active: tank.active, width: tank.width, height: tank.height, debugId: tank.debugId });
+                const fx = ecs.visualEffects.get(te);
+                state.tanks.push({ id: te, x: Math.round(tt.x * 10) / 10, y: Math.round(tt.y * 10) / 10, vx: tvx, vy: 0, active: tank.active, width: tank.width, height: tank.height, debugId: tank.debugId, fxSeed: fx?.seed });
             }
         }
         for (const [fe, flying] of ecs.flyingEnemies.entries()) {
             const ft = ecs.transforms.get(fe)!;
             if (Math.abs(ft.x - t.x) < VIEW_W / 2 + CULL_MARGIN && Math.abs(ft.y - t.y) < VIEW_H / 2 + CULL_MARGIN) {
-                state.flying.push({ id: fe, x: Math.round(ft.x * 10) / 10, y: Math.round(ft.y * 10) / 10, vx: Math.round((flying.lastDx || 0) * 100) / 100, vy: Math.round((flying.lastDy || 0) * 100) / 100, angle: Math.round(ft.angle * 100) / 100, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType, debugId: flying.debugId });
+                const fx = ecs.visualEffects.get(fe);
+                state.flying.push({ id: fe, x: Math.round(ft.x * 10) / 10, y: Math.round(ft.y * 10) / 10, vx: Math.round((flying.lastDx || 0) * 100) / 100, vy: Math.round((flying.lastDy || 0) * 100) / 100, angle: Math.round(ft.angle * 100) / 100, active: flying.active, width: flying.width, height: flying.height, enemyType: flying.enemyType, debugId: flying.debugId, fxSeed: fx?.seed });
             }
         }
         for (const [ce, cargo] of ecs.cargos.entries()) {

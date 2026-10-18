@@ -1,4 +1,5 @@
 import type { Inputs, BotState } from './types';
+import type { EntityVisualFxComponent } from '../game/entity-fx';
 
 export type Entity = number;
 
@@ -204,6 +205,7 @@ export class Registry {
     public cargoBays = new Map<Entity, CargoBay>();
     public weaponMounts = new Map<Entity, WeaponMount>();
     public bots = new Map<Entity, BotState>();
+    public visualEffects = new Map<Entity, EntityVisualFxComponent>();
     public roomRules: RoomRulesComponent = {
         discipline: 'mission',
         flavor: 'STANDARD',
@@ -231,6 +233,7 @@ export class Registry {
         this.cargoBays.delete(e);
         this.weaponMounts.delete(e);
         this.bots.delete(e);
+        this.visualEffects.delete(e);
     }
 
     getPlayerEntity(id: string): Entity | undefined {
