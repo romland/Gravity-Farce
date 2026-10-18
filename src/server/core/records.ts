@@ -39,11 +39,13 @@ export interface SubmitResult {
  */
 export class RecordManager {
     private dbPath: string;
+    private announcementsPath: string;
     private db: Record<string, Leaderboard> = {};
     private pvpPairHistory: Record<string, number[]> = {};
 
     constructor(filename: string = 'data/server_records.json') {
         this.dbPath = path.resolve(process.cwd(), filename);
+        this.announcementsPath = path.resolve(process.cwd(), 'data/global_announcements.jsonl');
         this.load();
     }
 
@@ -409,6 +411,24 @@ export class RecordManager {
             loserDelta: -delta,
             note: mult === 0 ? 'DIMINISHING RETURNS: 24H CAP REACHED AGAINST THIS OPPONENT' : undefined
         };
+    }
+
+    public logGlobalAnnouncement(text: string, meta?: { levelIndex?: number; levelName?: string; category?: string; mode?: string }) {
+        try {
+            const dir = path.dirname(this.announcementsPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            const entry = {
+                timestamp: Date.now(),
+                isoDate: new Date().toISOString(),
+                text,
+                ...meta
+            };
+            fs.appendFileSync(this.announcementsPath, JSON.stringify(entry) + '\n');
+        } catch (e) {
+            console.error('Failed to log global announcement:', e);
+        }
     }
 
     private load() {

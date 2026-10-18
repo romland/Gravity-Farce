@@ -14,8 +14,9 @@ const DEFAULT_INPUT_CONFIG = {
     system: {
         escape: ['Escape'],
         restartCavern: ['Slash', 'NumpadDivide', 'Backslash'],
+        openLeaderboard: ['Tab'],
         watchReplay: ['KeyX'],
-        pause: ['KeyP'],
+        pause: ['KeyP'],    // Debug action, actually pauses server!
         toggleDebugLines: ['KeyV'],
         toggleFreecam: ['KeyC'],
         powerup2x: ['KeyU'],
@@ -23,7 +24,7 @@ const DEFAULT_INPUT_CONFIG = {
         powerupRear: ['KeyO'],
         spawnBot: ['KeyB'],
         dumpBots: ['KeyN'],
-        jumpLevel: ['KeyL', 'KeyJ'],
+        jumpLevel: ['KeyJ'],
         addLife: ['KeyM']
     },
     gamepad: {
@@ -83,6 +84,9 @@ class InputManager {
         if (isPressed && !e.repeat && this.config.system) {
             for (const [action, keys] of Object.entries(this.config.system)) {
                 if (keys.includes(e.code)) {
+                    if (e.code === 'Tab' && (e.ctrlKey || e.altKey || e.shiftKey || e.metaKey)) {
+                        continue;
+                    }
                     e.preventDefault();
                     if (this.onAction) this.onAction(action);
                     return; // System keys absorb the input

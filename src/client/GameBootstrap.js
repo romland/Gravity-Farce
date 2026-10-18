@@ -329,6 +329,14 @@ const inputManager = new InputManager(null, (inputs) => {
         }
     } else if (action === 'restartCavern') {
         triggerSpRestart();
+    } else if (action === 'openLeaderboard') {
+        const lbModal = document.getElementById('leaderboard-modal');
+        if (lbModal && lbModal.style.display && lbModal.style.display !== 'none') {
+            lbModal.style.display = 'none';
+        } else {
+            dialogManager.closeAnyOpen();
+            socket.emit('request_leaderboard');
+        }
     } else if (action === 'inputEnter') {
         if (payload === 'alias-input') attemptLogin(aliasInput.value);
         else if (payload === 'room-code-input') document.getElementById('btn-room-join-code').click();
@@ -539,7 +547,7 @@ socket.on('initLevel', (data) => {
     if (window.gfRenderer) {
         window.gfRenderer.rock.buildLevelCache(level);
         window.gfRenderer.flora.initLevel(level);
-        if (window.gfRenderer.details) window.gfRenderer.details.initLevel(level);
+        if (window.gfRenderer.details) window.gfRenderer.details.initLevel(level, currentRoomInfo.category || 'mission');
     }
     raceLights = [];
     if (level.rawMap) {
@@ -1261,7 +1269,8 @@ function gameLoop(timestamp = performance.now()) {
                 window.gfRenderer.details.updateAndDraw(
                     ctx, { x: renderCamX, y: renderCamY }, VIEW_W, VIEW_H,
                     level, renderState.players, serverState.turrets, serverState.bullets,
-                    timeSec, window.gfRenderer.rock, window.gfRenderer.flora
+                    timeSec, window.gfRenderer.rock, window.gfRenderer.flora,
+                    currentRoomInfo.category || 'mission'
                 );
             });
         }

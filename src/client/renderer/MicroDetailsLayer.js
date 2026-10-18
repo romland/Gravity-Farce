@@ -89,8 +89,9 @@ export class MicroDetailsLayer {
         return c;
     }
 
-    initLevel(level) {
+    initLevel(level, category = 'mission') {
         this.builtForLevel = level;
+        this.builtForCategory = category;
         this.heatSpots = [];
         this.sparks = [];
         this.smokePuffs = [];
@@ -175,7 +176,9 @@ export class MicroDetailsLayer {
         if (level.rawMap) {
             this.initInteriorRockLifeAndTrickles(level, cfg);
             this.initOresAndShiftingGround(level, cfg);
-            this.baseCrewController.init(level, cfg);
+            if (category === 'mission') {
+                this.baseCrewController.init(level, cfg);
+            }
         }
     }
 
@@ -946,11 +949,11 @@ export class MicroDetailsLayer {
         ctx.restore();
     }
 
-    updateAndDraw(ctx, camera, viewW, viewH, level, players, turrets, bullets, timeSec, rockLayer, floraLayer) {
+    updateAndDraw(ctx, camera, viewW, viewH, level, players, turrets, bullets, timeSec, rockLayer, floraLayer, category = 'mission') {
         const cfg = RENDER_CONFIG.details;
         if (!cfg || !cfg.enabled) return;
-        if (level && this.builtForLevel !== level) {
-            this.initLevel(level);
+        if (level && (this.builtForLevel !== level || this.builtForCategory !== category)) {
+            this.initLevel(level, category);
         }
         const dt = this.lastUpdateTimeSec > 0 ? Math.min(0.05, Math.max(0.002, timeSec - this.lastUpdateTimeSec)) : (1 / 60);
         const dt60 = dt * 60.0;
@@ -1356,7 +1359,7 @@ export class MicroDetailsLayer {
         }
 
         // 1.8. Primary Base Ground Crew (Working at base, running out to landed home ship, dodging incoming/departing ships)
-        if (cfg.baseCrewEnabled !== false) {
+        if (cfg.baseCrewEnabled !== false && category === 'mission') {
             this.baseCrewController.updateAndDraw(ctx, camera, viewW, viewH, players, this.sparks, timeSec, dt60);
         }
 

@@ -21,7 +21,7 @@ import { TILE_DICTIONARY } from './core/tiles';
 import { GameTracker } from './core/tracker';
 import { SERVER_CONFIG } from './core/config';
 import { createPRNG } from './core/math';
-import { getActivePhysicsHash } from './core/records';
+import { getActivePhysicsHash, recordDB } from './core/records';
 import { pilotStatsDB } from './core/pilot-stats';
 import { FloraBurnSystem, type FloraBurnRecord } from './game/highres/FloraBurnSystem';
 import { botPathWorker } from './game/bot-path-worker';
@@ -120,6 +120,12 @@ export class Room {
     }
 
     public broadcastGlobalAnnouncement(text: string) {
+        recordDB.logGlobalAnnouncement(text, {
+            levelIndex: this.levelIndex,
+            levelName: this.level?.name,
+            category: this.category,
+            mode: this.getRoomMode()
+        });
         this.io.emit('server_announcement', { text });
     }
 

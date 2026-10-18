@@ -69,6 +69,10 @@ export class HudManager {
         cMode.dataset.homeSlot = HUD_CONFIG.componentSlots.modeAndScore || 'bottom-bar';
         cMode.innerHTML = `
             <div class="hud-field">
+                <span class="hud-label">PILOT</span>
+                <span class="hud-val hud-val-lg" id="hud-val-pilot">---</span>
+            </div>
+            <div class="hud-field">
                 <span class="hud-label" id="hud-lbl-mode">MISSION // STANDARD</span>
                 <span class="hud-val hud-val-lg" id="hud-val-cavern">CAVERN 00</span>
             </div>
@@ -143,7 +147,7 @@ export class HudManager {
 
     bindCachedElements() {
         const ids = [
-            'hud-lbl-mode', 'hud-val-cavern', 'hud-val-score',
+            'hud-val-pilot', 'hud-lbl-mode', 'hud-val-cavern', 'hud-val-score',
             'hud-bar-fuel', 'hud-val-lives',
             'hud-sec-mission', 'hud-val-cargo',
             'hud-sec-race', 'hud-lbl-race', 'hud-val-race',
@@ -295,6 +299,7 @@ export class HudManager {
         this.setPlayAreaSize(level.width, level.height);
 
         // 1. Mode, Flavor, Cavern & Score
+        this.setVal('valPilot', this.els['hud-val-pilot'], myServerPlayer.alias || 'UNK');
         const disc = (roomRules?.discipline || 'mission').toUpperCase();
         const flavor = (roomRules?.flavor || 'STANDARD').toUpperCase();
         this.setVal('lblMode', this.els['hud-lbl-mode'], `${disc} | ${flavor}`);
